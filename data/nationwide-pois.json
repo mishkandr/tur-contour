@@ -1,0 +1,467 @@
+{
+  "source": {
+    "id": "local-snapshot",
+    "name": "Wikidata и сайты объектов",
+    "url": "https://www.wikidata.org/wiki/Wikidata:Data_access",
+    "license": "Wikidata CC0 1.0",
+    "provider": "Опубликованные координаты"
+  },
+  "cities": {
+    "524901": {
+      "checkedAt": "2026-11-17",
+      "places": [
+        {
+          "id": "Q1140429",
+          "name": "Государственный исторический музей",
+          "en": "State Historical Museum",
+          "cn": "俄羅斯國家歷史博物館",
+          "coordinates": [
+            55.755,
+            37.61805555555556
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q1140429"
+        },
+        {
+          "id": "Q183334",
+          "name": "Государственная Третьяковская галерея",
+          "en": "Tretyakov Gallery",
+          "cn": "特列季亚科夫画廊",
+          "coordinates": [
+            55.741389,
+            37.620864
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q183334"
+        },
+        {
+          "id": "Q4872",
+          "name": "Государственный музей изобразительных искусств имени А. С. Пушкина",
+          "en": "Pushkin Museum of Fine Arts",
+          "cn": "普希金造型藝術博物館",
+          "coordinates": [
+            55.74702868,
+            37.60602901
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4872"
+        },
+        {
+          "id": "Q133274",
+          "name": "Московский Кремль",
+          "en": "Kremlin",
+          "cn": "克里姆林宫",
+          "coordinates": [
+            55.751666666666665,
+            37.617777777777775
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q133274"
+        },
+        {
+          "id": "Q41116",
+          "name": "Красная площадь",
+          "en": "Red Square",
+          "cn": "红场",
+          "coordinates": [
+            55.754166666667,
+            37.62
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q41116"
+        },
+        {
+          "id": "Q129846",
+          "name": "Храм Василия Блаженного",
+          "en": "St. Basil's Cathedral",
+          "cn": "柏拉仁诺教堂",
+          "coordinates": [
+            55.7525,
+            37.62305555555555
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q129846"
+        },
+        {
+          "id": "Q138908",
+          "name": "Большой театр",
+          "en": "Bolshoi Theatre",
+          "cn": "莫斯科大剧院",
+          "coordinates": [
+            55.76027777777778,
+            37.618611111111115
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q138908"
+        },
+        {
+          "id": "Q2033910",
+          "name": "Государственный Кремлёвский дворец",
+          "en": "State Kremlin Palace",
+          "cn": "國家克里姆林宮",
+          "coordinates": [
+            55.751388888889,
+            37.615555555556
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q2033910"
+        },
+        {
+          "id": "Q19908995",
+          "name": "парк «Зарядье»",
+          "en": "Zaryadye Park",
+          "cn": "扎里亞季耶公園",
+          "coordinates": [
+            55.751,
+            37.629
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q19908995"
+        },
+        {
+          "id": "Q1472498",
+          "name": "Александровский сад",
+          "en": "Alexander Garden",
+          "cn": "亚历山大公园",
+          "coordinates": [
+            55.752393,
+            37.61385111
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q1472498"
+        },
+        {
+          "id": "Q126877",
+          "name": "Центральный парк культуры и отдыха им. Горького",
+          "en": "Gorky Park",
+          "cn": "高爾基公園 (莫斯科)",
+          "coordinates": [
+            55.73135347,
+            37.60463662
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q126877"
+        },
+        {
+          "id": "Q2034313",
+          "name": "Метрополь",
+          "en": "Hotel Metropol",
+          "cn": "莫斯科都市酒店",
+          "coordinates": [
+            55.75833333,
+            37.62138889
+          ],
+          "category": "stay",
+          "url": "https://www.wikidata.org/wiki/Q2034313"
+        },
+        {
+          "id": "Q4314782",
+          "name": "Гостиница Националь",
+          "en": "Hotel National",
+          "cn": "国立酒店 (莫斯科)",
+          "coordinates": [
+            55.756666666667,
+            37.613888888889
+          ],
+          "category": "stay",
+          "url": "https://www.wikidata.org/wiki/Q4314782"
+        },
+        {
+          "id": "Q4077011",
+          "name": "Балчуг Кемпински",
+          "en": "Hotel Baltschug Kempinski",
+          "cn": null,
+          "coordinates": [
+            55.74825,
+            37.626027777778
+          ],
+          "category": "stay",
+          "url": "https://www.wikidata.org/wiki/Q4077011"
+        },
+        {
+          "id": "Q15272755",
+          "name": "Кафе Пушкинъ",
+          "en": "Café Pushkin",
+          "cn": "普希金咖啡馆",
+          "coordinates": [
+            55.7623118,
+            37.6037872
+          ],
+          "category": "food",
+          "url": "https://www.wikidata.org/wiki/Q15272755"
+        }
+      ]
+    },
+    "551487": {
+      "checkedAt": "2026-11-17",
+      "places": [
+        {
+          "id": "Q603622",
+          "name": "Казанский кремль",
+          "en": "Qazan Kremlin",
+          "cn": "喀山克里姆林宫",
+          "coordinates": [
+            55.797442,
+            49.10724
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q603622"
+        },
+        {
+          "id": "Q2166466",
+          "name": "Башня Сююмбике",
+          "en": "Söyembikä Tower",
+          "cn": "苏尤姆别卡塔",
+          "coordinates": [
+            55.800525,
+            49.105194444444
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q2166466"
+        },
+        {
+          "id": "Q4165421",
+          "name": "Дом Ушковой",
+          "en": "Ushkova House, Kazan",
+          "cn": null,
+          "coordinates": [
+            55.791702777778,
+            49.120908333333
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q4165421"
+        },
+        {
+          "id": "Q2655072",
+          "name": "Петропавловский собор",
+          "en": "Saints Peter and Paul Cathedral",
+          "cn": "圣彼得和圣保罗主教座堂",
+          "coordinates": [
+            55.793611111111,
+            49.113205555556
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q2655072"
+        },
+        {
+          "id": "Q4155923",
+          "name": "Дворец земледельцев",
+          "en": "Palace of Agriculturalists",
+          "cn": null,
+          "coordinates": [
+            55.800555555556,
+            49.112222222222
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q4155923"
+        },
+        {
+          "id": "Q4315032",
+          "name": "Национальный музей Республики Татарстан",
+          "en": "National Museum of the Republic of Tatarstan",
+          "cn": null,
+          "coordinates": [
+            55.7955649,
+            49.1101587
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4315032"
+        },
+        {
+          "id": "Q4146878",
+          "name": "Государственный музей изобразительных искусств Республики Татарстан",
+          "en": "Tatarstan State Museum of Fine Arts",
+          "cn": null,
+          "coordinates": [
+            55.79474,
+            49.13418
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4146878"
+        },
+        {
+          "id": "Q4518730",
+          "name": "Чёрное озеро (парк)",
+          "en": "Sad Chërnoye Ozero",
+          "cn": null,
+          "coordinates": [
+            55.794813888889,
+            49.11855
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q4518730"
+        },
+        {
+          "id": "Q21641331",
+          "name": "Лядской сад",
+          "en": "Lyadskoy garden",
+          "cn": null,
+          "coordinates": [
+            55.793023,
+            49.134
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q21641331"
+        },
+        {
+          "id": "Q4345245",
+          "name": "Парк Победы (Казань)",
+          "en": "Park Pobedy",
+          "cn": null,
+          "coordinates": [
+            55.830008333333,
+            49.107527777778
+          ],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q4345245"
+        },
+        {
+          "id": "Q2034194",
+          "name": "Казанский зооботанический сад",
+          "en": "Kazan Zoo & Botanical Garden",
+          "cn": null,
+          "coordinates": [
+            55.76583333,
+            49.13444444
+          ],
+          "category": "family",
+          "url": "https://www.wikidata.org/wiki/Q2034194"
+        },
+        {
+          "id": "kazan-grand-hotel",
+          "name": "Гранд Отель Казань",
+          "en": "Grand Hotel Kazan",
+          "coordinates": [
+            55.785962,
+            49.125194
+          ],
+          "category": "stay",
+          "url": "https://grandhotelkazan.ru/contacts/"
+        },
+        {
+          "id": "kazan-shalyapin-palace",
+          "name": "Шаляпин Палас Отель",
+          "en": "Shalyapin Palace Hotel",
+          "coordinates": [
+            55.78785,
+            49.11996111111111
+          ],
+          "category": "stay",
+          "url": "https://shalyapin-hotel.ru/",
+          "geoUrl": "https://www.wikidata.org/wiki/Q130899024"
+        },
+        {
+          "id": "kazan-capella",
+          "name": "Ресторан «Капелла»",
+          "en": "Capella Restaurant",
+          "coordinates": [
+            55.78785,
+            49.11996111111111
+          ],
+          "category": "food",
+          "url": "https://shalyapin-hotel.ru/restaurants/",
+          "geoUrl": "https://www.wikidata.org/wiki/Q130899024"
+        }
+      ]
+    },
+    "2013348": {
+      "checkedAt": "2026-11-17",
+      "places": [
+        {
+          "id": "Q4112958",
+          "name": "Владивостокская крепость",
+          "en": "Vladivostok Fortress",
+          "cn": "符拉迪沃斯托克要塞",
+          "coordinates": [
+            43.1224,
+            131.8766
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q4112958"
+        },
+        {
+          "id": "Q1254559",
+          "name": "С-56",
+          "en": "Soviet submarine S-56",
+          "cn": "C-56潜水艇博物馆",
+          "coordinates": [
+            43.11342,
+            131.891221
+          ],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q1254559"
+        },
+        {
+          "id": "Q4378712",
+          "name": "Музей истории Дальнего Востока имени В. К. Арсеньева",
+          "en": "Vladimir K. Arseniev Museum of Far East History",
+          "cn": "阿尔谢尼耶夫远东历史博物馆",
+          "coordinates": [
+            43.1163652083033,
+            131.88212557829652
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4378712"
+        },
+        {
+          "id": "Q30889527",
+          "name": "Приморская государственная картинная галерея",
+          "en": "Primorye State Art Gallery",
+          "cn": null,
+          "coordinates": [
+            43.114358,
+            131.882053
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q30889527"
+        },
+        {
+          "id": "Q4112966",
+          "name": "Владивостокский океанариум",
+          "en": "Oceanarium of Vladivostok",
+          "cn": null,
+          "coordinates": [
+            43.12124167,
+            131.8761389
+          ],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4112966"
+        },
+        {
+          "id": "Q16688355",
+          "name": "Приморский океанариум",
+          "en": "Primorsky Aquarium",
+          "cn": null,
+          "coordinates": [
+            43.013888888889,
+            131.93
+          ],
+          "category": "family",
+          "url": "https://www.wikidata.org/wiki/Q16688355"
+        },
+        {
+          "id": "vladivostok-azimut",
+          "name": "AZIMUT Сити Отель Владивосток",
+          "en": "AZIMUT City Hotel Vladivostok",
+          "coordinates": [
+            43.114058,
+            131.875653
+          ],
+          "category": "stay",
+          "url": "https://azimuthotels.com/ru/vladivostok/azimut-hotel-vladivostok"
+        },
+        {
+          "id": "vladivostok-port-avenue",
+          "name": "Ресторан «Порт Авеню»",
+          "en": "Port Avenue",
+          "coordinates": [
+            43.114058,
+            131.875653
+          ],
+          "category": "food",
+          "url": "https://azimuthotels.com/ru/vladivostok/azimut-hotel-vladivostok"
+        }
+      ]
+    }
+  }
+}

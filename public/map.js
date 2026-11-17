@@ -1,8 +1,35 @@
 const pilotBounds = [[56.08, 40.30], [56.47, 40.62]];
 const fitOptions = { padding: [42, 42], maxZoom: 13, animate: false };
-const placeKinds = { visit: 'Достопримечательность', food: 'Питание', stay: 'Размещение' };
-const statuses = { blocked: 'Ограничение', unknown: 'Требуется проверка', ready: 'Подходит по условиям' };
 const osmCredit = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
+const samePoint = (a, b) => a[0] === b[0] && a[1] === b[1];
+const mapCopy = {
+  ru: {
+    kinds:{visit:'Достопримечательность',food:'Питание',stay:'Размещение'},
+    statuses:{blocked:'Ограничение',unknown:'Требуется проверка',ready:'Подходит по условиям'},
+    zoomIn:'Приблизить',zoomOut:'Отдалить',showPlaces:'Показать объекты',sharedAddress:'Объекты по одному адресу',
+    keyboard:'Используйте стрелки для панорамирования, плюс и минус для изменения масштаба. Клавиша Tab переводит фокус на точки карты.',
+    stops:(day,order)=>'День '+day+', точка '+order, alternative:'Другой вариант', changed:'Условия изменились',
+  },
+  en: {
+    kinds:{visit:'Attraction',food:'Dining',stay:'Accommodation'},
+    statuses:{blocked:'Restriction',unknown:'Needs confirmation',ready:'Meets the requirements'},
+    zoomIn:'Zoom in',zoomOut:'Zoom out',showPlaces:'Show sites',sharedAddress:'Sites at the same address',
+    keyboard:'Use the arrow keys to pan, plus and minus to zoom, and Tab to move to map markers.',
+    stops:(day,order)=>'Day '+day+', stop '+order, alternative:'Alternative', changed:'Conditions changed',
+  },
+  zh: {
+    kinds:{visit:'景点',food:'餐饮',stay:'住宿'},
+    statuses:{blocked:'有条件限制',unknown:'需要确认',ready:'满足条件'},
+    zoomIn:'放大',zoomOut:'缩小',showPlaces:'查看地点',sharedAddress:'同一地址的地点',
+    keyboard:'使用方向键移动地图，使用加号和减号缩放，使用 Tab 键切换至地图标记。',
+    stops:(day,order)=>'第'+day+'天，第'+order+'站', alternative:'备选方案', changed:'条件已变更',
+  },
+};
+const cityNames = {
+  'Владимир':['Vladimir','弗拉基米尔'], 'Суздаль':['Suzdal','苏兹达尔'], 'Кидекша':['Kideksha','基杰克沙'],
+  'Боголюбово':['Bogolyubovo','博戈柳博沃'], 'Александров':['Alexandrov','亚历山德罗夫'],
+  'Муром':['Murom','穆罗姆'], 'Гусь-Хрустальный':['Gus-Khrustalny','古西-赫鲁斯塔利内'],
+};
 
 function coordinates(value) {
   const pair = value?.coordinates ?? value;
@@ -21,14 +48,6 @@ function placeEntries(places, geodata) {
     const point = coordinates(place.coordinates) ?? coordinates(geodata?.places?.[place.id]);
     return point ? [[place.id, { ...place, point }]] : [];
   }));
-}
-
-function routeEntries(route, places) {
-  const stops = Array.isArray(route) ? route : route?.days?.flatMap(day => day.stops) ?? [];
-  return stops.flatMap(stop => {
-    const place = places.get(typeof stop === 'string' ? stop : stop.id);
-    return place ? [place] : [];
-  });
 }
 
 function addLandmark(pane, text, tag = 'span') {
@@ -60,27 +79,74 @@ function connectionBetween(connections, from, to) {
   return [];
 }
 
-function routeSegments(entries, connections) {
+function routeGeometry(route, places, geodata, firstDay = 0) {
+  const days = Array.isArray(route) ? [{ stops: route }] : route?.days ?? [];
+  const stops = new Map();
   const segments = [];
-  for (let index = 1; index < entries.length; index += 1) {
-    const before = entries[index - 1];
-    const next = entries[index];
-    const road = before.city !== next.city ? connectionBetween(connections, before.city, next.city) : [];
+  let last;
+
+  function connect(from, to, schematic = true) {
+    if (from && to && !samePoint(from, to)) segments.push({points:[from,to],schematic});
+  }
+
+  function transfer(from, to, departure, arrival) {
+    const road = connectionBetween(geodata?.connections, from, to);
     if (road.length > 1) {
-      segments.push({ points: [before.point, road[0]], schematic: true });
-      segments.push({ points: road, schematic: false });
-      segments.push({ points: [road.at(-1), next.point], schematic: true });
-    } else if (before.point[0] !== next.point[0] || before.point[1] !== next.point[1]) {
-      segments.push({ points: [before.point, next.point], schematic: true });
+      connect(departure,road[0]);
+      segments.push({points:road,schematic:false});
+      connect(road.at(-1),arrival);
+      return arrival ?? road.at(-1);
+    }
+    const start = departure ?? coordinates(geodata?.cities?.[from]);
+    const end = arrival ?? coordinates(geodata?.cities?.[to]);
+    connect(start,end);
+    return end;
+  }
+
+  for (const [day, value] of days.entries()) {
+    let order = 0;
+    if (value.transfer?.distanceType==='straight-line') {
+      const {from,to}=value.transfer;
+      const origin=last?.city===from ? last.point : coordinates(geodata?.cities?.[from]);
+      const destination=coordinates(geodata?.cities?.[to]);
+      connect(origin,destination);
+      if (destination) last={city:to,point:destination};
+    }
+    for (const stop of value.stops ?? []) {
+      if (stop.type === 'travel') {
+        const [parsedFrom,parsedTo] = (stop.name ?? '').split('→').map(name=>name.trim());
+        const from = stop.from ?? parsedFrom;
+        const to = stop.to ?? parsedTo;
+        if (from && to) {
+          const start = last?.city === from ? last.point : null;
+          const end = transfer(from,to,start,null);
+          if (end) last = {city:to,point:end};
+        }
+        continue;
+      }
+      const place = places.get(typeof stop === 'string' ? stop : stop.id);
+      if (!place) continue;
+      order += 1;
+      if (!stops.has(place.id)) stops.set(place.id,{place,order,dayIndex:firstDay+day,start:stop.start,end:stop.end});
+      if (last?.city && last.city !== place.city) transfer(last.city,place.city,last.point,place.point);
+      else connect(last?.point,place.point);
+      last = place;
     }
   }
-  return segments;
+  return {stops,segments};
 }
 
-export function createRouteMap(element, { onSelect, onStatus } = {}) {
+function segmentKey(points) {
+  const direct = JSON.stringify(points);
+  const reversed = JSON.stringify([...points].reverse());
+  return direct < reversed ? direct : reversed;
+}
+
+export function createRouteMap(element, { onSelect, onStatus, locale: initialLocale } = {}) {
   const L = globalThis.L;
   if (!element || !L) return null;
 
+  element.classList.add('route-map');
   const map = L.map(element, {
     zoomControl: false, attributionControl: false, scrollWheelZoom: false, preferCanvas: true,
     minZoom: 6, maxZoom: 18, zoomSnap: 0.5,
@@ -90,7 +156,7 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
   map.createPane('routeLabels').style.zIndex = 380;
   map.createPane('routeTraffic').style.zIndex = 390;
   const attribution = L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(map);
-  L.control.zoom({ position: 'bottomright', zoomInTitle: 'Приблизить', zoomOutTitle: 'Отдалить' }).addTo(map);
+  const zoom = L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 90 }).addTo(map);
   const baseLayer = L.layerGroup().addTo(map);
   const labels = L.layerGroup().addTo(map);
@@ -107,6 +173,7 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
   let base = null;
   let tileStatus;
   let cycleLoads = 0;
+  let cycleErrors = 0;
   let fallbackTimer;
   let credits = [];
   let geodata;
@@ -114,17 +181,47 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
   let initialFrame = true;
   let selectedId;
   let changedIds = new Set();
-  let alternativeIds = new Set();
-  let routeIds = new Map();
-  let current = [];
-  let alternative = [];
+  let current = {stops:new Map(),segments:[]};
+  let alternative = {stops:new Map(),segments:[]};
+  const markersByPlace = new Map();
+  const markerElements = new Map();
   let showPlaces = true;
   let inactive = false;
+  let locale;
+  let copy;
+
+  function setLocale(value) {
+    const language = typeof value === 'string' ? value.toLowerCase().split('-')[0] : 'ru';
+    const next = Object.hasOwn(mapCopy,language) ? language : 'ru';
+    if (next === locale) return;
+    locale = next;
+    copy = mapCopy[next];
+    element.setAttribute('aria-description',copy.keyboard);
+    for (const [selector,title] of [['.leaflet-control-zoom-in',copy.zoomIn],['.leaflet-control-zoom-out',copy.zoomOut]]) {
+      const button = zoom.getContainer().querySelector(selector);
+      button.title = title;
+      button.setAttribute('aria-label',title);
+    }
+  }
+
+  function placeLabel(place) {
+    return (locale==='zh' ? place.cn : locale==='en' ? place.en : null) ?? place.name;
+  }
+
+  function cityLabel(city) {
+    if (locale==='ru') return city;
+    const entry=geodata?.cities?.[city];
+    const label=locale==='en' ? entry?.en : entry?.cn;
+    if (label) return label;
+    return cityNames[city]?.[locale==='en' ? 0 : 1] ?? city;
+  }
+
+  setLocale(initialLocale);
 
   function report(status) {
     if (tileStatus === status || inactive) return;
     tileStatus = status;
-    element.classList.toggle('map--fallback', status === 'fallback');
+    element.classList.toggle('map--fallback',status === 'fallback' || status === 'partial');
     element.dataset.tiles = status;
     referencePane.style.visibility = status === 'ready' ? 'hidden' : '';
     if (!initialFrame) drawMarkers();
@@ -134,17 +231,20 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
   tiles.on('loading', () => {
     if (base !== 'streets') return;
     cycleLoads = 0;
+    cycleErrors = 0;
     clearTimeout(fallbackTimer);
     if (tileStatus !== 'ready') fallbackTimer = setTimeout(() => report('fallback'), 2500);
   });
   tiles.on('tileload', () => {
     if (base !== 'streets') return;
     cycleLoads += 1;
-    clearTimeout(fallbackTimer);
-    report('ready');
   });
+  tiles.on('tileerror', () => { cycleErrors += 1; });
   tiles.on('load', () => {
-    if (base === 'streets' && !cycleLoads) report('fallback');
+    if (base !== 'streets') return;
+    clearTimeout(fallbackTimer);
+    if (cycleLoads) report(cycleErrors ? 'partial' : 'ready');
+    else if (cycleErrors) report('fallback');
   });
 
   function setBase(next) {
@@ -194,87 +294,112 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
 
   function drawPaths() {
     paths.clearLayers();
-    const main = routeSegments(current, geodata?.connections);
-    const candidate = routeSegments(alternative, geodata?.connections);
     const line = (points, weight, color, options = {}) => {
       if (points.length > 1) L.polyline(points, {
         weight, color, pane: 'routeTraffic', interactive: false, lineJoin: 'round', lineCap: 'round', ...options,
       }).addTo(paths);
     };
-    for (const { points, schematic } of main) {
+    for (const { points, schematic } of current.segments) {
       if (!schematic) line(points, 9, '#f8fcf7', { opacity: 0.92, className: 'map-path-outline' });
       line(points, schematic ? 2.5 : 4.5, '#0d7763', {
         opacity: 0.95, dashArray: schematic ? '2 6' : null, className: 'map-path-main',
       });
     }
-    const mainKeys = new Set(main.map(segment => JSON.stringify(segment.points)));
-    for (const { points, schematic } of candidate) {
-      if (!mainKeys.has(JSON.stringify(points))) {
+    const mainKeys = new Set(current.segments.map(segment => segmentKey(segment.points)));
+    for (const { points, schematic } of alternative.segments) {
+      if (!mainKeys.has(segmentKey(points))) {
         line(points, 3.5, '#6352a9', { opacity: 0.86, dashArray: schematic ? '3 6' : '8 9', className: 'map-path-alternative' });
       }
     }
+    for (const walk of activeWalks()) {
+      line(walk,3.2,'#375d85',{opacity:0.91,dashArray:'5 6',className:'map-path-walking'});
+    }
   }
 
-  function selectPlace(id, { focus = false } = {}) {
+  function activeWalks() {
+    const active = new Set([...current.stops.keys(),...alternative.stops.keys(),selectedId]);
+    return Object.entries(geodata?.walks ?? {}).filter(([id,walk])=>active.has(id) && walk.kind==='walk')
+      .map(([,walk])=>(walk.coordinates ?? []).filter(coordinates));
+  }
+
+  function selectPlace(id, { focus = false, keyboardFocus = false } = {}) {
     const place = entries.get(id);
     if (!place || inactive) return false;
     selectedId = id;
     if (focus) map.setView(place.point, Math.max(14, map.getZoom()), { animate: false });
+    drawPaths();
     drawMarkers();
+    if (keyboardFocus) markersByPlace.get(id)?.focus({preventScroll:true});
     return true;
   }
 
-  function handleSelection(place) {
+  function handleSelection(place, keyboard = false) {
     selectPlace(place.id);
-    onSelect?.(place.id, place);
+    const stop = current.stops.get(place.id) ?? alternative.stops.get(place.id);
+    onSelect?.(place.id,place,{dayIndex:stop?.dayIndex,keyboard});
+    if (keyboard && !element.contains(document.activeElement)) {
+      if (document.activeElement === document.body) markersByPlace.get(place.id)?.focus({preventScroll:true});
+    }
   }
 
-  function decorateMarker(marker, label) {
+  function decorateMarker(marker, label, key, places, selected) {
     marker.on('add', () => {
       const content = marker.getElement();
-      content?.setAttribute('aria-label', label);
-      content?.addEventListener('keydown', event => {
-        if (event.key === ' ') {
+      content.setAttribute('aria-label', label);
+      content.setAttribute('role','button');
+      if (selected !== undefined) content.setAttribute('aria-pressed',String(selected));
+      content.dataset.mapMarker = key;
+      markerElements.set(key,content);
+      for (const place of places) markersByPlace.set(place.id,content);
+      content.addEventListener('keydown', event => {
+        if (event.key === ' ' || event.key === 'Enter') {
           event.preventDefault();
           event.stopPropagation();
-          marker.fire('click');
+          marker.fire('click',{keyboard:true});
         }
       });
     });
   }
 
   function drawPlace(place) {
-    const order = routeIds.get(place.id);
+    const stop = current.stops.get(place.id);
+    const order = stop?.order;
     const isSelected = place.id === selectedId;
     const changed = changedIds.has(place.id);
-    const candidate = alternativeIds.has(place.id) && !order;
+    const candidate = alternative.stops.has(place.id) && !order;
     const body = document.createElement('div');
     body.className = 'map-pin';
     if (order) body.classList.add('map-pin--route');
     if (candidate) body.classList.add('map-pin--alternative');
     if (isSelected) body.classList.add('map-pin--selected');
     if (changed) body.classList.add('map-pin--changed');
-    if (Object.hasOwn(statuses, place.status)) body.classList.add('map-pin--' + place.status);
+    if (Object.hasOwn(copy.statuses,place.status)) body.classList.add('map-pin--' + place.status);
     const glyph = changed ? '!' : order ? String(order) : candidate ? '+' :
       place.kind === 'food' ? '•' : place.kind === 'stay' ? '▪' : '·';
     const core = addLandmark(body, glyph);
     core.className = 'map-pin__core';
     core.setAttribute('aria-hidden', 'true');
-    if (isSelected || changed) addLandmark(body, place.name).className = 'map-pin__caption';
+    const name = placeLabel(place);
+    if (isSelected || changed) addLandmark(body,name).className = 'map-pin__caption';
 
-    const title = [place.name, placeKinds[place.kind], statuses[place.status]].filter(Boolean).join(' · ');
+    const visit = stop ? copy.stops(stop.dayIndex+1,order) : candidate ? copy.alternative : '';
+    const time = stop?.start && stop?.end ? stop.start+'–'+stop.end : '';
+    const details = [visit,time,copy.kinds[place.kind],copy.statuses[place.status]].filter(Boolean);
+    if (changed) details.push(copy.changed);
+    const title = [name,...details].join(' · ');
     const marker = L.marker(place.point, {
       title, keyboard: true,
       zIndexOffset: isSelected ? 900 : changed ? 700 : order ? 500 : candidate ? 400 : 100,
       icon: L.divIcon({ className: 'map-marker', html: body, iconSize: [30, 30], iconAnchor: [15, 15] }),
     });
-    decorateMarker(marker, title);
+    decorateMarker(marker,title,'place:'+place.id,[place],isSelected);
     if (!isSelected && !changed) {
-      const tooltip = document.createElement('span');
-      tooltip.textContent = place.name;
+      const tooltip = document.createElement('div');
+      addLandmark(tooltip,name,'strong');
+      if (details.length) addLandmark(tooltip,details.join(' · '),'small');
       marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -16], className: 'map-tooltip' });
     }
-    marker.on('click', () => handleSelection(place)).addTo(markers);
+    marker.on('click',event => handleSelection(place,event.keyboard)).addTo(markers);
   }
 
   function cityPoints(group, city) {
@@ -285,76 +410,110 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
   function drawCity(city, group, coincident = false) {
     const cityGroup = document.createElement('div');
     cityGroup.className = 'map-city';
-    if (group.some(place => routeIds.has(place.id))) cityGroup.classList.add('map-city--route');
+    if (group.some(place => current.stops.has(place.id))) cityGroup.classList.add('map-city--route');
     if (group.some(place => changedIds.has(place.id))) cityGroup.classList.add('map-city--changed');
+    if (group.some(place => place.id === selectedId)) cityGroup.classList.add('map-city--selected');
     addLandmark(cityGroup, String(group.length)).className = 'map-city__count';
-    if (!coincident) addLandmark(cityGroup, city).className = 'map-city__name';
-    const title = 'Объекты в локации «' + city + '» · ' + group.length;
+    const label = cityLabel(city);
+    if (!coincident) addLandmark(cityGroup,label).className = 'map-city__name';
+    const title = label+' · '+(coincident ? copy.sharedAddress : copy.showPlaces)+' · '+group.length;
     const marker = L.marker(coincident ? group[0].point : cityPoints(group, city), {
-      title, keyboard: true,
+      title, keyboard: true, zIndexOffset:coincident && group.some(place=>place.id===selectedId) ? 900 : 0,
       icon: L.divIcon({ className: 'map-marker', html: cityGroup, iconSize: [30, 30], iconAnchor: [15, 15] }),
     });
-    decorateMarker(marker, title);
+    decorateMarker(marker,title,(coincident ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
     if (coincident) {
       const contents = document.createElement('div');
       contents.className = 'map-places-popup';
+      addLandmark(contents,copy.sharedAddress,'strong');
       for (const place of group) {
-        const option = addLandmark(contents, place.name, 'button');
+        const option = addLandmark(contents,placeLabel(place),'button');
         option.type = 'button';
-        option.addEventListener('click', () => handleSelection(place));
+        option.dataset.mapPopupPlace = place.id;
+        option.addEventListener('click', event => handleSelection(place,event.detail===0));
       }
+      contents.addEventListener('keydown',event=>{
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        marker.closePopup();
+        marker.getElement()?.focus({preventScroll:true});
+      });
       marker.bindPopup(contents);
+      marker.on('popupopen',()=>marker.getElement()?.setAttribute('aria-expanded','true'));
+      marker.on('popupclose',()=>marker.getElement()?.setAttribute('aria-expanded','false'));
+      marker.on('add',()=>marker.getElement()?.setAttribute('aria-expanded','false'));
+      marker.on('click',event=>{
+        if (event.keyboard) contents.querySelector('button')?.focus({preventScroll:true});
+      });
     } else {
-      marker.on('click', () => map.fitBounds(L.latLngBounds(group.map(x => x.point)), {
-        padding: [38, 38], maxZoom: 16, animate: false,
-      }));
+      marker.on('click',event=>{
+        map.fitBounds(L.latLngBounds(group.map(place=>place.point)), {padding:[42,42],maxZoom:16,animate:false});
+        if (event.keyboard) markersByPlace.get(group[0].id)?.focus({preventScroll:true});
+      });
     }
     marker.addTo(markers);
   }
 
   function drawMarkers() {
+    const focused = document.activeElement;
+    const key = focused?.dataset.mapMarker;
+    const focusId = focused?.dataset.mapPopupPlace ?? [...markersByPlace].find(([,target])=>target===focused)?.[0];
     markers.clearLayers();
     labels.clearLayers();
+    markersByPlace.clear();
+    markerElements.clear();
     const visible = [...entries.values()].filter(place =>
-      showPlaces || routeIds.has(place.id) || alternativeIds.has(place.id) || changedIds.has(place.id) || place.id === selectedId);
-    const groups = new Map();
+      showPlaces || current.stops.has(place.id) || alternative.stops.has(place.id) || changedIds.has(place.id) || place.id === selectedId);
     const cluster = map.getZoom() < 13;
+    const groups = new Map();
     for (const place of visible) {
-      if (changedIds.has(place.id) || place.id === selectedId || (alternativeIds.has(place.id) && !routeIds.has(place.id))) {
-        drawPlace(place);
-        continue;
-      }
-      const key = cluster ? place.city : place.point.join(',');
+      const key = place.point.join(',');
       const group = groups.get(key) ?? [];
       group.push(place);
       groups.set(key, group);
     }
-    for (const group of groups.values()) {
-      if (group.length > 1) drawCity(group[0].city, group, !cluster);
+    const cityGroups = new Map();
+    for (const atAddress of groups.values()) {
+      const place = atAddress[0];
+      const highlight = atAddress.some(item=>item.id===selectedId || changedIds.has(item.id) ||
+        (alternative.stops.has(item.id) && !current.stops.has(item.id)));
+      if (cluster && !highlight) {
+        const cityGroup = cityGroups.get(place.city) ?? [];
+        cityGroups.set(place.city,[...cityGroup,...atAddress]);
+      } else if (atAddress.length > 1) drawCity(place.city,atAddress,true);
+      else drawPlace(place);
+    }
+    for (const [city, group] of cityGroups) {
+      if (group.length > 1) drawCity(city,group,group.every(place=>samePoint(place.point,group[0].point)));
       else drawPlace(group[0]);
     }
-    if (tileStatus !== 'ready' && cluster) {
+    const streetTiles = tileStatus === 'ready';
+    if (!streetTiles && cluster) {
       for (const [city, entry] of Object.entries(geodata?.cities ?? {})) {
         const point = coordinates(entry);
-        if (!point || (groups.get(city)?.length ?? 0) > 1) continue;
-        const ownGroup = groups.get(city);
-        if (!ownGroup && [...groups.values()].some(group =>
-          map.latLngToContainerPoint(point).distanceTo(map.latLngToContainerPoint(group[0].point)) < 100)) continue;
+        if (!point || (cityGroups.get(city)?.length ?? 0) > 1) continue;
+        if (!cityGroups.has(city) && visible.some(place=>
+          map.latLngToContainerPoint(point).distanceTo(map.latLngToContainerPoint(place.point)) < 100)) continue;
         const body = document.createElement('span');
-        body.textContent = city;
+        body.textContent = cityLabel(city);
         L.marker(point, {
           pane: 'routeLabels', interactive: false, keyboard: false,
           icon: L.divIcon({ className: 'map-base-label', html: body, iconSize: [1, 1], iconAnchor: [-11, 8] }),
         }).addTo(labels);
       }
     }
+    if (key || focusId) (markerElements.get(key) ?? markersByPlace.get(focusId) ?? element).focus({preventScroll:true});
   }
 
   function fit({ routeOnly = false, allPlaces = false } = {}) {
     if (inactive) return;
-    const activePlaces = [...current, ...alternative, ...[...changedIds].flatMap(id => entries.get(id) ?? [])];
-    const focus = allPlaces ? [...entries.values()] : routeOnly ? activePlaces : [];
-    const bounds = L.latLngBounds(focus.length ? focus.map(place => place.point) : geodata?.bounds ?? pilotBounds);
+    const activePoints = [...current.segments,...alternative.segments].flatMap(segment=>segment.points).concat(activeWalks().flat());
+    for (const id of new Set([...current.stops.keys(),...alternative.stops.keys(),...changedIds])) {
+      if (entries.has(id)) activePoints.push(entries.get(id).point);
+    }
+    const focus = allPlaces ? [...entries.values()].map(place=>place.point) : routeOnly ? activePoints : [];
+    const bounds = L.latLngBounds(focus.length ? focus : geodata?.bounds ?? pilotBounds);
     if (bounds.isValid()) map.fitBounds(bounds, fitOptions);
   }
 
@@ -367,7 +526,8 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
 
   function update({
     places, geodata: mapData, route, alternative: comparison,
-    selectedId: selected, changedIds: changed, showPlaces: show = true, base: nextBase = 'scheme', frame = false,
+    selectedId: selected, changedIds: changed, showPlaces: show = true, base: nextBase = 'scheme', frame = false, dayIndex = 0,
+    locale: nextLocale = locale,
   } = {}) {
     if (inactive) return;
     if (mapData !== geodata) {
@@ -377,17 +537,13 @@ export function createRouteMap(element, { onSelect, onStatus } = {}) {
     entries = placeEntries(places, geodata);
     selectedId = selected;
     changedIds = new Set(changed ?? []);
-    current = routeEntries(route, entries);
-    alternative = routeEntries(comparison, entries);
-    routeIds = new Map();
-    current.forEach(place => {
-      if (!routeIds.has(place.id)) routeIds.set(place.id, routeIds.size + 1);
-    });
-    alternativeIds = new Set(alternative.map(place => place.id));
+    current = routeGeometry(route,entries,geodata,dayIndex);
+    alternative = routeGeometry(comparison,entries,geodata,dayIndex);
     showPlaces = show;
+    setLocale(nextLocale);
     setBase(nextBase);
     if (initialFrame || frame) {
-      fit({ routeOnly: frame === 'route' });
+      fit({ routeOnly: frame === 'route' || initialFrame, allPlaces:frame === 'places' });
       initialFrame = false;
     }
     drawPaths();

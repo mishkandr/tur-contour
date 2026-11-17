@@ -13,7 +13,7 @@ const stopTypes = {
 
 const themes = {
   heritage: '历史与建筑', museum: '博物馆', romantic: '浪漫旅行', family: '亲子旅行',
-  hike: '徒步', nature: '自然风光', any: '不限主题',
+  hike: '徒步', nature: '自然风光', craft:'工艺与玻璃制作', pilgrimage:'朝圣与修道院', any: '不限主题',
 };
 
 const missingItems = {
@@ -63,7 +63,7 @@ export function chineseItinerary(plan) {
       plan.completeness ? '行程草案。已校验接待条件，交通、实际名额和预订须另行确认。' : '行程草案。部分接待条件尚待确认。',
     preparation,
     days:plan.days.map((day,index)=>({
-      title:'第 '+(index+1)+' 天 · '+(cities[day.city] ?? day.city),
+      title:'第 '+(index+1)+' 天 · '+(day.cn ?? cities[day.city] ?? day.city),
       date:dateFormat.format(new Date(day.date)),
       stops:day.stops.map(stop=>localizeStop(stop,settings)),
       missing:day.missing.map(item=>missingItems[item] ?? '其他行程项目'),

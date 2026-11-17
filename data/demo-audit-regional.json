@@ -1,0 +1,17 @@
+{
+  "source": "Учебные условия для расчёта региональных маршрутов",
+  "synthetic": true,
+  "objects": {
+    "murom-monastery":{"capacity":24,"language":"interpreter","minutes":55,"hours":[9,17],"off":[],"seasons":["all"],"access":null},
+    "murom-exhibit":{"capacity":20,"language":"interpreter","minutes":70,"hours":[11,18],"off":[],"seasons":["all"],"access":null},
+    "murom-gallery":{"capacity":16,"language":"interpreter","minutes":55,"hours":[10,18],"off":[],"seasons":["all"],"access":null},
+    "murom-hotel":{"capacity":20,"language":"interpreter","minutes":30,"hours":[14,24],"off":[],"seasons":["all"],"access":null},
+    "murom-cafe":{"capacity":18,"language":"interpreter","minutes":55,"hours":[12,20],"off":[],"seasons":["all"],"access":null},
+    "maltsov-crystal":{"capacity":20,"language":"interpreter","minutes":70,"hours":[10,16],"off":[1],"seasons":["all"],"access":null},
+    "gus-history":{"capacity":16,"language":"interpreter","minutes":60,"hours":[10,17],"off":[2],"seasons":["all"],"access":null},
+    "gus-hotel":{"capacity":20,"language":"interpreter","minutes":30,"hours":[14,24],"off":[],"seasons":["all"],"access":null},
+    "gus-food":{"capacity":22,"language":"interpreter","minutes":60,"hours":[12,20],"off":[],"seasons":["all"],"access":null},
+    "bogolyubovo":{"capacity":18,"language":"interpreter","minutes":50,"hours":[9,16],"off":[],"seasons":["all"],"access":null},
+    "nerl-trail":{"capacity":16,"language":"interpreter","minutes":95,"hours":[9,15],"off":[],"seasons":["spring","summer","autumn"],"access":null}
+  }
+}

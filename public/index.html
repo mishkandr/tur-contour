@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Мониторинг изменений туристических объектов и маршрутов Владимирской области.">
+<meta name="description" content="Конструктор маршрутов по России, проверка условий посещения и мониторинг туристических программ.">
 <title>ТурКонтур — мониторинг маршрутов</title>
 <link rel="stylesheet" href="/vendor/leaflet.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/atlas.css">
+<link rel="stylesheet" href="/workspace.css">
+<link rel="stylesheet" href="/map-workspace.css">
 <script src="/vendor/leaflet.js" defer></script>
 <script type="module" src="/app.js"></script>
 </head>
@@ -15,21 +17,30 @@
 <a class="skip" href="#content">К содержанию</a>
 <header class="top">
   <div class="top-inner">
-    <a href="#impact" class="brand" aria-label="ТурКонтур, мониторинг"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>ТурКонтур</a>
+    <a href="#overview" class="brand" aria-label="ТурКонтур, обзор региона"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>ТурКонтур</a>
     <nav aria-label="Разделы">
+      <a href="#overview">Обзор</a>
       <a href="#impact">Карта</a>
       <a href="#catalog">Объекты</a>
       <a href="#route">Маршруты</a>
       <a href="#stats">Статистика</a>
+      <a href="#ask">Вопрос ИИ</a>
+      <a class="nav-sources" href="#sources">Источники</a>
     </nav>
-    <a class="top-sources" href="#sources">Источники <span aria-hidden="true">↗</span></a>
+    <label class="locale-picker"><span class="sr-only">Язык</span>
+      <select id="locale" aria-label="Язык">
+        <option value="ru" lang="ru">Русский</option>
+        <option value="en" lang="en">English</option>
+        <option value="zh" lang="zh-Hans">简体中文</option>
+      </select>
+    </label>
   </div>
 </header>
 <main id="content" tabindex="-1">
   <p id="toast" class="toast" role="status" hidden></p>
   <div id="screen" aria-busy="true"><p>Загружаем мониторинг…</p></div>
 </main>
-<footer><span>ТурКонтур · Пилот Школы 21</span><a href="#sources">Данные и методика</a></footer>
+<footer><span>ТурКонтур</span><a href="#sources">Данные и методика</a></footer>
 <dialog id="place-dialog" aria-labelledby="place-title"></dialog>
 </body>
 </html>

@@ -1,3 +1,7 @@
+import { directionId, routeDirections, routeTheme, scheduleFor } from './route-directions.mjs';
+
+export { routeDirections };
+
 export const region = 'Владимирская область';
 export const officialStatistics = 'https://rosstat.gov.ru/statistics/turizm';
 export const metricInfo = {
@@ -52,7 +56,6 @@ export const trackedRoutes = [
   { id:'group-small', title:'Владимир → Суздаль', subtitle:'Малая группа', settings:{...defaultRoute, size:8, market:'ru'} },
 ];
 const cities = ['Владимир','Суздаль','Кидекша'];
-const themes = ['heritage','museum','any','romantic','family','hike','nature'];
 const exteriorVisits = new Set(['golden-gate']);
 const shortHeritageVisits = new Set(['dmitrovsky','golden-gate','nativity','kideksha']);
 export const kindNames = { visit:'Посещение', food:'Питание', stay:'Размещение' };
@@ -74,12 +77,14 @@ export function routeSettings(input) {
   const date = /^20\d{2}-\d{2}-\d{2}$/.test(input.date) && Number.isFinite(Date.parse(input.date)) &&
     new Date(input.date).toISOString().slice(0,10) === input.date ? input.date : defaultRoute.date;
   const size = Number(input.size);
+  const direction = directionId(input.direction);
   return {
     days:Number(input.days) === 3 ? 3 : 2, date,
     size:Number.isInteger(size) && size >= 1 && size <= 100 ? size : defaultRoute.size,
     market:input.market === 'ru' ? 'ru' : 'zh',
-    theme:themes.includes(input.theme) ? input.theme : 'heritage',
+    theme:routeTheme(input.theme,direction),
     access:input.access === true, demo:input.demo !== false,
+    ...(direction==='vladimir-suzdal' ? {} : {direction}),
   };
 }
 
@@ -147,6 +152,7 @@ export function assess(place, settings, day = 0) {
 
 function themeFit(place, theme) {
   if (place.kind !== 'visit') return 0;
+  if (place.formats?.includes(theme)) return 2;
   if (theme === 'romantic') return Number(shortHeritageVisits.has(place.id) || place.id === 'suzdal-kremlin');
   if (theme === 'family') return Number(place.theme === 'museum');
   if (theme === 'hike' || theme === 'nature') return place.theme===theme ? 2 : Number(exteriorVisits.has(place.id));
@@ -155,6 +161,10 @@ function themeFit(place, theme) {
 
 function travelStop(name, cn, start, duration) {
   return { type:'travel', name, cn, start:clockTime(start), end:clockTime(start+duration) };
+}
+
+function regionalTransfer(leg,start = leg.start) {
+  return {...travelStop(leg.name,leg.cn,start,leg.minutes),from:leg.from,to:leg.to,en:leg.en};
 }
 
 function openingWindows(place, audit, settings, day) {
@@ -178,30 +188,42 @@ function candidateFor(place, settings, day, splitId) {
   return { place, audit, split, windows:openingWindows(place,audit,settings,day), fit:themeFit(place,settings.theme) };
 }
 
-function buildDay(places, settings, day, splitId) {
-  const city = cities[day];
+function buildDay(places, settings, day, splitId, stage) {
+  const city = stage?.city ?? cities[day];
   const date = isoDate(dateFor(settings.date,day));
   const candidates = places.map(place=>candidateFor(place,settings,day,splitId)).filter(Boolean);
   const venues = (kind, location = city) => candidates.filter(item=>item.place.kind===kind && item.place.city===location);
-  const visits = venues('visit').sort((a,b) => Number(b.split)-Number(a.split) || b.fit-a.fit);
-  const roles = [
-    { candidates:visits, missing:'Подтверждённая точка посещения' },
-    { candidates:venues('food',day===2 ? 'Суздаль' : city), missing:'Место для обеда', lunch:true },
-  ];
-  if (day!==2) roles.push({candidates:visits, missing:'Вторая точка посещения'});
-  if (day<settings.days-1) roles.push({candidates:venues('stay'), missing:'Ночёвка'});
+  const visits = venues('visit').filter(item=>!stage?.visits || stage.visits.includes(item.place.id))
+    .sort((a,b) => Number(b.split)-Number(a.split) || b.fit-a.fit);
+  const mealCity = stage ? stage.mealCity ?? city : day===2 ? 'Суздаль' : city;
+  const stayCity = stage?.stayCity ?? city;
+  const secondVisit = (stage?.visitCount ?? (day===2 ? 1 : 2))===2;
+  const roles = [{ candidates:visits, missing:'Подтверждённая точка посещения' }];
+  const extra = {candidates:visits, missing:'Вторая точка посещения'};
+  if (secondVisit && stage?.visitsFirst) roles.push(extra);
+  roles.push({ candidates:venues('food',mealCity), missing:'Место для обеда', lunch:true });
+  if (secondVisit && !stage?.visitsFirst) roles.push(extra);
+  if (day<settings.days-1) roles.push({candidates:venues('stay',stayCity), missing:'Ночёвка'});
 
   const first = {cursor:600, stops:[], missing:[], hasSplit:false, fit:0};
-  if (day===1) first.stops.push(travelStop('Владимир → Суздаль','弗拉基米尔 → 苏兹达尔',540,60));
-  if (day===2) first.stops.push(travelStop('Суздаль → Кидекша','苏兹达尔 → 基杰克沙',540,25));
-  if (day===1) first.cursor = 615;
-  if (day===2) first.cursor = 580;
+  if (stage) {
+    first.cursor = stage.start;
+    if (stage.inbound) first.stops.push(regionalTransfer(stage.inbound));
+  } else {
+    if (day===1) first.stops.push(travelStop('Владимир → Суздаль','弗拉基米尔 → 苏兹达尔',540,60));
+    if (day===2) first.stops.push(travelStop('Суздаль → Кидекша','苏兹达尔 → 基杰克沙',540,25));
+    if (day===1) first.cursor = 615;
+    if (day===2) first.cursor = 580;
+  }
 
   let paths = [first];
   for (const role of roles) {
     paths = paths.flatMap(path => {
       let {cursor, stops} = path;
-      if (role.lunch && day===2) {
+      if (role.lunch && stage?.beforeLunch) {
+        stops = [...stops,regionalTransfer(stage.beforeLunch,cursor)];
+        cursor += stage.beforeLunch.minutes + 20;
+      } else if (role.lunch && !stage && day===2) {
         stops = [...stops, travelStop('Кидекша → Суздаль','基杰克沙 → 苏兹达尔',cursor,25)];
         cursor += 45;
       }
@@ -216,7 +238,8 @@ function buildDay(places, settings, day, splitId) {
         const end = start + duration;
         const stop = { type:place.kind, id:place.id, name:place.name, cn:place.cn, url:place.url,
           theme:place.theme, start:clockTime(start), end:clockTime(end), capacity:audit.capacity, split,
-          booking:audit.booking, verifiedAt:audit.verifiedAt, sourceUrl:audit.sourceUrl };
+          booking:audit.booking, verifiedAt:audit.verifiedAt, sourceUrl:audit.sourceUrl,
+          ...(stage ? {en:place.en,formats:place.formats} : {}) };
         return [{cursor:end+20, stops:[...stops,stop], missing:path.missing,
           hasSplit:path.hasSplit || split, fit:path.fit+fit}];
       });
@@ -225,32 +248,50 @@ function buildDay(places, settings, day, splitId) {
   }
 
   return paths.sort((a,b) => a.missing.length-b.missing.length || Number(b.hasSplit)-Number(a.hasSplit) || b.fit-a.fit)
-    .map(({stops,missing}) => ({city,date,stops,missing}));
+    .map(({stops,missing}) => ({city,date,stops,missing,
+      ...(stage ? {mealCity,stayCity,cn:stage.cn,en:stage.en,visitIds:stage.visits} : {})}));
 }
 
 function routeCandidates(places, settings, splitId) {
-  const days = Array.from({length:settings.days},(_,day)=>buildDay(places,settings,day,splitId));
+  const stages = scheduleFor(settings);
+  const days = Array.from({length:settings.days},(_,day)=>buildDay(places,settings,day,splitId,stages?.[day]));
+  const issuesFor = (place,day) => {
+    const result = assess(place,settings,day);
+    return result.status==='ready' ? [] : [{id:place.id,name:place.name,city:place.city,day,...result}];
+  };
+  if (stages) {
+    const issues = stages.flatMap((stage,day)=>places.filter(place=>{
+      if (place.kind==='food') return place.city===(stage.mealCity ?? stage.city);
+      if (place.kind==='stay') return day<settings.days-1 && place.city===(stage.stayCity ?? stage.city);
+      return place.city===stage.city && (!stage.visits || stage.visits.includes(place.id));
+    }).flatMap(place=>issuesFor(place,day)));
+    return {days,issues};
+  }
   const issues = places.flatMap(place => {
     const index = cities.indexOf(place.city);
     const daysToCheck = index===1 && place.kind==='food' && settings.days===3 ? [1,2] : [index];
-    return daysToCheck.filter(day=>day>=0 && day<settings.days).flatMap(day=>{
-      const result = assess(place,settings,day);
-      return result.status==='ready' ? [] : [{id:place.id,name:place.name,city:place.city,day,...result}];
-    });
+    return daysToCheck.filter(day=>day>=0 && day<settings.days).flatMap(day=>issuesFor(place,day));
   });
   return {days,issues};
 }
 
 function assembleRoute(settings, days, issues) {
   const outdoor = ['hike','nature'].includes(settings.theme);
-  const missingTheme = outdoor && !days.some(day=>day.stops.some(stop=>stop.theme===settings.theme));
+  const requiresTheme = outdoor || ['craft','pilgrimage'].includes(settings.theme);
+  const missingTheme = requiresTheme && !days.some(day=>day.stops.some(stop=>
+    stop.theme===settings.theme || stop.formats?.includes(settings.theme)));
+  const direction = settings.direction && routeDirections.find(item=>item.id===settings.direction);
   const themeNote = missingTheme
-    ? 'В пилотном каталоге нет подтверждённых природных объектов или пеших троп. Культурные остановки показаны для справки.'
+    ? direction ? 'Для выбранного формата требуется ключевая остановка с подходящими условиями на дату поездки.' :
+      'В пилотном каталоге нет подтверждённых объектов для этого формата. Культурные остановки показаны для справки.'
     : settings.theme==='family' ? 'Приоритет у музеев. Возрастные условия и семейные услуги нужно уточнить у объектов.'
     : settings.theme==='romantic' ? 'Приоритет у архитектурных остановок и коротких визитов.' : null;
-  const assumptions = ['Переезды и запас между остановками рассчитаны по схеме пилота. Транспорт и брони подтверждаются отдельно.'];
+  const assumptions = [direction ? 'Время переездов ориентировочное. Сверьте время в пути и точки посадки с перевозчиком, а групповые места с поставщиками.' :
+    'Переезды и запас между остановками рассчитаны по схеме пилота. Транспорт и брони подтверждаются отдельно.'];
+  if (direction?.id==='bogolyubovo') assumptions.push('Перед пешей частью проверьте состояние тропы, световой день и доступность после паводка или снегопада.');
   if (days.some(day=>day.stops.some(stop=>stop.split))) assumptions.push('Два сеанса и ожидание второй подгруппы нужно согласовать с объектом.');
   return { settings, days, issues, themeNote, assumptions,
+    ...(direction ? {direction} : {}),
     completeness:!missingTheme && days.every(day => day.missing.length === 0) };
 }
 
@@ -303,8 +344,8 @@ export function reviewRoute(places, plan) {
   const byId = new Map(places.map(place=>[place.id,place]));
   const issues = plan.days.flatMap((day,index)=>day.stops.flatMap(stop=>{
     if (!stop.id) return [];
-    const issue = {id:stop.id,name:stop.name,city:day.city,day:index};
     const place = byId.get(stop.id);
+    const issue = {id:stop.id,name:stop.name,city:place?.city ?? day.city,day:index};
     if (!place) return [{...issue,status:'unknown',reasons:['В каталоге больше нет этой остановки.']}];
     const settings = stop.split ? {...plan.settings,size:Math.ceil(plan.settings.size/2)} : plan.settings;
     const assessment = assess(place,settings,index);

@@ -12,16 +12,24 @@ import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
 import { mergePublishedConditions } from './published-conditions.mjs';
 import { getDemoOffers } from './ota-offers.mjs';
+import { detectCities, draftItinerary, listCities } from './nationwide.mjs';
+import { interpretBrief, parseBrief } from './planner-brief.mjs';
+import { answerKnowledge, classifyKnowledge } from './knowledge-chat.mjs';
+import { createRegionalStatistics, statisticsRegions } from './regional-statistics.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const load = name => readFile(join(directory,'data',name),'utf8').then(JSON.parse);
-const [catalog, baseline, initial] = await Promise.all([
-  load('catalog.json'), load('demo-audit.json'), load('snapshot.json'),
+const [catalog, originalAudit, changedAudit, regionalAudit, initial] = await Promise.all([
+  load('catalog.json'), load('demo-audit.json'), load('demo-audit-change.json'),
+  load('demo-audit-regional.json'), load('snapshot.json'),
 ]);
+const withRegionalAudit = audit => ({...audit,objects:{...regionalAudit.objects,...audit.objects}});
+const baseline = withRegionalAudit(originalAudit);
+const alternateAudit = withRegionalAudit(changedAudit);
 const mapData = await load('map.json');
 const demoOffers = await load('demo-ota.json');
 const publishedConditions = mergePublishedConditions(catalog,await Promise.all([
-  load('published-vladimir.json'), load('published-suzdal.json'), load('published-hospitality.json'),
+  load('published-vladimir.json'), load('published-suzdal.json'), load('published-hospitality.json'), load('published-regional.json'),
 ]));
 const stateDir = process.env.TUR_STATE_DIR || join(directory,'.runtime');
 const statePath = join(stateDir,'state.json');
@@ -30,7 +38,9 @@ const publicDemo = process.env.TUR_PUBLIC_DEMO === '1';
 const verifiedAuditPath = process.env.TUR_AUDIT_FEED_FILE;
 if (publicDemo && verifiedAuditPath) throw new Error('Публичный показ использует опубликованные условия и учебные данные');
 const statsEdition = process.env.TUR_ROSSTAT_EDITION;
+const regionalStatistics = createRegionalStatistics({edition:statsEdition,apiKey:process.env.ROSCHART_API_KEY});
 const ollamaModel = process.env.TUR_OLLAMA_MODEL || 'qwen3.5:4b';
+const briefModel = process.env.TUR_OLLAMA_DETAIL_MODEL || ollamaModel;
 const ollamaUrl = 'http://127.0.0.1:11434';
 const userAgent = 'TurContourMVP/1.0 (School 21 demonstration)';
 let state;
@@ -40,9 +50,11 @@ try {
   if (error.code !== 'ENOENT') throw error;
   state = { ...initial, audit:baseline, changes:[], sources:{}, refreshedAt:null };
 }
+state.audit = withRegionalAudit(state.audit);
 state.publishedConditions = publishedConditions;
 let queue = Promise.resolve();
 let modelBusy = false;
+let waitingModel = null;
 function serial(action) {
   const result = queue.then(action);
   queue = result.catch(error => console.error('Операция обновления:',error.message));
@@ -50,11 +62,19 @@ function serial(action) {
 }
 
 async function withModel(action, fallback) {
-  if (!publicDemo) return action();
-  if (modelBusy) return fallback;
-  modelBusy = true;
+  if (modelBusy) {
+    if (waitingModel) return fallback;
+    const acquired = await new Promise(resolve=>{
+      const timer=setTimeout(()=>{waitingModel=null;resolve(false);},5000);
+      waitingModel=()=>{clearTimeout(timer);waitingModel=null;resolve(true);};
+    });
+    if (!acquired) return fallback;
+  } else modelBusy = true;
   try { return await action(); }
-  finally { modelBusy = false; }
+  finally {
+    if (waitingModel) waitingModel();
+    else modelBusy = false;
+  }
 }
 
 async function persist(next) {
@@ -197,7 +217,7 @@ async function refresh(metric) {
 
 async function changeAudit(version) {
   return serial(async () => {
-    const audit = version === '2' ? await load('demo-audit-change.json') : await load('demo-audit.json');
+    const audit = version === '2' ? alternateAudit : baseline;
     if (audit.version === state.audit.version) return state;
     const now = new Date().toISOString();
     const next = { ...state, audit, auditCheckedAt:now };
@@ -370,10 +390,10 @@ async function interpret(question) {
   }
 }
 
-async function answer(question, settings) {
-  const unsupported = unsupportedStatistics(question);
+async function answer(question, settings, trustedPlan = null) {
+  const unsupported = !trustedPlan && unsupportedStatistics(question);
   if (unsupported) return {plan:{intent:'clarify',mode:'Проверка доступных показателей'},title:'Охват данных',text:unsupported};
-  const plan = await withModel(()=>interpret(question),{...fallbackQuery(question),mode:'Базовый разбор · модель занята'});
+  const plan = trustedPlan ?? await withModel(()=>interpret(question),{...fallbackQuery(question),mode:'Базовый разбор · модель занята'});
   if (plan.intent === 'statistics') {
     const snapshot = await refresh(plan.metric);
     const series = snapshot.stats[plan.metric];
@@ -439,19 +459,25 @@ async function readBody(request) {
 const assets = {
   '/':['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'],
   '/atlas.js':['atlas.js','text/javascript'], '/atlas.css':['atlas.css','text/css'], '/map.js':['map.js','text/javascript'],
+  '/overview.js':['overview.js','text/javascript'], '/workspace.css':['workspace.css','text/css'],
+  '/locale.js':['locale.js','text/javascript'], '/map-workspace.css':['map-workspace.css','text/css'],
+  '/composer.js':['composer.js','text/javascript'], '/knowledge.js':['knowledge.js','text/javascript'],
   '/chinese-itinerary.mjs':['chinese-itinerary.mjs','text/javascript'],
   '/vendor/leaflet.js':['vendor/leaflet.js','text/javascript'], '/vendor/leaflet.css':['vendor/leaflet.css','text/css'],
   '/assets/suzdal.jpg':['assets/suzdal.jpg','image/jpeg'],
   '/assets/inter-cyrillic.woff2':['assets/inter-cyrillic.woff2','font/woff2'],
   '/assets/inter-latin.woff2':['assets/inter-latin.woff2','font/woff2'],
+  '/assets/pt-serif-cyrillic.woff2':['assets/pt-serif-cyrillic.woff2','font/woff2'],
+  '/assets/pt-serif-latin.woff2':['assets/pt-serif-latin.woff2','font/woff2'],
 };
 
 export async function handleRequest(request,response) {
-  const path = new URL(request.url,'http://localhost').pathname;
+  const url = new URL(request.url,'http://localhost');
+  const path = url.pathname;
   try {
-    if (request.method==='GET' && path==='/engine.mjs') {
+    if (request.method==='GET' && ['/engine.mjs','/route-directions.mjs'].includes(path)) {
       response.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','X-Content-Type-Options':'nosniff'});
-      return response.end(await readFile(join(directory,'engine.mjs')));
+      return response.end(await readFile(join(directory,path.slice(1))));
     }
     if (request.method==='GET' && Object.hasOwn(assets,path)) {
       const [name,type] = assets[path];
@@ -460,10 +486,33 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/map') return respond(response,200,mapData);
     if (request.method==='GET' && path==='/api/state') return respond(response,200,dashboard(state));
+    if (request.method==='GET' && path==='/api/cities') return respond(response,200,await listCities(url.searchParams.get('q') ?? ''));
+    if (request.method==='GET' && path==='/api/stat-regions') return respond(response,200,{regions:await statisticsRegions()});
+    if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
+    if (request.method==='POST' && path==='/api/draft') return respond(response,200,await draftItinerary(await readBody(request)));
+    if (request.method==='POST' && path==='/api/knowledge') {
+      const input=await readBody(request);
+      const question=typeof input.question==='string'?input.question.trim():'';
+      if (question.length<3 || question.length>600) return respond(response,400,{error:'Задайте вопрос в пределах 600 символов.'});
+      return respond(response,200,await answerKnowledge({question,locale:input.locale,dashboard:dashboard(state),
+        settings:input.settings,scope:input.regionId},{askStats:answer,detectCities,lookupDraft:draftItinerary,getRegionalStats:regionalStatistics.get,
+        classify:text=>process.env.TUR_NO_LLM==='1' ? null : withModel(()=>classifyKnowledge(text,{model:ollamaModel,baseUrl:ollamaUrl}),null)}));
+    }
+    if (request.method==='POST' && path==='/api/brief') {
+      const input = await readBody(request);
+      const brief = typeof input.text==='string' ? input.text.trim() : '';
+      if (brief.length<3 || brief.length>600) return respond(response,400,{error:'Опишите задачу в пределах 600 символов.'});
+      const cities = await detectCities(brief);
+      const referenceDate = new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
+      const fast = {parsed:parseBrief(brief,referenceDate),mode:'rules'};
+      const allowed = input.mode==='ai' && process.env.TUR_NO_LLM!=='1';
+      const result = allowed ? await withModel(()=>interpretBrief(brief,{baseUrl:ollamaUrl,model:briefModel,referenceDate}),{...fast,mode:'busy'}) : fast;
+      return respond(response,200,{...result,cities});
+    }
     if (request.method==='GET' && path==='/api/demo-offers-source') return respond(response,200,demoOffers);
     if (request.method==='POST' && path==='/api/demo-offers') return respond(response,200,getDemoOffers(demoOffers,await readBody(request)));
     if (request.method==='GET' && /^\/api\/audit-version\/[12]$/.test(path)) {
-      return respond(response,200,path.endsWith('/2') ? await load('demo-audit-change.json') : baseline);
+      return respond(response,200,path.endsWith('/2') ? alternateAudit : baseline);
     }
     if (request.method==='POST' && path==='/api/refresh') return respond(response,200,dashboard(await refresh()));
     if (request.method==='POST' && path==='/api/audit') {

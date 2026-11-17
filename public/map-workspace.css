@@ -1,0 +1,125 @@
+.route-map {
+  --map-focus: #104e80;
+  --map-change: #9a441f;
+  --map-unknown: #835b0f;
+  --map-blocked: #ab391f;
+}
+
+.route-map .map-marker:focus-visible,
+.route-map .leaflet-control-zoom a:focus-visible,
+.route-map .map-places-popup button:focus-visible {
+  outline: 2px solid var(--map-focus);
+  outline-offset: 3px;
+}
+
+.route-map .map-marker:focus-visible .map-pin__core,
+.route-map .map-marker:focus-visible .map-city__count {
+  outline: 2px solid #fff;
+  outline-offset: 0;
+}
+
+.route-map .map-pin--unknown .map-pin__core,
+.route-map .map-pin--blocked .map-pin__core {
+  position: relative;
+}
+
+.route-map .map-pin--unknown .map-pin__core::after,
+.route-map .map-pin--blocked .map-pin__core::after {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid white;
+  background: var(--map-unknown);
+  content: '';
+}
+
+.route-map .map-pin--unknown .map-pin__core::after {
+  transform: rotate(45deg);
+}
+
+.route-map .map-pin--blocked .map-pin__core::after {
+  right: -4px;
+  width: 9px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--map-blocked);
+}
+
+.route-map .map-city--changed .map-city__count {
+  border-color: #fff;
+  background: var(--map-change);
+  color: #fff;
+}
+
+.route-map .map-city--selected .map-city__count {
+  outline: 2px solid var(--map-focus);
+  outline-offset: 2px;
+}
+
+.route-map .map-tooltip {
+  padding: 8px 10px;
+  border: 1px solid #cedcd4;
+  border-radius: 8px;
+  white-space: normal;
+}
+
+.route-map .map-tooltip > div {
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  max-width: min(230px, 58vw);
+}
+
+.route-map .map-tooltip strong {
+  font-size: .77rem;
+  font-weight: 720;
+}
+
+.route-map .map-tooltip small {
+  color: #435c51;
+  font-size: .7rem;
+  line-height: 1.4;
+}
+
+.route-map .map-places-popup {
+  display: grid;
+  min-width: 155px;
+  gap: 3px;
+}
+
+.route-map .map-places-popup strong {
+  margin: 1px 0 3px;
+  color: #254236;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.route-map .map-places-popup button {
+  min-height: 34px;
+  border-radius: 5px;
+}
+
+.route-map .map-city__name,
+.route-map .map-pin__caption {
+  max-width: min(165px, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (pointer: coarse) {
+  #tour-map.route-map .leaflet-control-zoom a {
+    width: 42px;
+    height: 42px;
+    line-height: 42px;
+  }
+}
+
+@media (forced-colors: active) {
+  .route-map .map-marker:focus-visible,
+  .route-map .leaflet-control-zoom a:focus-visible,
+  .route-map .map-places-popup button:focus-visible {
+    outline-color: Highlight;
+  }
+}

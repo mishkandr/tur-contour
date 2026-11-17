@@ -1,42 +1,98 @@
 import { mountAtlas } from '/atlas.js';
-import { assess, clockTime, defaultRoute, kindNames, months, number, planRoute, publishedHours, routeSettings } from '/engine.mjs';
+import { assess, clockTime, defaultRoute, kindNames, months, number, planRoute, publishedHours, routeSettings, routeDirections, statSummary } from '/engine.mjs';
 import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
+import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, localizeDom, setLocale, t } from '/locale.js';
+import { renderOverview } from '/overview.js';
+import { itineraryTabs, mountComposer } from '/composer.js';
+import { mountKnowledge } from '/knowledge.js';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
 const dialog = $('#place-dialog');
-const labels = { impact:'Карта маршрутов', catalog:'Каталог', route:'Маршрут', stats:'Статистика', sources:'Данные и методика' };
+const labels = { overview:'Обзор региона', impact:'Карта объектов', catalog:'Каталог', route:'Маршруты', stats:'Статистика',
+  ask:'Вопрос по данным', sources:'Данные и методика' };
 const statusText = { ready:'Подходит по условиям', blocked:'Ограничение', unknown:'Требует проверки' };
 const routeThemes = {
   heritage:'История и архитектура', museum:'Музеи', romantic:'Романтическая поездка', family:'Семейная поездка',
-  hike:'Пеший маршрут', nature:'Природа', any:'Любой формат',
+  hike:'Пеший маршрут', nature:'Природа', craft:'Ремёсла', pilgrimage:'Паломничество', any:'Любой формат',
 };
+addLocaleMessages([
+  ['Проверка программы','Verify itinerary','核查行程'],
+  ['Направление','Direction','路线方向'],
+  ['Данные для проверки','Evidence for verification','用于核查的数据'],
+  ['Опубликованные и подтверждённые условия','Published and supplier-confirmed conditions','已公布和供应方确认的条件'],
+  ['Сопоставить даты, группу и условия','Match dates, group and conditions','核对日期、团队与参观条件'],
+  ['Карта объектов','Map of places','地点地图'],
+  ['Дата визита','Visit date','到访日期'],
+  ['Все города','All cities','所有城市'],
+  ['Город','City','城市'],
+  ['Режим','Mode','模式'],
+  ['Опубликованные данные','Published data','已公布的数据'],
+  ['Учебные данные','Training data','演示数据'],
+  ['Группа · {size} чел.','Group · {size} people','团队 · {size} 人'],
+  ['Обновлено','Updated','已更新'],
+  ['Картографические источники','Mapping sources','地图数据源'],
+  ['Города, координаты и часовые пояса','Cities, coordinates and time zones','城市、坐标和时区'],
+  ['Места и категории OpenStreetMap по запросу; при сбое — геопоиск Wikimedia и сохранённые записи.',
+    'OpenStreetMap places and categories on request, with Wikimedia geosearch and saved records as fallbacks.',
+    '按需检索 OpenStreetMap 地点和类别，失败时使用 Wikimedia 地理搜索及已保存的记录。'],
+  ['Графики и запись сверяются по паспорту поставщика.','Use the supplier record to check hours and booking.','开放时间及预约请查阅供应方档案。'],
+  ['Проверить по опубликованным условиям','Check against published conditions','按已公布条件核查'],
+  ['Территория','Area','地区'],
+  ['Росстат · месячные ряды средств размещения','Rosstat · monthly accommodation series','俄罗斯统计局 · 住宿业月度序列'],
+  ['Загружаем региональный ряд…','Loading regional series…','正在加载地区统计序列…'],
+  ['Нет доступных месячных данных для этого субъекта.','No monthly data is available for this federal subject.','该联邦主体暂无可用的月度数据。'],
+  ['Лимит запросов к источнику достигнут.','The source request limit has been reached.','已达到数据源的请求上限。'],
+  ['Ряд из сохранённой копии','Series from cache','已缓存的统计序列'],
+  ['Задать вопрос по региону','Ask about this region','询问此地区'],
+  ['Последние три полных года','Last three complete years','最近三个完整年度'],
+  ['Методика Росстата изменилась с января 2026 года.','Rosstat methodology changed in January 2026.','俄罗斯统计局自2026年1月起调整统计方法。'],
+  ['Методология Росстата','Rosstat methodology','俄罗斯统计方法'],
+  ['Месячные значения','Monthly values','月度数值'],
+  ['{date} · {days} дня · {size} чел.','{date} · {days} days · {size} people','{date} · {days} 天 · {size} 人'],
+  ['Владимир','Vladimir','弗拉基米尔'],
+  ['Суздаль','Suzdal','苏兹达尔'],
+  ['Кидекша','Kideksha','基杰克沙'],
+  ['Муром','Murom','穆罗姆'],
+  ['Гусь-Хрустальный','Gus-Khrustalny','古斯-赫鲁斯塔利内'],
+  ['Боголюбово','Bogolyubovo','博戈柳博沃'],
+  ['На эти даты варианты не найдены. Измените параметры программы или уточните данные объектов.',
+    'No options found for these dates. Change the itinerary requirements or check place conditions.',
+    '这些日期未找到方案。请修改行程参数或核实地点条件。'],
+]);
 let data;
 let geodata = {};
 let atlas;
-let options = {...defaultRoute};
+let composer;
+let knowledge;
+let atlasHash;
+const mapContexts = new Map();
+let options = {...defaultRoute,demo:false};
 let review = newReview();
+const overview = {filter:'external',selected:null};
 let agent;
 let busy = false;
 let metric = 'nights';
+const statistics = {regionId:'83',period:'full',regions:null,lookup:null,result:null,loading:false,version:0};
 let offerSearch = {date:defaultRoute.date,occupancy:2,result:null};
-let filters = {search:'',kind:'all',status:'all',date:''};
+let filters = {search:'',kind:'all',status:'all',city:'all',date:'',size:null};
 let toastTimer;
 const safe = value => String(value ?? '').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[character]);
 const chip = (text,type='') => '<span class="chip '+type+'">'+safe(text)+'</span>';
 const outbound = (href,label) => '<a href="'+safe(href)+'" target="_blank" rel="noopener noreferrer">'+safe(label)+'</a>';
-const page = () => Object.hasOwn(labels,location.hash.slice(1)) ? location.hash.slice(1) : 'impact';
-const dateFmt = new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',year:'numeric',timeZone:'Europe/Moscow'});
-const datetimeFmt = new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Moscow'});
-const date = text => dateFmt.format(new Date(text));
-const timestamp = text => text ? datetimeFmt.format(new Date(text)) : 'ещё не проверен';
-const sameSettings = (a,b) => Object.keys(defaultRoute).every(key=>a[key]===b[key]);
+const path = () => location.hash.slice(1).split('?')[0];
+const page = () => Object.hasOwn(labels,path()) ? path() : 'overview';
+const params = () => new URLSearchParams(location.hash.slice(1).split('?')[1]);
+const date = text => formatDate(text,{day:'numeric',month:'short',year:'numeric'});
+const timestamp = text => text ? formatDate(text,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : t('ещё не проверен');
+const sameSettings = (a,b) => [...Object.keys(defaultRoute),'direction'].every(key=>a[key]===b[key]);
 const head = (title,subtitle='',action='') => '<header class="page-head"><div><h1>'+safe(title)+'</h1>'+
   (subtitle ? '<p class="muted">'+safe(subtitle)+'</p>' : '')+'</div>'+action+'</header>';
 const button = (label,action,quiet=false) => '<button type="button" class="'+(quiet?'button-quiet':'button')+'" data-action="'+action+'">'+safe(label)+'</button>';
 const val = v => v===null ? 'нет данных' : typeof v==='number' ? number(v) : Array.isArray(v) ? v.join(', ') : String(v);
 const placeDay = place => place.city==='Суздаль' ? 1 : place.city==='Кидекша' ? 2 : 0;
-const catalogSettings = () => ({...options,date:filters.date || options.date,demo:false});
+const catalogSettings = () => ({...options,date:filters.date || options.date,size:filters.size ?? options.size,demo:false});
+const itemName = item => getLocale()==='zh' ? item.cn || item.name : getLocale()==='en' ? item.en || item.name : item.name;
 
 function visitDate(start, day) {
   const value = new Date(start+'T12:00:00Z');
@@ -70,30 +126,38 @@ function toast(message) {
   toastTimer = setTimeout(()=>{ $('#toast').hidden=true; },5500);
 }
 
+function statisticsMonth(month, width = 'long') {
+  const index = months.indexOf(month);
+  return index < 0 ? month : formatDate(new Date(Date.UTC(2024,index,1)),{month:width});
+}
+
 function statisticChart(series) {
   const maximum = Math.max(1,...series.averages.map(month=>month.value ?? 0));
   const lows = new Set(series.lows.map(month=>month.month));
   const columns = series.averages.map(({month,value})=>{
     const height = value===null ? 0 : Math.round(100*value/maximum);
-    const tooltip = month+' · '+(value===null ? 'нет данных' : number(value)+' '+series.unit);
+    const tooltip = statisticsMonth(month)+' · '+(value===null ? t('нет данных') : formatNumber(value)+' '+t(series.unit));
     return '<div class="chart-col" title="'+safe(tooltip)+'"><div class="chart-value">'+
-      (value===null?'—':number(Math.round(value/1000))+' тыс.')+'</div><div class="bar-base"><div class="chart-bar '+
-      (lows.has(month)?'low':'')+'" style="--h:'+height+';width:100%;'+(value===null?'visibility:hidden':'')+'"></div></div><span>'+safe(month.slice(0,3))+'</span></div>';
+      (value===null?'—':safe(formatNumber(value,{notation:'compact',maximumFractionDigits:0})))+'</div><div class="bar-base"><div class="chart-bar '+
+      (lows.has(month)?'low':'')+'" style="--h:'+height+';width:100%;'+(value===null?'visibility:hidden':'')+'"></div></div><span>'+safe(statisticsMonth(month,'short'))+'</span></div>';
   }).join('');
-  return '<div class="chart" aria-hidden="true">'+columns+'</div><p class="caption">Среднее по месяцам, '+
-    safe((series.years.some(y=>y.total!==null) ? series.years.filter(y=>y.total!==null) : series.years).map(y=>y.year).join(', '))+
-    '. Тёмным выделены три месяца с наименьшими значениями.</p>'+
-    '<details><summary class="link-button">Значения по месяцам</summary><div class="table-wrap"><table><thead><tr><th>Месяц</th>'+
-    series.years.map(y=>'<th>'+y.year+'</th>').join('')+'</tr></thead><tbody>'+months.map((month,i)=>'<tr><th scope="row">'+month+'</th>'+
-    series.years.map(y=>'<td>'+val(y.monthly[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
+  const full = series.years.filter(year=>year.total!==null);
+  const years = (full.length ? full : series.years).map(year=>year.year).join(', ');
+  return '<div class="chart" aria-hidden="true">'+columns+'</div><p class="caption">'+
+    safe(t('Среднее по месяцам за {years}. Тёмным выделены три месяца с наименьшими значениями.',{years}))+'</p>'+
+    '<details><summary class="link-button">'+safe(t('Значения по месяцам'))+'</summary><div class="table-wrap"><table><thead><tr><th>'+safe(t('Месяц'))+'</th>'+
+    series.years.map(year=>'<th scope="col">'+safe(year.year)+'</th>').join('')+'</tr></thead><tbody>'+months.map((month,index)=>
+      '<tr><th scope="row">'+safe(statisticsMonth(month))+'</th>'+series.years.map(year=>
+        '<td>'+safe(year.monthly[index]==null ? t('нет данных') : formatNumber(year.monthly[index]))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
 }
 
 function matchingPlaces(settings) {
   const query = filters.search.toLowerCase().trim();
   return data.places.filter(place=>{
-    const result = assess(place,settings,placeDay(place));
+    const result = assess(place,settings,0);
     return (filters.kind==='all'||place.kind===filters.kind) && (filters.status==='all'||result.status===filters.status) &&
-      (!query || (place.name+' '+place.city).toLowerCase().includes(query));
+      (filters.city==='all'||filters.city===place.city) && (!query ||
+        [place.name,place.cn,place.en,place.city,t(place.city)].some(value=>value?.toLowerCase().includes(query)));
   });
 }
 
@@ -104,58 +168,75 @@ function selectOption(value,label,selected) {
 function catalogRows() {
   const settings = catalogSettings();
   const matching = matchingPlaces(settings);
-  if (!matching.length) return '<tr><td colspan="6"><p class="empty">Подходящих объектов нет.</p></td></tr>';
+  if (!matching.length) return '<tr role="row"><td role="cell" colspan="6"><p class="empty">Подходящих объектов нет.</p></td></tr>';
   return matching.map(place=>{
-    const offset = placeDay(place);
+    const offset = 0;
     const result = assess(place,settings,offset);
     const evidence = place.publishedConditions;
     const hours = publishedHours(place,settings.date,offset);
     const source = evidence?.schedule?.url ?? evidence?.booking?.url ?? evidence?.notes?.[0]?.url;
-    return '<tr><td><button class="link-button" data-place="'+safe(place.id)+'">'+safe(place.name)+'</button></td><td>'+safe(place.city)+
-      '<div class="caption">'+visitDate(settings.date,offset)+'</div></td>'+
-      '<td>'+safe(openingLabel(hours))+(hours?.label ? '<div class="caption">'+safe(hours.label)+'</div>' : '')+'</td>'+
-      '<td>'+kindNames[place.kind]+'</td><td>'+chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</td>'+
-      '<td>'+outbound(source ?? place.url,source ? 'Условия визита' : place.url.includes('wikidata')?'Wikidata':'Страница объекта')+'</td></tr>';
+    return '<tr role="row"><td role="cell"><button class="link-button" data-source-text data-place="'+safe(place.id)+'" data-place-day="0">'+safe(itemName(place))+
+      '</button></td><td role="cell">'+safe(t(place.city))+'</td>'+
+      '<td role="cell">'+safe(t(openingLabel(hours)))+(hours?.label ? '<div class="caption" data-source-text>'+safe(hours.label)+'</div>' : '')+'</td>'+
+      '<td role="cell">'+safe(t(kindNames[place.kind]))+'</td><td role="cell">'+chip(t(statusText[result.status]),result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</td>'+
+      '<td role="cell">'+outbound(source ?? place.url,t(source ? 'Условия визита' : place.url.includes('wikidata')?'Wikidata':'Страница объекта'))+'</td></tr>';
   }).join('');
 }
 
 function catalog() {
-  return head('Каталог объектов','Опубликованные условия для группы из '+options.size+' чел. · Владимир, Суздаль и Кидекша в последовательные дни')+
-    '<section class="panel"><div class="filters"><label class="field">Дата начала<input id="catalog-date" type="date" required value="'+safe(catalogSettings().date)+'"></label>'+
+  const settings = catalogSettings();
+  const cities = [...new Set(data.places.map(place=>place.city))];
+  return head(t('Каталог объектов'),t('Данные Владимирской области'))+
+    '<section class="panel"><div class="filters"><label class="field">Дата визита<input id="catalog-date" type="date" required value="'+safe(settings.date)+'"></label>'+
+    '<label class="field compact-field">Размер группы<input id="catalog-size" type="number" min="1" max="100" value="'+settings.size+'"></label>'+
     '<label class="field flex-grow">Поиск<input type="search" id="search" placeholder="Название или город" value="'+safe(filters.search)+
-    '"></label><label class="field">Категория<select id="kind">'+Object.entries({all:'Все категории',...kindNames}).map(([v,t])=>selectOption(v,t,filters.kind)).join('')+
-    '</select></label><label class="field">Готовность<select id="status">'+Object.entries({all:'Любой статус',...statusText}).map(([v,t])=>selectOption(v,t,filters.status)).join('')+
-    '</select></label></div><div class="table-wrap catalog-table"><table><thead><tr><th>Объект</th><th>Место и дата</th><th>Опубликованный график</th><th>Категория</th><th>Готовность</th><th>Источник</th></tr></thead>'+
-    '<tbody id="catalog-rows">'+catalogRows()+'</tbody></table></div></section>';
+    '"></label><label class="field">Город<select id="city">'+selectOption('all',t('Все города'),filters.city)+cities.map(city=>selectOption(city,t(city),filters.city)).join('')+
+    '</select></label><label class="field">Категория<select id="kind">'+Object.entries({all:'Все категории',...kindNames}).map(([v,label])=>selectOption(v,t(label),filters.kind)).join('')+
+    '</select></label><label class="field">Готовность<select id="status">'+Object.entries({all:'Любой статус',...statusText}).map(([v,label])=>selectOption(v,t(label),filters.status)).join('')+
+    '</select></label></div><div class="table-wrap catalog-table"><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Объект</th><th scope="col">Город</th><th scope="col">Опубликованный график</th><th scope="col">Категория</th><th scope="col">Готовность</th><th scope="col">Источник</th></tr></thead>'+
+    '<tbody id="catalog-rows" role="rowgroup">'+catalogRows()+'</tbody></table></div></section>';
+}
+
+function evidenceReason(reason) {
+  const groupLimit = reason.match(/^Лимит (\d+) чел\. для группы из (\d+)\.$/);
+  if (groupLimit) return t('Лимит {limit} чел. для группы из {group}.',{limit:groupLimit[1],group:groupLimit[2]});
+  const publishedLimit = reason.match(/^Опубликованный лимит для этого посещения — (\d+) чел\.$/);
+  if (publishedLimit) return t('Опубликованный лимит для этого посещения — {limit} чел.',{limit:publishedLimit[1]});
+  return t(reason);
 }
 
 function officialEvidence(place,settings,offset) {
   const evidence = place.publishedConditions;
-  const title = '<h3>Опубликованные условия</h3>';
   const officialDate = visitDate(settings.date,offset);
   const result = assess(place,{...settings,demo:false},offset);
-  const summary = '<div class="official-evidence-head"><div>'+title+'<p class="caption">'+officialDate+
-    ' · группа '+settings.size+' чел.</p></div>'+chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</div>';
+  const status = chip(t(statusText[result.status]),result.status==='blocked'?'error':result.status==='unknown'?'warn':'');
+  const summary = '<div class="official-evidence-head"><div><h3>'+safe(t('Опубликованные условия'))+'</h3><p class="caption">'+
+    safe(t('{date} · группа {size} чел.',{date:officialDate,size:formatNumber(settings.size)}))+'</p></div>'+status+'</div>';
   if (!evidence) return '<section class="official-evidence">'+summary+
-    '<p class="detail">В собранных источниках нет условий визита. Уточните часы, запись и допустимый размер группы у объекта.</p></section>';
+    '<p class="detail">'+safe(t('В собранных источниках нет условий визита. Уточните часы, запись и допустимый размер группы у объекта.'))+'</p></section>';
   const hours = publishedHours(place,settings.date,offset);
+  const sourceText = text=>'<p lang="ru" data-source-text>'+safe(text)+'</p>';
   const lastEntry = hours?.windows?.length && hours.lastEntryMinutes ?
-    '<p class="caption">Последний вход '+hours.windows.map(([,close])=>clockTime(close-hours.lastEntryMinutes)).join(', ')+'</p>' : '';
-  const period = hours?.validFrom || hours?.validUntil ? '<p class="caption">Период действия'+
-    (hours.validFrom ? ' с '+date(hours.validFrom) : '')+(hours.validUntil ? ' по '+date(hours.validUntil) : '')+'</p>' : '';
-  const facts = items=>items.map(item=>'<li><p>'+safe(item.text)+'</p>'+outbound(item.url,'Источник')+'</li>').join('');
-  const questions = [...new Set([...(evidence.clarify ?? []),...(result.status==='unknown' ? result.reasons : [])])];
+    '<p class="caption">'+safe(t('Последний вход {time}',{time:hours.windows.map(([,close])=>clockTime(close-hours.lastEntryMinutes)).join(', ')}))+'</p>' : '';
+  const validity = [hours?.validFrom && t('с {date}',{date:date(hours.validFrom)}),
+    hours?.validUntil && t('по {date}',{date:date(hours.validUntil)})].filter(Boolean).join(' ');
+  const period = validity ? '<p class="caption">'+safe(t('Период действия {period}',{period:validity}))+'</p>' : '';
+  const facts = items=>items.map(item=>'<li>'+sourceText(item.text)+outbound(item.url,t('Источник'))+'</li>').join('');
+  const sourceQuestions = new Set(evidence.clarify ?? []);
+  const questions = [...new Set([...sourceQuestions,...(result.status==='unknown' ? result.reasons : [])])];
   return '<section class="official-evidence">'+summary+
-    (result.status==='blocked' ? '<p class="detail">'+safe(result.reasons.join(' '))+'</p>' : '')+
-    (questions.length ? '<div class="callout"><strong>Уточнить у объекта</strong><ul class="official-questions">'+
-      questions.map(question=>'<li>'+safe(question)+'</li>').join('')+'</ul></div>' : '')+
-    '<dl class="official-facts"><dt>График'+(hours?.label?' · '+safe(hours.label):'')+'</dt><dd><strong>'+safe(openingLabel(hours))+'</strong>'+
-    (hours ? lastEntry+period+(hours.note?'<p class="detail">'+safe(hours.note)+'</p>':'')+
-      outbound(hours.url,'Опубликованный график') : '')+'</dd>'+
-    (evidence.booking ? '<dt>Правила записи</dt><dd><p>'+safe(evidence.booking.text)+'</p>'+outbound(evidence.booking.url,'Источник')+'</dd>' : '')+
-    (evidence.limits?.length ? '<dt>Лимиты отдельных посещений</dt><dd><ul class="official-links">'+facts(evidence.limits)+'</ul></dd>' : '')+
-    (evidence.notes?.length ? '<dt>Другие сведения</dt><dd><ul class="official-links">'+facts(evidence.notes)+'</ul></dd>' : '')+
-    '</dl><p class="caption">Сверено с опубликованными источниками '+date(evidence.checkedAt)+' · Наличие мест на дату визита проверяется отдельно.</p></section>';
+    (result.status==='blocked' ? '<p class="detail">'+safe(result.reasons.map(evidenceReason).join(' '))+'</p>' : '')+
+    (questions.length ? '<div class="callout"><strong>'+safe(t('Уточнить у объекта'))+'</strong><ul class="official-questions">'+
+      questions.map(question=>sourceQuestions.has(question) ? '<li lang="ru" data-source-text>'+safe(question)+'</li>' : '<li>'+safe(evidenceReason(question))+'</li>').join('')+'</ul></div>' : '')+
+    '<dl class="official-facts"><dt>'+safe(t('График'))+(hours?.label?' · <span lang="ru" data-source-text>'+safe(hours.label)+'</span>':'')+
+    '</dt><dd><strong>'+safe(t(openingLabel(hours)))+'</strong>'+
+    (hours ? lastEntry+period+(hours.note?'<p class="detail" lang="ru" data-source-text>'+safe(hours.note)+'</p>':'')+
+      outbound(hours.url,t('Опубликованный график')) : '')+'</dd>'+
+    (evidence.booking ? '<dt>'+safe(t('Правила записи'))+'</dt><dd>'+sourceText(evidence.booking.text)+outbound(evidence.booking.url,t('Источник'))+'</dd>' : '')+
+    (evidence.limits?.length ? '<dt>'+safe(t('Лимиты отдельных посещений'))+'</dt><dd><ul class="official-links">'+facts(evidence.limits)+'</ul></dd>' : '')+
+    (evidence.notes?.length ? '<dt>'+safe(t('Другие сведения'))+'</dt><dd><ul class="official-links">'+facts(evidence.notes)+'</ul></dd>' : '')+
+    '</dl><p class="caption">'+safe(t('Сверено с опубликованными источниками {date}. Наличие мест на дату визита проверяется отдельно.',
+      {date:date(evidence.checkedAt)}))+'</p></section>';
 }
 
 function placeDetails(id,decisionId,requestedDay,requestedSettings) {
@@ -170,31 +251,39 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings) {
   const offset = Number.isInteger(requestedDay) ? requestedDay : day>=0 ? day : placeDay(place);
   const requirements = stop?.split ? {...settings,size:Math.ceil(settings.size/2)} : settings;
   const result = assess(place,requirements,offset);
-  dialog.innerHTML = '<div class="section-head"><h2 id="place-title">'+safe(place.name)+'</h2>'+button('Закрыть','close',true)+'</div>'+
-    '<p class="caption">'+safe(place.city)+' · '+kindNames[place.kind]+'</p>'+officialEvidence(place,settings,offset)+'<dl class="dialog-fields">'+
-    '<dt>Источник сведений об объекте</dt><dd>'+outbound(place.url,place.url.includes('wikidata')?'Wikidata':'Страница объекта')+'</dd>'+
-    '<dt>Дата проверки</dt><dd>'+date(place.checkedAt)+'</dd>'+
-    (place.coordinates ? '<dt>Координаты</dt><dd>'+outbound(place.wikiLink,place.coordinates.map(x=>x.toFixed(5)).join(', '))+
-      '<div class="caption">Wikidata · '+timestamp(place.wikiCheckedAt)+'</div></dd>' : '')+
-    (audit ? '<dt>'+(settings.demo?'Учебный режим':'Экспертное подтверждение')+'</dt><dd>'+(settings.demo ? outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит, версия '+data.auditVersion)+' · '+chip(statusText[result.status],result.status==='ready'?'':'warn') :
-      outbound(audit.sourceUrl,'Источник подтверждённых условий'))+'</dd>'+
-      (audit.verifiedAt ? '<dt>Проверено</dt><dd>'+date(audit.verifiedAt)+'</dd>' : '')+
-      (audit.validUntil ? '<dt>Действует до</dt><dd>'+date(audit.validUntil)+'</dd>' : '')+
-      (audit.booking ? '<dt>Запись</dt><dd>'+(audit.booking==='reservation'?'Нужно бронирование':'Предварительная запись не требуется')+'</dd>' : '')+
-      '<dt>Лимит группы</dt><dd>'+safe(audit.capacity)+' чел.</dd><dt>Часы работы</dt><dd>'+safe(audit.hours?.[0])+':00–'+safe(audit.hours?.[1])+':00</dd>'+
-      '<dt>Продолжительность</dt><dd>'+safe(audit.minutes)+' мин.</dd><dt>Под перевод</dt><dd>'+
-      (audit.language==='interpreter'?(settings.demo?'Предусмотрено в демо':'Подтверждено источником'):'Требует подтверждения')+'</dd>' : '')+
-    '</dl>'+(settings.demo && audit ? result.reasons.map(t=>'<p class="detail">'+safe(t)+'</p>').join('') : '');
-  if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">Проверка для двух подгрупп. Согласуйте оба сеанса с музеем.</p>');
+  const field = (label,content)=>'<dt>'+safe(t(label))+'</dt><dd>'+content+'</dd>';
+  dialog.innerHTML = '<div class="section-head"><h2 id="place-title" lang="ru" data-source-text>'+safe(place.name)+'</h2>'+
+    button(t('Закрыть'),'close',true)+'</div>'+
+    (getLocale()==='zh'&&place.cn ? '<p class="lang-line" lang="zh-Hans">'+safe(place.cn)+'</p>' : '')+
+    '<p class="caption">'+safe(t(place.city))+' · '+safe(t(kindNames[place.kind]))+'</p>'+officialEvidence(place,settings,offset)+'<dl class="dialog-fields">'+
+    field('Источник сведений об объекте',outbound(place.url,place.url.includes('wikidata')?'Wikidata':t('Страница объекта')))+
+    field('Дата проверки',safe(date(place.checkedAt)))+
+    (place.coordinates ? field('Координаты',outbound(place.wikiLink,place.coordinates.map(x=>x.toFixed(5)).join(', '))+
+      '<div class="caption">Wikidata · '+safe(timestamp(place.wikiCheckedAt))+'</div>') : '')+
+    (audit ? field(settings.demo?'Учебный режим':'Экспертное подтверждение',settings.demo
+      ? outbound('/api/audit-version/'+data.auditVersion,t('Учебный аудит, версия {version}',{version:data.auditVersion}))+
+        ' · '+chip(t(statusText[result.status]),result.status==='ready'?'':'warn')
+      : outbound(audit.sourceUrl,t('Источник подтверждённых условий')))+
+      (audit.verifiedAt ? field('Проверено',safe(date(audit.verifiedAt))) : '')+
+      (audit.validUntil ? field('Действует до',safe(date(audit.validUntil))) : '')+
+      (audit.booking ? field('Запись',safe(t(audit.booking==='reservation'?'Нужно бронирование':'Предварительная запись не требуется'))) : '')+
+      field('Лимит группы',safe(t('{count} чел.',{count:formatNumber(audit.capacity)})))+
+      field('Часы работы',safe(audit.hours.map(hour=>clockTime(hour*60)).join('–')))+
+      field('Продолжительность',safe(t('{minutes} мин.',{minutes:formatNumber(audit.minutes)})))+
+      field('Под перевод',safe(t(audit.language==='interpreter'
+        ? settings.demo?'Предусмотрено в демо':'Подтверждено источником' : 'Требует подтверждения'))) : '')+
+    '</dl>'+(settings.demo && audit ? result.reasons.map(reason=>'<p class="detail">'+safe(evidenceReason(reason))+'</p>').join('') : '');
+  if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">'+safe(t('Проверка для двух подгрупп. Согласуйте оба сеанса с музеем.'))+'</p>');
   dialog.showModal();
 }
 
 function renderDay(day,index,settings,decisionId) {
   const reference = decisionId ? ' data-decision="'+safe(decisionId)+'"' : '';
-  return '<section class="route-day"><div class="route-day-head"><p class="caption">День '+(index+1)+' · '+date(day.date)+'</p><h3>'+safe(day.city)+'</h3></div>'+
+  return '<section class="route-day"><div class="route-day-head"><p class="caption">'+safe(t('День {day}',{day:index+1}))+' · '+date(day.date)+'</p><h3>'+safe(itemName({...day,name:day.city}))+'</h3></div>'+
     '<ul class="rows">'+day.stops.map(stop=>'<li class="timeline"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><div class="label-pair">'+
-      (stop.id ? '<button type="button" class="link-button" data-place="'+safe(stop.id)+'"'+reference+'>'+safe(stop.name)+'</button>' : '<strong>'+safe(stop.name)+'</strong>')+
-      (settings.market==='zh' && stop.cn ? '<span lang="zh-Hans" class="lang-line">'+safe(stop.cn)+'</span>':'')+
+      (stop.id ? '<button type="button" class="link-button" data-source-text data-place="'+safe(stop.id)+'" data-place-day="'+index+'"'+reference+'>'+safe(itemName(stop))+'</button>' :
+        '<strong data-source-text>'+safe(itemName(stop))+'</strong>')+
+      (getLocale()!=='zh' && settings.market==='zh' && stop.cn ? '<span lang="zh-Hans" class="lang-line">'+safe(stop.cn)+'</span>':'')+
       '<span class="caption">'+(stop.type==='travel'?'Переезд · расчётное время':kindNames[stop.type]+
         (stop.split?' · два сеанса по '+Math.ceil(settings.size/2)+' чел.':' · лимит '+safe(stop.capacity)+' чел.'+(settings.demo?' в демо':'')))+'</span></div></li>').join('')+
     '</ul>'+(day.missing.length?'<p class="callout">Требуется подтверждение: '+safe(day.missing.join(', '))+'.</p>':'')+'</section>';
@@ -285,9 +374,9 @@ function routeDecision(plan) {
   const assumptions = plan.assumptions?.length ? plan.assumptions : plan.days.some(day=>day.stops.some(stop=>stop.split))
     ? ['Согласуйте два отдельных сеанса с музеем.'] : [];
   return '<section class="panel route-program" aria-labelledby="route-program-title"><div class="section-head"><div>'+
-    '<h2 id="route-program-title" tabindex="-1">'+safe(plan.days.map(day=>day.city).join(' → '))+'</h2>'+
-    '<p class="caption">'+date(plan.settings.date)+' · '+plan.settings.days+' дня · '+plan.settings.size+' чел.'+
-    (localized?' · Группа из Китая':'')+'</p></div>'+routeState(plan)+'</div>'+
+    '<h2 id="route-program-title" tabindex="-1">'+safe(plan.days.map(day=>t(day.city)).join(' → '))+'</h2>'+
+    '<p class="caption">'+safe(t('{date} · {days} дня · {size} чел.',{date:date(plan.settings.date),days:formatNumber(plan.settings.days),size:formatNumber(plan.settings.size)}))+
+    (localized?' · '+safe(t('Группа из Китая')):'')+'</p></div>'+routeState(plan)+'</div>'+
     chinesePreview(plan)+
     (plan.themeNote ? '<p class="callout">'+safe(plan.themeNote)+'</p>' : '')+
     '<div class="route-days">'+plan.days.map((day,i)=>renderDay(day,i,plan.settings)).join('')+'</div>'+
@@ -303,10 +392,11 @@ function officialRouteReview(plan) {
   const {settings} = plan;
   const itinerary = plan.days.map((day,index)=>{
     const candidates = data.places.flatMap(place=>{
-      const lunch = index===2 && place.city==='Суздаль' && place.kind==='food';
-      const relevant = place.city===day.city && (place.kind==='visit' || index!==2 && place.kind==='food' ||
-        index<settings.days-1 && place.kind==='stay');
-      if (!lunch && !relevant) return [];
+      const mealCity = day.mealCity ?? (day.city==='Кидекша'?'Суздаль':day.city);
+      const stayCity = day.stayCity ?? day.city;
+      const relevant = place.kind==='visit' && place.city===day.city && (!day.visitIds || day.visitIds.includes(place.id)) ||
+        place.kind==='food' && place.city===mealCity || place.kind==='stay' && index<settings.days-1 && place.city===stayCity;
+      if (!relevant) return [];
       const result = assess(place,settings,index);
       return [{place,result,hours:publishedHours(place,settings.date,index)}];
     });
@@ -364,15 +454,21 @@ function currentRoutePlan() {
 }
 
 function routeView() {
-  return head('Планирование маршрута','Владимирская область · программы на два или три дня')+
+  const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
+  const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
+  return head(t('Проверка программы'))+itineraryTabs(true)+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
+    '<label class="field">Направление<select name="direction">'+routeDirections.map(item=>selectOption(item.id,localizedDirection(item).title,direction.id)).join('')+
+    '</select><small class="caption">'+safe(localizedDirection(direction).description)+'</small></label>'+
     '<label class="field">Дата начала<input name="date" type="date" required value="'+safe(options.date)+'"></label>'+
     '<label class="field">Длительность<select name="days">'+selectOption(2,'2 дня',options.days)+selectOption(3,'3 дня',options.days)+'</select></label>'+
     '<label class="field">Размер группы<input name="size" type="number" min="1" max="100" required value="'+options.size+'"></label>'+
     '<label class="field">Группа<select name="market">'+selectOption('zh','Группа из Китая',options.market)+selectOption('ru','Российская группа',options.market)+'</select></label>'+
-    '<label class="field">Формат поездки<select name="theme">'+Object.entries(routeThemes).map(([value,label])=>selectOption(value,label,options.theme)).join('')+'</select></label>'+
+    '<label class="field">Формат поездки<select name="theme">'+Object.entries(routeThemes).filter(([key])=>direction.themes.includes(key)||options.theme===key)
+      .map(([value,label])=>selectOption(value,t(label),options.theme)).join('')+'</select></label>'+
     '<label class="check"><input type="checkbox" name="access" '+(options.access?'checked':'')+'>Безбарьерный доступ</label>'+
-    '<label class="check"><input type="checkbox" name="demo" '+(options.demo?'checked':'')+'>Учебные условия визита</label>'+
+    (options.demo ? '<div class="inline-mode">'+chip(t('Учебные данные'),'warn')+
+      '<button type="button" class="link-button" data-action="live-conditions">'+safe(t('Проверить по опубликованным условиям'))+'</button></div>' : '')+
     '<button type="submit" class="button">Рассчитать варианты</button>'+
     '<p class="caption route-dirty" role="status"'+(review.dirty?'':' hidden')+'>Пересчитайте варианты с новыми параметрами.</p></form>'+
     '<div class="route-workbench" id="route-workbench">'+routeWorkbench()+'</div></div>';
@@ -383,6 +479,7 @@ function repaintWorkbench() {
   if (!workspace) return;
   const chineseOpen = workspace.querySelector('.chinese-preview')?.open;
   workspace.innerHTML = routeWorkbench();
+  localizeDom(workspace);
   const preview = workspace.querySelector('.chinese-preview');
   if (preview && chineseOpen) preview.open = true;
 }
@@ -472,48 +569,128 @@ async function approveRoute() {
 
 function statisticsSource(status,checkedAt) {
   const text = status==='live' ? 'Обновлено из источника' : status==='error' ? 'Последний доступный снимок' : 'Начальный снимок';
-  return '<p class="caption statistics-source">'+chip(text,status==='error'?'warn':status==='live'?'':'plain')+
-    (checkedAt ? ' Проверка источника: '+timestamp(checkedAt) : '')+'</p>';
+  return '<p class="caption statistics-source">'+chip(t(text),status==='error'?'warn':status==='live'?'':'plain')+
+    (checkedAt ? ' '+safe(t('Проверка источника: {time}',{time:timestamp(checkedAt)})) : '')+'</p>';
 }
 
 function agentView() {
   if (!agent) return '';
-  return '<div class="ask-result" aria-live="polite"><h3>'+safe(agent.title)+'</h3><p class="detail">'+safe(agent.text)+'</p>'+
-    '<p class="caption status-line">'+safe(agent.plan.mode)+'</p>'+
-    (agent.summary ? '<p class="caption">'+outbound(agent.summary.source,'Ряд Roschart')+' · '+outbound(agent.summary.publication,'Первоисточник Росстат')+
-      ' · '+safe(agent.summary.edition)+' · Данные получены '+timestamp(agent.summary.checkedAt)+'</p>'+
-      statisticsSource(agent.sourceStatus,agent.sourceCheckedAt)+(agent.note ? '<p class="caption">'+safe(agent.note)+'</p>' : '')+
-      (agent.summary.years.length?statisticChart(agent.summary):'') : '')+
-    (agent.view?'<a href="#'+safe(agent.view)+'">Открыть '+(agent.view==='impact'?'мониторинг':'маршрут')+'</a>':'')+'</div>';
+  const summary = agent.summary;
+  const original = '<p class="detail" lang="ru" data-source-text>'+safe(agent.text)+'</p>';
+  const full = summary?.years.filter(year=>year.total!==null) ?? [];
+  const selected = (full.length ? full : summary?.years ?? []).map(year=>year.year).join(', ');
+  const brief = summary?.lows.length ? t('Месяцы с наименьшими средними значениями за {years}',{years:selected}) :
+    t('В подключённой выгрузке нет сопоставимых месячных значений за запрошенный период.');
+  const output = summary && getLocale()!=='ru' ? '<p class="detail">'+safe(brief)+'</p>'+
+    (summary.lows.length ? '<ul class="rows">'+summary.lows.map(({month,value})=>'<li>'+safe(statisticsMonth(month))+' · '+
+      safe(formatNumber(value))+' '+safe(t(summary.unit))+'</li>').join('')+'</ul>' : '')+
+    '<details><summary class="link-button">'+safe(t('Исходный ответ на русском'))+'</summary>'+original+'</details>' :
+    t(agent.text)!==agent.text ? '<p class="detail">'+safe(t(agent.text))+'</p>' : original;
+  const detail = summary ? '<p class="caption">'+outbound(summary.source,t('Ряд Roschart'))+' · '+outbound(summary.publication,t('Первоисточник Росстат'))+
+    ' · '+safe(summary.edition)+' · '+safe(t('Данные получены {time}',{time:timestamp(summary.checkedAt)}))+'</p>'+
+    statisticsSource(agent.sourceStatus,agent.sourceCheckedAt)+(agent.note ? '<p class="caption">'+safe(t(agent.note))+'</p>' : '')+
+    (summary.years.length?statisticChart(summary):'') : '';
+  const view = ['impact','route'].includes(agent.view) ? '<a href="#'+agent.view+'">'+safe(t(agent.view==='impact'?'Открыть мониторинг':'Открыть маршрут'))+'</a>' : '';
+  return '<div class="ask-result" aria-live="polite"><h3>'+safe(t(agent.title))+'</h3>'+output+
+    '<p class="caption status-line">'+safe(t(agent.plan.mode))+'</p>'+detail+view+'</div>';
 }
 
 function stats() {
-  const series = data[metric];
-  return head('Сезонность размещения','Владимирская область · месячные ряды Росстата',button('Обновить источники','refresh',true))+
-    '<div class="grid"><section class="panel"><div class="section-head"><div><h2>'+safe(series.name)+'</h2><p class="caption">Средние по полным календарным годам</p></div>'+
-    '<label class="field">Показатель<select id="metric">'+selectOption('nights','Ночёвки',metric)+selectOption('people','Размещённые лица',metric)+'</select></label></div>'+
-    statisticChart(series)+'<p class="caption status-line">'+outbound(series.publication,'Росстат')+' · '+outbound(series.source,'Выгрузка через Roschart')+
-    ' · '+safe(series.edition)+' · '+timestamp(series.checkedAt)+'</p>'+statisticsSource(data.sources[metric]?.status,data.sources[metric]?.checkedAt)+'</section>'+
-    '<section class="panel"><h2>Запросить анализ</h2><form id="ask-form" class="ask"><input aria-label="Запрос к агенту" type="text" name="question" required maxlength="600" placeholder="Например, когда меньше ночёвок?"><button type="submit" class="button">Спросить</button></form>'+
-    '<button class="link-button sample" data-sample="В какие месяцы меньше всего ночёвок за последние три полных года?">Минимум ночёвок за три года</button><br>'+
-    '<button class="link-button sample" data-sample="Какие маршруты затронуло изменение лимита?">Какие маршруты затронуты</button>'+agentView()+'</section></div>';
+  const pilot=statistics.regionId==='83';
+  const provider=statistics.result;
+  const stored=data[metric];
+  const selectedYears=statistics.period==='full' ? stored.years.filter(year=>year.total!==null).slice(-3).map(year=>year.year) : [Number(statistics.period)];
+  const series=pilot?statSummary(stored,selectedYears):provider?.summary;
+  const regionControl='<label class="field">'+safe(t('Территория'))+'<select id="stat-region"'+(statistics.regions?'':' disabled')+'>'+
+    statisticRegionsMarkup()+'</select></label>';
+  const available=series?.years.length ? '<h2>'+safe(t(series.name))+'</h2><p class="caption">'+safe(t(statistics.period==='full'?
+    'Средние по полным календарным годам':'Месячные значения'))+'</p>'+
+    statisticChart(series)+'<p class="caption status-line">'+outbound(series.publication,t('Росстат'))+' · '+outbound(series.source,t('Выгрузка через Roschart'))+
+    ' · '+safe(series.edition)+' · '+safe(timestamp(series.checkedAt))+'</p>'+
+    (series.methodologyChange ? '<p class="caption">'+safe(t('Методика Росстата изменилась с января 2026 года.'))+' '+
+      outbound(series.methodologyChange.source,t('Методология Росстата'))+'</p>':'')+
+    (!pilot && provider.sourceStatus==='cached' ? '<p class="caption">'+safe(t('Ряд из сохранённой копии'))+'</p>' :
+      statisticsSource(pilot?data.sources[metric]?.status:provider.sourceStatus,pilot?data.sources[metric]?.checkedAt:provider.sourceCheckedAt)) :
+    '<p class="empty" role="status">'+safe(t(statistics.loading?'Загружаем региональный ряд…':provider?.reason==='rate-limit'?
+      'Лимит запросов к источнику достигнут.':'Нет доступных месячных данных для этого субъекта.'))+'</p>'+
+    (provider?.sources?.length?'<p class="caption">'+provider.sources.map(entry=>outbound(entry.url,t(entry.title))).join(' · ')+'</p>':'');
+  return head(t('Сезонность размещения'),t('Росстат · месячные ряды средств размещения'),pilot ? button(t('Обновить источники'),'refresh',true) : '')+
+    '<div class="grid"><section class="panel"><div class="filters">'+regionControl+'<label class="field">'+safe(t('Показатель'))+'<select id="metric">'+
+    selectOption('nights',t('Ночёвки'),metric)+selectOption('people',t('Размещённые лица'),metric)+'</select></label>'+
+    '<label class="field">'+safe(t('Период'))+'<select id="stat-period">'+selectOption('full',t('Последние три полных года'),statistics.period)+
+    stored.years.map(year=>String(year.year)).toReversed().map(year=>selectOption(year,year,statistics.period)).join('')+
+    '</select></label></div>'+available+'</section>'+
+    '<section class="panel"><h2>'+safe(t('Спросить ИИ по статистике'))+'</h2>'+
+    (pilot?'<p class="caption">'+
+    safe(t('Ночёвки и размещённые лица во Владимирской области.'))+'</p><form id="ask-form" class="ask"><input aria-label="'+
+    safe(t('Запрос к агенту'))+'" type="text" name="question" required maxlength="600" placeholder="'+safe(t('Например, когда меньше ночёвок?'))+
+    '"><button type="submit" class="button">'+safe(t('Спросить'))+'</button></form>'+
+    '<button type="button" class="link-button sample" data-sample="В какие месяцы меньше всего ночёвок за последние три полных года?">'+
+    safe(t('Минимум ночёвок за три года'))+'</button><br><button type="button" class="link-button sample" '+
+    'data-sample="Как менялось число размещённых лиц за последние три полных года?">'+safe(t('Динамика размещённых лиц за три года'))+'</button>'+agentView() :
+    '<div class="actions spaced"><a class="button-quiet" href="#ask?region='+safe(statistics.regionId)+'">'+
+      safe(t('Задать вопрос по региону'))+'</a></div>')+'</section></div>';
+}
+
+function statisticRegionsMarkup() {
+  const regions=statistics.regions??[{id:'83',name:'Владимирская область'}];
+  return regions.map(region=>selectOption(region.id,t(itemName(region)),statistics.regionId)).join('');
+}
+
+async function loadStatRegions() {
+  if (statistics.lookup || statistics.regions) return;
+  statistics.lookup=api('stat-regions');
+  try {
+    statistics.regions=(await statistics.lookup).regions;
+    const select=$('#stat-region');
+    if (select) {select.innerHTML=statisticRegionsMarkup();select.disabled=false;}
+  } catch { /* The installed Vladimir series remains available. */ }
+  finally { statistics.lookup=null; }
+}
+
+async function loadRegionStatistics() {
+  const version=++statistics.version;
+  statistics.loading=statistics.regionId!=='83';
+  statistics.result=null;
+  render();
+  if (!statistics.loading) return;
+  try {
+    const result=await api('regional-statistics',{regionId:statistics.regionId,metric,
+      years:statistics.period==='full'?[]:[Number(statistics.period)]});
+    if (statistics.version===version) statistics.result=result;
+  } catch { /* An unavailable series has its own empty state. */ }
+  finally {
+    if (statistics.version===version) {
+      statistics.loading=false;
+      if (page()==='stats') {
+        const focused=document.activeElement?.id;
+        render();
+        if (['metric','stat-region','stat-period'].includes(focused)) $('#'+focused)?.focus({preventScroll:true});
+      }
+    }
+  }
 }
 
 function offerPanel() {
   const {date:arrival,occupancy,result} = offerSearch;
   const places = new Map(data.places.map(place=>[place.id,place.name]));
   const providers = new Map(result?.providers.map(provider=>[provider.id,provider.name]));
-  return '<section class="panel ota-panel"><div class="section-head"><h2>Предложения размещения</h2>'+chip('Учебные данные','warn')+'</div>'+
-    '<p class="detail">Сопоставляем две учебные выгрузки OTA по дате заезда. Для группы свободные номера и условия нужно подтвердить у отеля.</p>'+
-    '<form class="filters ota-form" id="ota-form"><label class="field">Дата заезда<input type="date" name="arrival" required value="'+safe(arrival)+'"></label>'+
-    '<label class="field">Гостей в номере<select name="occupancy">'+selectOption(1,'1 гость',occupancy)+selectOption(2,'2 гостя',occupancy)+
-    '</select></label><button type="submit" class="button-quiet">Сравнить предложения</button></form>'+
-    (result ? '<div aria-live="polite">'+(result.coverage==='snapshot' ? '<ul class="rows">'+result.objects.map(stay=>'<li><h3>'+safe(places.get(stay.id)??stay.id)+'</h3>'+
-      stay.offers.map(offer=>'<p class="detail">'+safe(providers.get(offer.providerId))+' · '+number(offer.priceRub)+' ₽ за ночь · '+number(offer.roomsListed)+
-        ' ном. в выгрузке</p>').join('')+'</li>').join('')+'</ul>' : '<p class="callout">На эту дату и состав номера в учебных выгрузках нет данных.</p>')+
-      '<p class="caption">'+result.providers.map(provider=>safe(provider.name)+' · '+safe(provider.version)+' · '+timestamp(provider.checkedAt)).join('<br>')+'</p></div>' :
-      '<p class="caption">Выгрузки покрывают сценарий 21–22 ноября 2026 года.</p>')+
-    '<p class="caption ota-source">'+outbound('/api/demo-offers-source','Открыть учебные выгрузки')+' · Данные об отелях учитываются по объектам каталога.</p></section>';
+  return '<section class="panel ota-panel"><div class="section-head"><h2>'+safe(t('Предложения размещения'))+'</h2>'+chip(t('Учебные данные'),'warn')+'</div>'+
+    '<p class="detail">'+safe(t('Сопоставляем две учебные выгрузки OTA по дате заезда. Для группы свободные номера и условия нужно подтвердить у отеля.'))+'</p>'+
+    '<form class="filters ota-form" id="ota-form"><label class="field">'+safe(t('Дата заезда'))+
+    '<input type="date" name="arrival" required value="'+safe(arrival)+'"></label><label class="field">'+safe(t('Гостей в номере'))+
+    '<select name="occupancy">'+selectOption(1,t('1 гость'),occupancy)+selectOption(2,t('2 гостя'),occupancy)+
+    '</select></label><button type="submit" class="button-quiet">'+safe(t('Сравнить предложения'))+'</button></form>'+
+    (result ? '<div aria-live="polite">'+(result.coverage==='snapshot' ? '<ul class="rows">'+result.objects.map(stay=>(
+      '<li><h3 lang="ru" data-source-text>'+safe(places.get(stay.id)??stay.id)+'</h3>'+stay.offers.map(offer=>
+        '<p class="detail"><span data-source-text>'+safe(providers.get(offer.providerId))+'</span> · '+
+        safe(t('{price} ₽ за ночь · {rooms} ном. в выгрузке',{price:formatNumber(offer.priceRub),rooms:formatNumber(offer.roomsListed)}))+'</p>'
+      ).join('')+'</li>')).join('')+'</ul>' : '<p class="callout">'+safe(t('На эту дату и состав номера в учебных выгрузках нет данных.'))+'</p>')+
+      '<p class="caption">'+result.providers.map(provider=>'<span data-source-text>'+safe(provider.name)+'</span> · '+safe(provider.version)+
+        ' · '+safe(timestamp(provider.checkedAt))).join('<br>')+'</p></div>' :
+      '<p class="caption">'+safe(t('Выгрузки покрывают сценарий 21–22 ноября 2026 года.'))+'</p>')+
+    '<p class="caption ota-source">'+outbound('/api/demo-offers-source',t('Открыть учебные выгрузки'))+' '+
+    safe(t('· Данные об отелях учитываются по объектам каталога.'))+'</p></section>';
 }
 
 function sources() {
@@ -521,61 +698,99 @@ function sources() {
     ['wiki','Названия и координаты · Wikidata','https://www.wikidata.org/wiki/Wikidata:Data_access']];
   const sourceRows = known.map(([key,name,url])=>{
     const entry = data.sources[key];
-    const status = entry?.status==='live' ? chip('Подключён') : entry?.status==='error' ? chip('Последняя копия','warn') : chip('Начальный снимок','plain');
-    return '<li><div class="row"><div><h3>'+outbound(url,name)+'</h3><p class="caption">'+timestamp(entry?.checkedAt)+
-      (entry?.status==='error'?' · '+safe(entry.message):'')+'</p></div>'+status+'</div></li>';
+    const status = entry?.status==='live' ? chip(t('Подключён')) : entry?.status==='error' ? chip(t('Последняя копия'),'warn') : chip(t('Начальный снимок'),'plain');
+    return '<li><div class="row"><div><h3>'+outbound(url,t(name))+'</h3><p class="caption">'+safe(timestamp(entry?.checkedAt))+
+      (entry?.status==='error'?' · <span data-source-text lang="ru">'+safe(entry.message)+'</span>':'')+'</p></div>'+status+'</div></li>';
   });
   const feed = data.auditFeed;
   const published = data.publishedConditions;
   const feedLabel = {live:'Подключена', error:'Ошибка обновления', pending:'Ожидает проверки'};
-  return head('Источники и изменения','Автоматическая проверка при запуске и раз в 6 часов работы приложения.',button('Обновить источники','refresh',true))+
-    '<div class="grid"><section class="panel"><div class="section-head"><h2>Журнал изменений</h2></div>'+
-    (data.changes.length ? '<ul class="rows">'+data.changes.map(change=>'<li><div class="row"><div><h3>'+safe(change.name)+'</h3><p class="detail">'+
-      safe(change.field)+' · '+safe(val(change.before))+' → '+safe(val(change.after))+'</p><p class="caption">'+outbound(change.url,change.source)+
-      ' · '+timestamp(change.at)+'</p></div>'+(change.demo ? chip('Учебное изменение','warn') : chip('Из внешнего источника'))+'</div></li>').join('')+
-      '</ul>' : '<p class="empty">Изменений не зафиксировано.</p>')+'</section>'+
-    '<div class="stack"><section class="panel"><div class="section-head"><h2>Автоматические подключения</h2></div><ul class="rows">'+sourceRows.join('')+
-    (feed ? '<li><div class="row"><div><h3>Выгрузка условий визита</h3><p class="caption">'+
-      (feed.enabled && feed.snapshotAt ? 'Снимок от '+timestamp(feed.snapshotAt)+' · объектов: '+number(feed.objectCount ?? 0) :
-        (feed.enabled?'Ожидаем доступный снимок с подтверждёнными условиями.':'Нет подключённой выгрузки с подтверждёнными условиями.'))+
-      '</p></div>'+chip(feed.enabled ? feedLabel[feed.state] : 'Не подключена',feed.state==='live'?'':feed.state==='error'?'warn':'plain')+'</div></li>' : '')+
-    '</ul></section>'+
-    '<section class="panel"><div class="section-head"><h2>Справочные материалы</h2></div><ul class="rows">'+
-    (published?.objectCount ? '<li><h3>Опубликованные условия посещения</h3><p class="detail">Сверены сведения по '+number(published.objectCount)+
-      ' объектам · '+date(published.checkedAt)+'. Снимок собран по страницам музеев, поставщиков и регионального турпортала.</p>'+
-      '<p class="caption">Ссылки, область действия лимитов и вопросы к поставщику доступны в <a href="#catalog">каталоге объектов</a>.</p></li>' : '')+
-    '<li><h3>'+outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит · версия '+data.auditVersion)+'</h3><p class="caption">Сценарные лимиты, режим работы и условия для групп.</p></li>'+
-    '<li><h3>Материалы МАГ</h3><p class="caption">Диагностические критерии и контрольные объекты использованы для сверки. Первичные материалы доступны участникам кейса на доске.</p></li></ul></section></div></div>'+offerPanel();
+  const stage = data.auditVersion==='2';
+  const changeValue = value=>typeof value==='number' ? formatNumber(value) : t(val(value));
+  const changes = data.changes.map(change=>'<li><div class="row"><div><h3 lang="ru" data-source-text>'+safe(change.name)+'</h3><p class="detail">'+
+    safe(t(change.field))+' · '+safe(changeValue(change.before))+' → '+safe(changeValue(change.after))+'</p><p class="caption">'+
+    outbound(change.url,t(change.source))+' · '+safe(timestamp(change.at))+'</p></div>'+
+    (change.demo ? chip(t('Учебное изменение'),'warn') : chip(t('Из внешнего источника')))+'</div></li>').join('');
+  const feedValue = feed?.enabled && feed.snapshotAt ?
+    t('Снимок от {time} · объектов: {count}',{time:timestamp(feed.snapshotAt),count:formatNumber(feed.objectCount ?? 0)}) :
+    t(feed?.enabled?'Ожидаем доступный снимок с подтверждёнными условиями.':'Нет подключённой выгрузки с подтверждёнными условиями.');
+  const practice = '<details class="panel practice"'+(stage?' open':'')+'><summary>'+safe(t('Учебный пример'))+'</summary>'+
+    '<p class="detail">'+safe(t('В учебном примере лимит Суздальского кремля снижается с 25 до 12 человек. Можно проверить влияние на две группы. Опубликованные условия музея сохраняются.'))+'</p>'+
+    '<div class="section-head">'+button(t(stage?'Сбросить учебный пример':'Запустить учебный пример'),'demo',true)+
+    '<a href="#impact?program=group-cn">'+safe(t('Открыть учебную программу на карте'))+'</a></div>'+
+    '<p class="caption">'+outbound('/api/audit-version/'+data.auditVersion,t('Учебный аудит · версия {version}',{version:data.auditVersion}))+'</p></details>';
+  const mapping = '<section class="panel"><h2>'+safe(t('Картографические источники'))+'</h2><ul class="rows">'+
+    '<li><h3>'+outbound('https://www.geonames.org/export/','GeoNames')+'</h3><p class="caption">'+safe(t('Города, координаты и часовые пояса'))+
+    '</p></li><li><h3>'+outbound('https://wiki.openstreetmap.org/wiki/Overpass_API','OpenStreetMap · Overpass')+'</h3><p class="caption">'+
+    safe(t('Места и категории OpenStreetMap по запросу; при сбое — геопоиск Wikimedia и сохранённые записи.'))+'</p>'+
+    '<p class="caption">'+outbound('https://www.mediawiki.org/wiki/API:Geosearch','MediaWiki GeoSearch')+' · '+
+    safe(t('Графики и запись сверяются по паспорту поставщика.'))+'</p></li></ul></section>';
+  return head(t('Источники и изменения'),t('Автоматическая проверка при запуске и раз в 6 часов работы приложения.'),button(t('Обновить источники'),'refresh',true))+
+    '<div class="grid"><section class="panel"><div class="section-head"><h2>'+safe(t('Журнал изменений'))+'</h2></div>'+
+    (changes ? '<ul class="rows">'+changes+'</ul>' : '<p class="empty">'+safe(t('Изменений не зафиксировано.'))+'</p>')+'</section>'+
+    '<div class="stack"><section class="panel"><div class="section-head"><h2>'+safe(t('Автоматические подключения'))+'</h2></div><ul class="rows">'+sourceRows.join('')+
+    (feed ? '<li><div class="row"><div><h3>'+safe(t('Выгрузка условий визита'))+'</h3><p class="caption">'+safe(feedValue)+
+      '</p></div>'+chip(t(feed.enabled ? feedLabel[feed.state] : 'Не подключена'),feed.state==='live'?'':feed.state==='error'?'warn':'plain')+'</div></li>' : '')+
+    '</ul></section>'+(published?.objectCount ? '<section class="panel"><h2>'+safe(t('Опубликованные условия посещения'))+'</h2><p class="detail">'+
+    safe(t('Сверены сведения по {count} объектам · {date}.',{count:formatNumber(published.objectCount),date:date(published.checkedAt)}))+'</p>'+
+    '<a href="#catalog">'+safe(t('Открыть каталог объектов'))+'</a></section>' : '')+mapping+'</div></div>'+practice+offerPanel();
 }
 
 function render(scroll=false) {
   if (!data) return;
   const current = page();
-  document.title = labels[current]+' — ТурКонтур';
-  document.querySelectorAll('nav a').forEach(a=>{
+  document.title = t(labels[current])+' — ТурКонтур';
+  document.querySelectorAll('.top nav a').forEach(a=>{
     if (a.hash==='#'+current) a.setAttribute('aria-current','page');
     else a.removeAttribute('aria-current');
   });
   document.body.classList.toggle('atlas-page',current==='impact');
+  if (composer) { composer.destroy(); composer=null; }
+  if (knowledge) { knowledge.destroy(); knowledge=null; }
   if (current==='impact') {
+    if (atlas && atlasHash!==location.hash) saveMapContext();
     if (atlas) atlas.update(data);
     else atlas=mountAtlas(screen,data,geodata,{
+      programId:params().get('program'),
+      placeId:params().get('place'),
+      initialLayer:params().get('layer'),
+      restored:mapContexts.get(location.hash),
       onOpenRoute(settings,program,context) {
         options=settings;
         review=newReview(program,context);
-        location.hash='route';
+        location.hash='route?scope=pilot';
       },
       onOpenPlace(id,settings,offset) { placeDetails(id,null,offset,settings); },
     });
+    atlasHash=location.hash;
   } else {
-    if (atlas) { atlas.destroy(); atlas=null; }
-    screen.innerHTML = {catalog,route:routeView,stats,sources}[current]();
-    if (current==='route' && !review.variants && !review.loading && !review.error) void loadAlternatives();
+    if (atlas) saveMapContext();
+    if (current==='ask') knowledge=mountKnowledge(screen,api,options,params().get('region'));
+    else if (current==='route' && params().get('scope')!=='pilot') composer=mountComposer(screen,api);
+    else {
+      screen.innerHTML = {overview:()=>renderOverview(data,overview),catalog,route:routeView,stats,sources}[current]();
+      if (current==='stats') void loadStatRegions();
+      if (current==='route' && !review.variants && !review.loading && !review.error) void loadAlternatives();
+    }
   }
+  localizeDom(screen);
   if (scroll) {
+    clearTimeout(toastTimer);
+    $('#toast').hidden=true;
     window.scrollTo(0,0);
     $('#content').focus({preventScroll:true});
+    const focus = params().get('focus');
+    if (current==='overview' && focus==='programmes') $('#ops-programmes')?.focus();
+    if (current==='stats' && focus==='ask') $('#ask-form input')?.focus();
   }
+}
+
+function saveMapContext() {
+  if (!atlas) return;
+  mapContexts.set(atlasHash,atlas.context());
+  if (mapContexts.size>20) mapContexts.delete(mapContexts.keys().next().value);
+  atlas.destroy();
+  atlas=null;
 }
 
 async function runAction(action,control) {
@@ -593,7 +808,7 @@ async function runAction(action,control) {
 function readOptions(form) {
   const f = new FormData(form);
   return routeSettings({date:f.get('date'),days:f.get('days'),size:f.get('size'),market:f.get('market'),theme:f.get('theme'),
-    access:f.has('access'),demo:f.has('demo')});
+    direction:f.get('direction'),access:f.has('access'),demo:options.demo});
 }
 
 screen.addEventListener('submit',event=>{
@@ -637,6 +852,13 @@ screen.addEventListener('submit',event=>{
 screen.addEventListener('click',event=>{
   const target = event.target.closest('[data-action],[data-place],[data-sample]');
   if (!target) return;
+  if (target.dataset.action==='overview-filter' || target.dataset.action==='overview-change') {
+    const key = target.dataset.action==='overview-filter' ? 'filter' : 'selected';
+    overview[key] = target.dataset.value;
+    render();
+    [...screen.querySelectorAll('[data-action="'+target.dataset.action+'"]')]
+      .find(button=>button.dataset.value===target.dataset.value)?.focus({preventScroll:true});
+  }
   if (target.dataset.place) placeDetails(target.dataset.place,target.dataset.decision,Number(target.dataset.placeDay));
   if (target.dataset.action==='select-variant') {
     if (busy) return;
@@ -647,6 +869,12 @@ screen.addEventListener('click',event=>{
     $(selector)?.focus({preventScroll:true});
   }
   if (target.dataset.action==='retry-variants') void loadAlternatives();
+  if (target.dataset.action==='live-conditions') {
+    options={...options,demo:false};
+    review=newReview();
+    render();
+    $('#route-form [name=date]')?.focus();
+  }
   if (target.dataset.action==='approve-route') runAction(approveRoute,target);
   if (target.dataset.action==='download-chinese') downloadChinese(target.dataset.decision);
   if (target.dataset.sample) {
@@ -669,6 +897,8 @@ screen.addEventListener('click',event=>{
   if (target.dataset.action==='demo') runAction(async()=>{
     data = await api('audit',{version:data.auditVersion==='1'?'2':'1'});
     review = newReview();
+    overview.filter=data.auditVersion==='2'?'impact':'external';
+    overview.selected=null;
     toast(data.auditVersion==='2'?'Лимит обновлён. Программы пересчитаны.':'Восстановлены исходные учебные условия.');
     render();
   },target);
@@ -678,6 +908,7 @@ screen.addEventListener('input',event=>{
   if (event.target.id==='search') {
     filters.search = event.target.value;
     $('#catalog-rows').innerHTML = catalogRows();
+    localizeDom($('#catalog-rows'));
   }
   if (event.target.form?.id==='route-form') {
     review.dirty = !sameSettings(readOptions(event.target.form),options);
@@ -697,21 +928,66 @@ screen.addEventListener('change',event=>{
     filters.date = input.value ? routeSettings({date:input.value}).date : '';
     input.value = catalogSettings().date;
     $('#catalog-rows').innerHTML = catalogRows();
+    localizeDom($('#catalog-rows'));
   }
-  if (input.id==='kind'||input.id==='status') {
+  if (['kind','status','city'].includes(input.id)) {
     filters[input.id] = input.value;
     $('#catalog-rows').innerHTML = catalogRows();
+    localizeDom($('#catalog-rows'));
+  }
+  if (input.id==='catalog-size') {
+    filters.size=input.validity.valid && input.value?Number(input.value):null;
+    $('#catalog-rows').innerHTML=catalogRows();
+    localizeDom($('#catalog-rows'));
   }
   if (input.id==='metric') {
     metric = input.value;
-    render();
+    void loadRegionStatistics();
     $('#metric').focus();
+  }
+  if (input.id==='stat-region') {
+    statistics.regionId=input.value;
+    void loadRegionStatistics();
+    $('#stat-region')?.focus();
+  }
+  if (input.id==='stat-period') {
+    statistics.period=input.value;
+    void loadRegionStatistics();
+    $('#stat-period')?.focus();
+  }
+  if (input.name==='direction' && input.form?.id==='route-form') {
+    const direction = routeDirections.find(item=>item.id===input.value);
+    const previous = readOptions(input.form);
+    options=routeSettings({...previous,direction:direction.id,theme:direction.theme});
+    review=newReview();
+    render();
+    $('#route-form [name=direction]').focus();
   }
 });
 dialog.addEventListener('click',event=>{
   if (event.target===dialog||event.target.closest('[data-action=close]')) dialog.close();
 });
+$('.skip').addEventListener('click',event=>{
+  event.preventDefault();
+  $('#content').focus();
+});
 window.addEventListener('hashchange',()=>render(true));
+const language = $('#locale');
+setLocale(getLocale());
+language.value = getLocale();
+localizeDom(document);
+language.closest('label').querySelector('.sr-only').textContent = t('Язык');
+language.setAttribute('aria-label',t('Язык'));
+language.addEventListener('change',()=>{
+  setLocale(language.value);
+  if (atlas) saveMapContext();
+  if (dialog.open) dialog.close();
+  localizeDom(document.querySelector('.top'));
+  localizeDom(document.querySelector('footer'));
+  language.closest('label').querySelector('.sr-only').textContent=t('Язык');
+  language.setAttribute('aria-label',t('Язык'));
+  render();
+});
 
 try {
   [data, geodata] = await Promise.all([api('state'), api('map').catch(()=>({}))]);

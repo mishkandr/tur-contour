@@ -7,6 +7,7 @@ const mapCopy = {
     kinds:{visit:'Достопримечательность',food:'Питание',stay:'Размещение'},
     statuses:{blocked:'Ограничение',unknown:'Требуется проверка',ready:'Подходит по условиям'},
     zoomIn:'Приблизить',zoomOut:'Отдалить',showPlaces:'Показать объекты',sharedAddress:'Объекты по одному адресу',
+    nearby:'Объекты рядом',
     keyboard:'Используйте стрелки для панорамирования, плюс и минус для изменения масштаба. Клавиша Tab переводит фокус на точки карты.',
     stops:(day,order)=>'День '+day+', точка '+order, alternative:'Другой вариант', changed:'Условия изменились',
   },
@@ -14,6 +15,7 @@ const mapCopy = {
     kinds:{visit:'Attraction',food:'Dining',stay:'Accommodation'},
     statuses:{blocked:'Restriction',unknown:'Needs confirmation',ready:'Meets the requirements'},
     zoomIn:'Zoom in',zoomOut:'Zoom out',showPlaces:'Show sites',sharedAddress:'Sites at the same address',
+    nearby:'Nearby sites',
     keyboard:'Use the arrow keys to pan, plus and minus to zoom, and Tab to move to map markers.',
     stops:(day,order)=>'Day '+day+', stop '+order, alternative:'Alternative', changed:'Conditions changed',
   },
@@ -21,6 +23,7 @@ const mapCopy = {
     kinds:{visit:'景点',food:'餐饮',stay:'住宿'},
     statuses:{blocked:'有条件限制',unknown:'需要确认',ready:'满足条件'},
     zoomIn:'放大',zoomOut:'缩小',showPlaces:'查看地点',sharedAddress:'同一地址的地点',
+    nearby:'附近地点',
     keyboard:'使用方向键移动地图，使用加号和减号缩放，使用 Tab 键切换至地图标记。',
     stops:(day,order)=>'第'+day+'天，第'+order+'站', alternative:'备选方案', changed:'条件已变更',
   },
@@ -407,29 +410,31 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     return cityPoint ?? groupCoordinates(group);
   }
 
-  function drawCity(city, group, coincident = false) {
+  function drawGroup(city,group,type='city') {
+    const popup = type!=='city';
+    const action = popup ? copy[type] : copy.showPlaces;
     const cityGroup = document.createElement('div');
     cityGroup.className = 'map-city';
     if (group.some(place => current.stops.has(place.id))) cityGroup.classList.add('map-city--route');
     if (group.some(place => changedIds.has(place.id))) cityGroup.classList.add('map-city--changed');
     if (group.some(place => place.id === selectedId)) cityGroup.classList.add('map-city--selected');
     const label = cityLabel(city);
-    if (!coincident) {
+    if (!popup) {
       addLandmark(cityGroup,label).className = 'map-city__name';
       cityGroup.append(document.createTextNode(' '));
     }
     addLandmark(cityGroup,String(group.length)).className = 'map-city__count';
-    const title = label+' · '+(coincident ? copy.sharedAddress : copy.showPlaces)+' · '+group.length;
-    const accessibleName = (coincident ? String(group.length) : label+' '+group.length)+' · '+(coincident ? copy.sharedAddress : copy.showPlaces);
-    const marker = L.marker(coincident ? group[0].point : cityPoints(group, city), {
-      title, keyboard: true, zIndexOffset:coincident && group.some(place=>place.id===selectedId) ? 900 : 0,
+    const title = label+' · '+action+' · '+group.length;
+    const accessibleName = (popup ? String(group.length) : label+' '+group.length)+' · '+action;
+    const marker = L.marker(popup ? group[0].point : cityPoints(group,city), {
+      title,keyboard:true,zIndexOffset:popup && group.some(place=>place.id===selectedId) ? 900 : 0,
       icon: L.divIcon({ className: 'map-marker', html: cityGroup, iconSize: [30, 30], iconAnchor: [15, 15] }),
     });
-    decorateMarker(marker,accessibleName,(coincident ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
-    if (coincident) {
+    decorateMarker(marker,accessibleName,(popup ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
+    if (popup) {
       const contents = document.createElement('div');
       contents.className = 'map-places-popup';
-      addLandmark(contents,copy.sharedAddress,'strong');
+      addLandmark(contents,action,'strong');
       for (const place of group) {
         const option = addLandmark(contents,placeLabel(place),'button');
         option.type = 'button';
@@ -459,6 +464,22 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     marker.addTo(markers);
   }
 
+  function drawStreetMarkers(places) {
+    const groups = [];
+    const ordered = places.toSorted((a,b)=>Number(b.id===selectedId)-Number(a.id===selectedId));
+    for (const place of ordered) {
+      const {x,y} = map.latLngToLayerPoint(place.point);
+      const group = groups.find(item=>Math.abs(item.x-x)<36 && Math.abs(item.y-y)<36);
+      if (group) group.places.push(place);
+      else groups.push({x,y,places:[place]});
+    }
+    for (const {places:nearby} of groups) {
+      const first = nearby[0];
+      if (nearby.length===1) drawPlace(first);
+      else drawGroup(first.city,nearby,nearby.every(place=>samePoint(place.point,first.point))?'sharedAddress':'nearby');
+    }
+  }
+
   function drawMarkers() {
     const focused = document.activeElement;
     const key = focused?.dataset.mapMarker;
@@ -470,6 +491,11 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     const visible = [...entries.values()].filter(place =>
       showPlaces || current.stops.has(place.id) || alternative.stops.has(place.id) || changedIds.has(place.id) || place.id === selectedId);
     const cluster = map.getZoom() < 13;
+    if (!cluster) {
+      drawStreetMarkers(visible);
+      if (key || focusId) (markerElements.get(key) ?? markersByPlace.get(focusId) ?? element).focus({preventScroll:true});
+      return;
+    }
     const groups = new Map();
     for (const place of visible) {
       const key = place.point.join(',');
@@ -482,18 +508,18 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       const place = atAddress[0];
       const highlight = atAddress.some(item=>item.id===selectedId || changedIds.has(item.id) ||
         (alternative.stops.has(item.id) && !current.stops.has(item.id)));
-      if (cluster && !highlight) {
+      if (!highlight) {
         const cityGroup = cityGroups.get(place.city) ?? [];
         cityGroups.set(place.city,[...cityGroup,...atAddress]);
-      } else if (atAddress.length > 1) drawCity(place.city,atAddress,true);
+      } else if (atAddress.length > 1) drawGroup(place.city,atAddress,'sharedAddress');
       else drawPlace(place);
     }
     for (const [city, group] of cityGroups) {
-      if (group.length > 1) drawCity(city,group,group.every(place=>samePoint(place.point,group[0].point)));
+      if (group.length > 1) drawGroup(city,group,group.every(place=>samePoint(place.point,group[0].point))?'sharedAddress':'city');
       else drawPlace(group[0]);
     }
     const streetTiles = tileStatus === 'ready';
-    if (!streetTiles && cluster) {
+    if (!streetTiles) {
       for (const [city, entry] of Object.entries(geodata?.cities ?? {})) {
         const point = coordinates(entry);
         if (!point || (cityGroups.get(city)?.length ?? 0) > 1) continue;

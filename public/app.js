@@ -1,11 +1,14 @@
+import { mountAtlas } from '/atlas.js';
 import { assess, defaultRoute, kindNames, months, number, planRoute, routeSettings } from '/engine.mjs';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
 const dialog = $('#place-dialog');
-const labels = { impact:'Мониторинг', catalog:'Каталог', route:'Маршрут', stats:'Статистика', sources:'Данные и методика' };
+const labels = { impact:'Карта маршрутов', catalog:'Каталог', route:'Маршрут', stats:'Статистика', sources:'Данные и методика' };
 const statusText = { ready:'Подходит в демо', blocked:'Ограничение', unknown:'Требует проверки' };
 let data;
+let geodata = {};
+let atlas;
 let options = {...defaultRoute};
 let route;
 let scenario;
@@ -41,11 +44,6 @@ function toast(message) {
   toastTimer = setTimeout(()=>{ $('#toast').hidden=true; },5500);
 }
 
-function routeStatus(record) {
-  if (record.affected) return chip('Требует пересмотра','warn');
-  return chip('Без изменений');
-}
-
 function statisticChart(series) {
   const maximum = Math.max(1,...series.averages.map(month=>month.value ?? 0));
   const lows = new Set(series.lows.map(month=>month.month));
@@ -62,33 +60,6 @@ function statisticChart(series) {
     '<details><summary class="link-button">Значения по месяцам</summary><div class="table-wrap"><table><thead><tr><th>Месяц</th>'+
     series.years.map(y=>'<th>'+y.year+'</th>').join('')+'</tr></thead><tbody>'+months.map((month,i)=>'<tr><th scope="row">'+month+'</th>'+
     series.years.map(y=>'<td>'+val(y.monthly[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
-}
-
-function monitor() {
-  const active = data.affected.filter(x=>x.affected);
-  const latest = data.changes[0];
-  const row = x => '<li><div class="row"><div><h3>'+safe(x.title)+'</h3><p class="caption">'+safe(x.subtitle)+' · '+x.settings.size+
-    ' чел. · '+date(x.settings.date)+'</p></div>'+routeStatus(x)+'</div>'+
-    (x.affected ? '<p class="detail">'+safe(x.issues.map(i=>i.name+' · '+i.reasons.join(' ')).join(' ') ||
-      (x.shifted.length?'Изменилось время посещения.':'Обновилась программа.'))+'</p>'+
-      (x.added.length ? '<p class="detail">Замена: '+safe(x.added.map(stop=>stop.name).join(', '))+'</p>' : '') : '')+
-    '<button class="link-button detail" data-track="'+safe(x.id)+'">Открыть программу</button></li>';
-  return '<header class="hero"><div><p class="eyebrow">Пилот · Владимирская область</p><h1>Мониторинг туристических маршрутов</h1>'+
-    '<p>Проверяйте, как изменения условий посещения влияют на поездки, и сравнивайте варианты корректировки программы.</p></div>'+
-    '<div class="hero-summary"><div class="value">'+active.length+' <small>из '+data.affected.length+'</small></div>'+
-    '<p>маршрутов требуют пересмотра</p>'+button(data.auditVersion==='1'?'Снизить лимит в демо':'Вернуть исходный лимит','demo')+'</div></header>'+
-    '<div class="counts"><div class="count"><strong>'+data.places.length+'</strong><span>объектов в каталоге</span></div>'+
-    '<div class="count"><strong>'+data.readyCount+'</strong><span>подходят для группы из 18 человек в демо</span></div>'+
-    '<div class="count"><strong>'+data.changes.length+'</strong><span>записей об изменениях</span></div></div>'+
-    '<div class="grid"><section class="panel"><div class="section-head"><h2>Маршруты на контроле</h2><a href="#route">Новый маршрут</a></div>'+
-    '<ul class="rows">'+data.affected.map(row).join('')+'</ul>'+
-    (active.length ? '<div class="callout">Проверьте замены и сценарий с двумя сеансами у группы из Китая. <a href="#route" data-action="scenario-link">Сравнить сценарии</a></div>' : '')+
-    '</section><div class="stack"><section class="panel"><div class="section-head"><h2>Последнее изменение</h2><a href="#sources">Журнал</a></div>'+
-    (latest ? '<div class="row"><div><h3>'+safe(latest.name)+'</h3><p class="detail">'+safe(latest.field)+' · '+safe(val(latest.before))+' → '+safe(val(latest.after))+
-      '</p><p class="caption">'+outbound(latest.url,latest.source)+' · '+timestamp(latest.at)+'</p></div></div>' :
-      '<p class="empty">Изменений пока нет. Учебное обновление снизит лимит в Суздальском кремле с 25 до 12 человек.</p>')+
-    '</section><section class="panel"><div class="section-head"><h2>Следующие действия</h2></div><ul class="rows">'+data.recommendations.slice(0,3).map(rec=>
-      '<li><h3>'+safe(rec.title)+'</h3><p class="detail">'+safe(rec.text)+'</p></li>').join('')+'</ul></section></div></div>';
 }
 
 function matchingPlaces() {
@@ -173,6 +144,7 @@ function scenarioView() {
 
 function routeView() {
   const plan = route ?? planRoute(data.places,options);
+  const hasSplit = plan.days.some(day=>day.stops.some(stop=>stop.split));
   const fromChina = options.market==='zh';
   return head('Планирование маршрута','Владимир · Суздаль · Кидекша')+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
@@ -191,7 +163,7 @@ function routeView() {
     (fromChina ? '<p class="caption">Проверьте запись музеев, сопровождающего переводчика, групповое питание и размещение.</p>' : '')+
     (fromChina&&options.demo ? '<p lang="zh-Hans" class="lang-line">行程草案：请确认中文翻译、团队餐饮、住宿及预订。</p>' : '')+
     plan.days.map((day,i)=>renderDay(day,i,fromChina)).join('')+
-    '<div class="actions spaced">'+(plan.completeness ? button('Поставить на мониторинг','track',true) : '')+
+    '<div class="actions spaced">'+(plan.completeness && !hasSplit ? button('Поставить на мониторинг','track',true) : '')+
     (data.auditVersion==='2'&&options.demo&&options.size>12&&options.size<=24 ? button('Сравнить два сценария','scenario',true) : '')+'</div>'+
     '</section>'+scenarioView()+'</div></div>';
 }
@@ -246,7 +218,19 @@ function render(scroll=false) {
     if (a.hash==='#'+current) a.setAttribute('aria-current','page');
     else a.removeAttribute('aria-current');
   });
-  screen.innerHTML = {impact:monitor,catalog,route:routeView,stats,sources}[current]();
+  document.body.classList.toggle('atlas-page',current==='impact');
+  if (current==='impact') {
+    if (atlas) atlas.update(data);
+    else atlas=mountAtlas(screen,data,geodata,{onOpenRoute(settings,program) {
+      options=settings;
+      route=program;
+      scenario=null;
+      location.hash='route';
+    }});
+  } else {
+    if (atlas) { atlas.destroy(); atlas=null; }
+    screen.innerHTML = {catalog,route:routeView,stats,sources}[current]();
+  }
   if (scroll) {
     window.scrollTo(0,0);
     $('#content').focus({preventScroll:true});
@@ -337,13 +321,7 @@ screen.addEventListener('click',event=>{
     render();
   },target);
   if (target.dataset.action==='scenario') runAction(showScenario,target);
-  if (target.dataset.action==='scenario-link') {
-    event.preventDefault();
-    options = {...defaultRoute};
-    route = null;
-    location.hash = 'route';
-    runAction(showScenario);
-  }
+
 });
 
 screen.addEventListener('input',event=>{
@@ -370,7 +348,7 @@ dialog.addEventListener('click',event=>{
 window.addEventListener('hashchange',()=>render(true));
 
 try {
-  data = await api('state');
+  [data, geodata] = await Promise.all([api('state'), api('map').catch(()=>({}))]);
   render();
   if (!data.refreshedAt) setTimeout(async()=>{
     if (!busy && !dialog.open && !screen.contains(document.activeElement)) {

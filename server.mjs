@@ -13,6 +13,7 @@ const load = name => readFile(join(directory,'data',name),'utf8').then(JSON.pars
 const [catalog, baseline, initial] = await Promise.all([
   load('catalog.json'), load('demo-audit.json'), load('snapshot.json'),
 ]);
+const mapData = await load('map.json');
 const stateDir = process.env.TUR_STATE_DIR || join(directory,'.runtime');
 const statePath = join(stateDir,'state.json');
 const port = Number(process.env.PORT || 4173);
@@ -263,6 +264,11 @@ async function readBody(request) {
 
 const assets = {
   '/':['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'],
+  '/atlas.js':['atlas.js','text/javascript'], '/atlas.css':['atlas.css','text/css'], '/map.js':['map.js','text/javascript'],
+  '/vendor/leaflet.js':['vendor/leaflet.js','text/javascript'], '/vendor/leaflet.css':['vendor/leaflet.css','text/css'],
+  '/assets/suzdal.jpg':['assets/suzdal.jpg','image/jpeg'],
+  '/assets/inter-cyrillic.woff2':['assets/inter-cyrillic.woff2','font/woff2'],
+  '/assets/inter-latin.woff2':['assets/inter-latin.woff2','font/woff2'],
 };
 
 const server = createServer(async (request,response) => {
@@ -274,9 +280,10 @@ const server = createServer(async (request,response) => {
     }
     if (request.method==='GET' && Object.hasOwn(assets,path)) {
       const [name,type] = assets[path];
-      response.writeHead(200,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
+      response.writeHead(200,{'Content-Type':type.startsWith('text/') ? type+'; charset=utf-8' : type,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
       return response.end(await readFile(join(directory,'public',name)));
     }
+    if (request.method==='GET' && path==='/api/map') return respond(response,200,mapData);
     if (request.method==='GET' && path==='/api/state') return respond(response,200,dashboard(state));
     if (request.method==='GET' && /^\/api\/audit-version\/[12]$/.test(path)) {
       return respond(response,200,path.endsWith('/2') ? await load('demo-audit-change.json') : baseline);

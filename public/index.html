@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Мониторинг изменений туристических объектов и маршрутов Владимирской области.">
 <title>ТурКонтур — мониторинг маршрутов</title>
+<link rel="stylesheet" href="/vendor/leaflet.css">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/atlas.css">
+<script src="/vendor/leaflet.js" defer></script>
 <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -14,12 +17,12 @@
   <div class="top-inner">
     <a href="#impact" class="brand" aria-label="ТурКонтур, мониторинг"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>ТурКонтур</a>
     <nav aria-label="Разделы">
-      <a href="#impact">Мониторинг</a>
-      <a href="#catalog">Каталог</a>
-      <a href="#route">Маршрут</a>
+      <a href="#impact">Карта</a>
+      <a href="#catalog">Объекты</a>
+      <a href="#route">Маршруты</a>
       <a href="#stats">Статистика</a>
     </nav>
-    <span class="region"><i></i> Владимирская область</span>
+    <a class="top-sources" href="#sources">Источники <span aria-hidden="true">↗</span></a>
   </div>
 </header>
 <main id="content" tabindex="-1">

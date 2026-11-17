@@ -5,7 +5,6 @@ const api = 'https://roschart.ru/api/';
 const catalogueUrl = 'https://roschart.ru/docs';
 const refreshPeriod = 12 * 60 * 60 * 1000;
 const retryPeriod = 60 * 1000;
-const methodologyChange = {from:'2026-01',source:'https://rosstat.gov.ru/storage/mediabank/met168-08042026.pdf'};
 const monthColumns = months.map((month,index)=>index ? 'январь-'+month : month);
 const editionId = /^(0[1-9]|1[0-2])-20\d{2}$/u;
 const metrics = {
@@ -188,14 +187,13 @@ export function createRegionalStatistics({fetchImpl=globalThis.fetch,apiKey,edit
       series?.years.filter(row=>row.total!==null).slice(-last).map(row=>row.year) ?? [];
     const summary = series && requestedYears.length ? statSummary(series,requestedYears) : null;
     const coveredYears = summary?.years.filter(year=>year.monthly.some(Number.isFinite)).map(year=>year.year) ?? [];
-    const straddlesRevision = coveredYears.some(year=>year<2026) && coveredYears.some(year=>year>=2026);
     const sources = [
       {title:'Росстат',url:officialStatistics,checkedAt:series?.checkedAt ?? null},
       {title:'Roschart',url:result.value?.source ?? catalogueUrl,checkedAt:series?.checkedAt ?? null},
     ];
-    if (straddlesRevision) sources.push({title:'Методология Росстата',url:methodologyChange.source,checkedAt:null});
+    if (summary?.methodologyChange) sources.push({title:'Методология Росстата',url:summary.methodologyChange.source,checkedAt:null});
     const unavailable = !coveredYears.length;
-    return {region:{...region},metric,summary:unavailable ? null : {...summary,...(straddlesRevision ? {methodologyChange} : {})},
+    return {region:{...region},metric,summary:unavailable ? null : summary,
       requestedYears,sources,sourceCheckedAt:checkedAt === undefined ? null : timestamp(checkedAt),
       sourceStatus:result.status==='error' ? 'error' : unavailable ? 'unavailable' : result.status,
       ...(result.reason ? {reason:result.reason} : unavailable ? {reason:series ? 'missing-period' : 'missing-region'} : {}),

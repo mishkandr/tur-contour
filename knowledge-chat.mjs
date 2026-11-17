@@ -1,4 +1,4 @@
-import { assess, clockTime, defaultRoute, months, officialStatistics, publishedHours, routeSettings } from './engine.mjs';
+import { assess, clockTime, defaultRoute, months, officialStatistics, publishedHours, routeSettings, statSummary } from './engine.mjs';
 
 const localeTags = {ru:'ru-RU',en:'en-GB',zh:'zh-Hans'};
 const copy = {
@@ -59,6 +59,9 @@ const copy = {
   regionalStatisticsScope:['Охват — средства размещения указанного субъекта.','Coverage is accommodation establishments in the selected federal subject.','统计范围为所选联邦主体的住宿机构。'],
   regionalStatisticsUnavailable:['Подключённый источник не вернул сопоставимый ряд для выбранного субъекта.','The connected source returned no comparable series for the selected federal subject.','已连接的数据源未返回该联邦主体可比较的序列。'],
   regionalStatisticsMethodology:['С отчёта за январь 2026 года применяется обновлённая методология Росстата. Учитывайте её при сравнении с предыдущими годами.','Rosstat updated the methodology from the January 2026 reporting period. Account for it when comparing with previous years.','俄罗斯统计局自2026年1月起采用更新后的统计方法。与往年比较时请考虑这一变化。'],
+  separateMethodology:['Значения по разным методикам приводятся отдельно, общее среднее и темп изменения не рассчитаны.','Figures from the two methodologies are presented separately. No combined average or change rate is calculated.','不同统计方法下的数值分别列示，不计算合并平均值或变化率。'],
+  narrowMethodology:['Укажите один месяц для значений по каждому году или период с одной методикой для расчёта сезонности.','Specify one month for figures by year, or choose a period with one methodology for a seasonal analysis.','请输入一个月份以查看各年度数值，或选择采用同一统计方法的期间进行季节性分析。'],
+  statisticsMethodology:['Методология Росстата','Rosstat methodology','俄罗斯统计局统计方法'],
   cityStatisticsUnavailable:['Для статистики отдельного города нужен муниципальный ряд. В этом сервисе можно выбрать данные по субъекту.','City-level figures require a municipal series. This service provides data by federal subject.','单个城市的统计需要市级数据。本服务可按联邦主体查看数据。'],
   unavailableMetric:['Для этого показателя нужен отдельный ряд данных. Сейчас доступны ночёвки и размещённые лица по Владимирской области.','This metric needs a separate dataset. The connected series cover overnight stays and accommodated guests in Vladimir Region.','该指标需要单独的数据集。目前可查弗拉基米尔州住宿夜数及住宿接待人数。'],
   unavailableArea:['Подключённые ряды охватывают Владимирскую область целиком. Данных для отдельных городов и других регионов в них нет.','The connected series cover Vladimir Region as a whole. They do not provide figures for individual cities or other regions.','已连接的数据覆盖整个弗拉基米尔州，不提供其他地区或单个城市的数据。'],
@@ -159,6 +162,7 @@ const mapProgram = id => '#impact?program='+encodeURIComponent(id);
 const formatDate = (tag,date) => new Intl.DateTimeFormat(tag,{dateStyle:'medium',timeZone:'Europe/Moscow'}).format(new Date(date));
 const validDate = value => /^20\d{2}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
 const monthsGenitive = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const monthsLocative = ['январе','феврале','марте','апреле','мае','июне','июле','августе','сентябре','октябре','ноябре','декабре'];
 const monthsEnglish = ['january','february','march','april','may','june','july','august','september','october','november','december'];
 
 function visitDate(question, fallback, now) {
@@ -344,7 +348,7 @@ function namesOtherSubject(query,area) {
 }
 
 function requestedMonth(query) {
-  const textual = months.findIndex((month,index)=>[month,monthsGenitive[index],monthsEnglish[index]].some(name=>contains(query,name)));
+  const textual = months.findIndex((month,index)=>[month,monthsGenitive[index],monthsLocative[index],monthsEnglish[index]].some(name=>contains(query,name)));
   if (textual>=0) return textual;
   const han = query.match(/(?:^|\D)(1[0-2]|[1-9])月/u);
   return han ? Number(han[1])-1 : -1;
@@ -375,7 +379,10 @@ async function statisticsAnswer(data,question,query,settings,scope,askStats,loca
   }
   const initial = regional ? null : data[request.metric];
   const available = result?.summary ?? initial;
-  const years = available?.years?.filter(year=>!request.years.length || request.years.includes(year.year)) ?? [];
+  const published = available?.availableYears ?? available?.years ?? [];
+  const requested = request.years.length ? request.years : published.filter(year=>Number.isFinite(year.total)).slice(-request.last).map(year=>year.year);
+  const years = published.filter(year=>requested.includes(year.year));
+  const summary = available && statSummary({...available,years},requested);
   const tag = localeTags[locale];
   const output = new Intl.NumberFormat(tag);
   const unit = t(request.metric==='people' ? 'unitPeople' : 'unitNights');
@@ -393,30 +400,33 @@ async function statisticsAnswer(data,question,query,settings,scope,askStats,loca
   if (annual) values.push(...full.map(year=>({title:String(year.year),text:output.format(year.total)+' '+unit})));
   const highest = /наибольш|максим|больше всего|highest|greatest|most|最多|最高/u.test(query);
   const comparison = full.length ? full : years;
-  if (month<0 && !annual && comparison.length) {
-    const comparable = months.flatMap((_,index)=>{
-      const values = comparison.map(year=>year.monthly?.[index]);
-      return values.every(Number.isFinite) ? [{index,value:Math.round(values.reduce((sum,value)=>sum+value,0)/values.length)}] : [];
-    });
+  const separate = Boolean(summary?.mixedMethodology);
+  if (month<0 && !annual && summary && !separate) {
+    const comparable = summary.averages.flatMap(({value},index)=>Number.isFinite(value)?[{index,value}]:[]);
     comparable.sort((a,b)=>highest ? b.value-a.value : a.value-b.value);
     values.push(...comparable.slice(0,3).map(({index,value})=>({title:monthName(index),text:output.format(value)+' '+unit})));
   }
-  const measure = month>=0 ? null : annual ? t('yearly') : t(highest ? 'highest' : 'lowest');
+  const mixedSeasonality = separate && month<0 && !annual;
+  const measure = month>=0 || mixedSeasonality ? null : annual ? t('yearly') : t(highest ? 'highest' : 'lowest');
   const title = [result?.region && placeName(result.region,locale),t(request.metric),measure].filter(Boolean).join(' · ');
-  const coverage = comparison.map(year=>year.year).join(', ');
+  const coverage = (separate ? years : comparison).map(year=>year.year).join(', ');
   const notes = [t(regional ? 'regionalStatisticsScope' : 'statisticsScope')];
-  if (!values.length) notes.push(t(regional && !available ? 'regionalStatisticsUnavailable' : 'noStats'));
+  if (mixedSeasonality) notes.push(t('narrowMethodology'));
+  else if (!values.length) notes.push(t(regional && !available ? 'regionalStatisticsUnavailable' : 'noStats'));
   else if (month<0 && coverage) notes.push(coverage+'.');
   if (missing.length) notes.push(t('missingYears')+' · '+missing.join(', ')+'.');
   if (partial.length) notes.push(t('partial')+' · '+partial.join(', ')+'.');
-  if (available?.methodologyChange) notes.push(t('regionalStatisticsMethodology'));
+  if (summary?.methodologyChange) notes.push(t('regionalStatisticsMethodology'));
+  if (separate) notes.push(t('separateMethodology'));
   if (available && (result?.sourceStatus ?? data.sources[request.metric]?.status)==='error') notes.push(t('error')+'.');
   const sources = references([
     ...(result?.sources ?? []).map(item=>reference(item.title,item.url,item.checkedAt)),
     reference('Roschart',available?.source,available?.checkedAt),
     reference('Росстат / Rosstat',available?.publication ?? officialStatistics,available?.checkedAt),
+    reference(t('statisticsMethodology'),summary?.methodologyChange?.source,null),
   ]);
-  return prepareResponse(locale,'statistics',title,notes.join(' '),chart,{status:values.length ? 'answered' : 'unavailable',items:values,sources});
+  return prepareResponse(locale,'statistics',title,notes.join(' '),chart,
+    {status:values.length ? 'answered' : mixedSeasonality ? 'needs-context' : 'unavailable',items:values,sources});
 }
 
 const supportedIntents = new Set(['statistics','sources','schedule','changes','impact','places','recommendations','route']);

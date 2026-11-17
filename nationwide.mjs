@@ -33,6 +33,11 @@ const paceModes = {
   dense:{ visits:4, starts:540, duration:55 },
 };
 const pilotCityNames=new Set(['Владимир','Суздаль','Кидекша','Муром','Гусь-Хрустальный','Боголюбово','Александров']);
+const cityAliases = {
+  '2013348':['符拉迪沃斯托克'], '1486209':['叶卡捷琳堡','葉卡捷琳堡','Ekaterinburg'],
+  '498817':['Saint Petersburg','St Petersburg'], '479561':['乌法'], '499099':['萨马拉'],
+};
+const citySearchForms = row=>[...row.slice(1,4),...(cityAliases[row[0]] ?? [])].filter(Boolean).map(normalize);
 const categories={museum:['museum','heritage'],heritage:['heritage'],park:['nature','hike','family','romantic'],
   family:['family'],craft:['craft'],pilgrimage:['heritage','pilgrimage'],stay:['accommodation'],food:['dining']};
 
@@ -55,7 +60,10 @@ async function cityData() {
 function formatCity(row, regions) {
   const [id,name,en,cn,lat,lon,population,regionCode,timezone] = row;
   const [region,regionEn,regionCn] = regions[regionCode] ?? [];
-  return { id:String(id),name,en,cn,region:region ?? null,regionEn:regionEn ?? null,regionCn:regionCn ?? null,
+  const aliases=cityAliases[id] ?? [];
+  const chinese=aliases.find(alias=>/^\p{Script=Han}+$/u.test(alias)) ?? cn;
+  return { id:String(id),name,en,cn:chinese,region:region ?? null,regionEn:regionEn ?? null,regionCn:regionCn ?? null,
+    ...(aliases.length ? {aliases:[...new Set([...aliases,cn].filter(Boolean))]} : {}),
     population:population || null,coordinates:[lat,lon],timezone,sourceUrl:geonames+id+'/' };
 }
 
@@ -69,7 +77,7 @@ export async function listCities(input = '') {
     citySearchCache.set(query,cached);
     return cached;
   }
-  citySearchNames ??= data.cities.map(row=>row.slice(1,4).filter(Boolean).map(normalize));
+  citySearchNames ??= data.cities.map(citySearchForms);
   const buckets = [[],[],[],[]];
   const terms = query.split(' ');
   for (const [index,row] of data.cities.entries()) {
@@ -125,17 +133,31 @@ function russianVariants(name) {
   return forms;
 }
 
+const excludedCityPrefix=/(?<!\p{L})(?:(?:не\s+(?:едем|поедем|ездим|заезжаем|заедем|посещаем|посетим|планируем\s+ехать)|не\s+нужно\s+(?:ехать|заезжать)|без|исключая|вместо|пропустить)\s+(?:(?:в|во|из|через)\s+)?|(?:skip|exclude|without|instead\s+of|not\s+(?:visiting|going\s+to|in|via|through))\s+(?:the\s+city\s+of\s+)?)$|(?:不去|不经过|不途经|不参观|别去|不要去|不在|跳过|排除)\s*$/u;
+const excludedCitySuffix=/^\s+(?:не\s+(?:едем|поедем|заезжаем|заедем|посещаем|посетим|рассматриваем)|(?:is\s+)?(?:excluded|off\s+the\s+itinerary))(?!\p{L})|^\s*(?:不去|不经过|不途经|不参观)/u;
+
+function firstCityUse(query,matchText,form) {
+  const isHan=/^\p{Script=Han}+$/u.test(form);
+  const text=isHan ? query : matchText;
+  const pattern=isHan ? form : ' '+form+' ';
+  let index=text.indexOf(pattern);
+  while (index>=0 && (excludedCityPrefix.test(query.slice(Math.max(0,index-80),index)) ||
+      excludedCitySuffix.test(query.slice(index+form.length,index+form.length+50)))) {
+    index=text.indexOf(pattern,index+1);
+  }
+  return index+1;
+}
+
 export async function detectCities(brief) {
-  const query=normalize(brief);
+  const query=clean(brief,4000).split(/(?<!\bst)[.!?;。！？；](?!\d)/iu).map(normalize).filter(Boolean).join(' | ');
   if (!query) return [];
   const data=await cityData();
   const matchText=' '+query+' ';
   const found=[];
   for (const row of data.cities) {
     if (row[6]<40_000 && !pilotCityNames.has(row[1])) continue;
-    const names=row.slice(1,4).filter(Boolean).map(normalize);
-    const forms=[...new Set([...names,...russianVariants(row[1])])];
-    const matched=forms.map(form=>({form,index:/^[\p{Script=Han}]+$/u.test(form) ? query.indexOf(form)+1 : matchText.indexOf(' '+form+' ')+1}))
+    const forms=[...new Set([...citySearchForms(row),...russianVariants(row[1])])];
+    const matched=forms.map(form=>({form,index:firstCityUse(query,matchText,form)}))
       .filter(item=>item.index>0).sort((a,b)=>a.index-b.index || b.form.length-a.form.length)[0];
     if (matched) found.push({...matched,row});
   }

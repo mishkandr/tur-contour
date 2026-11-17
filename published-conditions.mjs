@@ -35,7 +35,9 @@ function isSchedule(schedule) {
 function validate(id, entry) {
   const { schedule, booking, limits = [], notes = [], clarify } = entry;
   const isFact = fact => fact && isUrl(fact.url) && hasText(fact.text);
-  if ((schedule && !isSchedule(schedule)) || (booking && !isFact(booking)) ||
+  const isBooking = fact=>isFact(fact) && (fact.advanceDays===undefined || Number.isInteger(fact.advanceDays) &&
+    fact.advanceDays>0 && isDate(fact.validFrom) && isDate(fact.validUntil) && fact.validFrom<=fact.validUntil && isUrl(fact.termsUrl));
+  if ((schedule && !isSchedule(schedule)) || (booking && !isBooking(booking)) ||
     !Array.isArray(limits) || !limits.every(item => isFact(item) && (item.max === undefined || Number.isInteger(item.max) && item.max > 0)) ||
     !Array.isArray(notes) || !notes.every(isFact) || !Array.isArray(clarify) || !clarify.every(hasText)) {
     throw new Error('Проверьте опубликованные условия объекта ' + id);

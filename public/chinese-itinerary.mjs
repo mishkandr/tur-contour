@@ -29,6 +29,7 @@ const dateFormat = new Intl.DateTimeFormat('zh-CN',{
 
 function localizeStop(stop, settings) {
   const details = [];
+  if (stop.provisional) details.push('此时段按已公布开放时间拟定。团队时段、人数上限及预约待供应方确认。');
   if (Number.isFinite(stop.capacity)) details.push('场馆接待上限：'+stop.capacity+' 人');
   if (stop.split) {
     details.push('分两场，每组最多 '+Math.ceil(settings.size / 2)+' 人。须与场馆确认两个时段和等候安排。');
@@ -60,6 +61,7 @@ export function chineseItinerary(plan) {
     title:'弗拉基米尔州团队行程',
     group:'中国游客团队 · '+settings.size+' 人 · '+plan.days.length+' 天 · '+(themes[settings.theme] ?? themes.any)+' · 当地时间',
     status:settings.demo ? '演示行程草案。接待条件为演示数据，预订尚未确认。' :
+      plan.publishedPreview ? '按已公布开放时间拟定的草案。时间仅供参考，仍须确认团队接待条件和预约。' :
       plan.completeness ? '行程草案。已校验接待条件，交通、实际名额和预订须另行确认。' : '行程草案。部分接待条件尚待确认。',
     preparation,
     days:plan.days.map((day,index)=>({

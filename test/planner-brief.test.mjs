@@ -46,3 +46,42 @@ test('reports an unsupported spelled-out duration in every interface language', 
     assert.equal(parseBrief(request,reference).days,null);
   }
 });
+
+test('keeps relative dates, inflected group sizes and explicit negations in three languages', () => {
+  for (const [brief, size] of [
+    ['Казань завтра на три дня для восемнадцати гостей, без экскурсий по музеям. Не нужен безбарьерный доступ.',18],
+    ['Two days in Yekaterinburg from tomorrow for twenty-one guests. No visits to museums, no need for wheelchair access.',21],
+    ['符拉迪沃斯托克两天，明天出发，二十四人，不去博物馆。无需轮椅。',24],
+  ]) {
+    const result = parseBrief(brief,reference);
+    assert.equal(result.date,'2026-11-18');
+    assert.equal(result.size,size);
+    assert.equal(result.access,false);
+    assert.deepEqual(result.interests,[]);
+    assert.deepEqual(result.excludedInterests,['museum']);
+  }
+  assert.equal(parseBrief('Для восьми гостей на 21.11.26, требуется вход без ступенек.',reference).access,true);
+  assert.equal(parseBrief('November 21 for eight guests.',reference).size,8);
+  assert.equal(parseBrief('On 11/21/2026 for three days.',reference).date,'2026-11-21');
+  assert.equal(parseBrief('Безбарьерный доступ не требуется.',reference).access,false);
+  assert.equal(parseBrief('Wheelchair access is not required.',reference).access,false);
+});
+
+test('explicit invalid dates and out-of-range group sizes never become defaults', () => {
+  for (const [brief, size] of [
+    ['Казань, 3 дня для 120 человек, 31 ноября 2026.', '120'],
+    ['Start on 2026-11-31 in Kazan for 0 guests.', '0'],
+    ['莫斯科2026年11月31日，一百二十人，三天。','120'],
+  ]) {
+    const result=parseBrief(brief,reference);
+    assert.equal(result.date,null);
+    assert.equal(result.invalidDate,'2026-11-31');
+    assert.equal(result.size,null);
+    assert.equal(result.invalidSize,size);
+  }
+  assert.equal(parseBrief('Казань завершить к 17.30.',reference).invalidDate,null);
+  assert.equal(parseBrief('Москва 2026-11-21, 100 человек.',reference).size,100);
+  assert.equal(parseBrief('Москва для 12,5 человек.',reference).invalidSize,'12.5');
+  assert.equal(parseBrief('Казань, 3 дня для ста двадцати гостей',reference).invalidSize,'120');
+  assert.equal(parseBrief('Three days for one hundred and twenty guests in Kazan.',reference).invalidSize,'120');
+});

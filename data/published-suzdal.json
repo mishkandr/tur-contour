@@ -14,6 +14,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Для организованной экскурсии по договору с ВСМЗ заявку подают минимум за 7 дней через личный кабинет или на suzburo@vladmuseum.ru. В заявке указывают маршрут, дату, время, состав и размер группы. Входные билеты на территорию и в собор доступны отдельно."
       },
       "limits": [{
@@ -44,6 +48,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Заявку на организованную экскурсию по договору с ВСМЗ подают минимум за 7 дней через личный кабинет или на suzburo@vladmuseum.ru. Входные билеты и билеты на сборную экскурсию опубликованы в онлайн-кассе музея."
       },
       "limits": [{
@@ -71,6 +79,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Заявку на организованную экскурсию по договору с ВСМЗ подают минимум за 7 дней через личный кабинет или на suzburo@vladmuseum.ru. Билет на сборную программу в Музее деревянного зодчества организованным группам не продают."
       },
       "limits": [{

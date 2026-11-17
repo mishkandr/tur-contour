@@ -13,6 +13,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Юрлица и ИП заказывают комплексное экскурсионное обслуживание через экскурсионное бюро Владимира (exburo@vladmuseum.ru). По условиям 2026 года заявку подают минимум за 7 дней."
       },
       "notes": [
@@ -32,6 +36,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Комплексное обслуживание юрлиц и ИП заказывают через exburo@vladmuseum.ru. Заявка подаётся минимум за 7 дней по оферте ВСМЗ на 2026 год."
       },
       "limits": [
@@ -56,6 +64,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Комплексное обслуживание юрлиц и ИП заказывают через exburo@vladmuseum.ru. Заявка подаётся минимум за 7 дней по оферте ВСМЗ на 2026 год."
       },
       "notes": [
@@ -75,6 +87,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Комплексное обслуживание юрлиц и ИП заказывают через exburo@vladmuseum.ru. Заявка подаётся минимум за 7 дней по оферте ВСМЗ на 2026 год."
       },
       "limits": [
@@ -106,6 +122,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Комплексное обслуживание юрлиц и ИП заказывают через exburo@vladmuseum.ru. Заявка подаётся минимум за 7 дней по оферте ВСМЗ на 2026 год."
       },
       "notes": [
@@ -126,6 +146,10 @@
       },
       "booking": {
         "url": "https://vladmuseum.ru/ru/turoperator/",
+        "advanceDays": 7,
+        "validFrom": "2026-01-01",
+        "validUntil": "2026-12-31",
+        "termsUrl": "https://vladmuseum.ru/ru/files/doc/dogovor_oferti_2026_.pdf",
         "text": "Комплексное обслуживание юрлиц и ИП заказывают через exburo@vladmuseum.ru. Заявка подаётся минимум за 7 дней по оферте ВСМЗ на 2026 год."
       },
       "notes": [

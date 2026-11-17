@@ -1,5 +1,5 @@
-import { mountAtlas } from '/atlas.js';
-import { assess, clockTime, defaultRoute, kindNames, months, number, planRoute, publishedHours, routeSettings, routeDirections, statSummary } from '/engine.mjs';
+import { mountAtlas, pilotParameters, readPilotParameters } from '/atlas.js';
+import { assess, clockTime, defaultRoute, groupApplicationDeadline, kindNames, months, number, planRoute, previewPublishedRoute, publishedHours, routeSettings, routeDirections, statSummary } from '/engine.mjs';
 import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, localizeDom, setLocale, t } from '/locale.js';
 import { renderOverview } from '/overview.js';
@@ -18,11 +18,25 @@ const routeThemes = {
   hike:'Пеший маршрут', nature:'Природа', craft:'Ремёсла', pilgrimage:'Паломничество', any:'Любой формат',
 };
 addLocaleMessages([
+  ['Начиная с января 2026 года действует обновлённая методика Росстата.','Rosstat uses an updated methodology from January 2026.','俄罗斯统计局自2026年1月起采用更新后的统计方法。'],
+  ['Ряды показаны отдельно по годам.','The series are shown separately by year.','各年度数据分别列示。'],
+  ['Среднее и темп изменения между периодами с разной методикой не рассчитаны.','No average or change rate is calculated across the two methodologies.','不同统计方法的期间不计算合并平均值或变化率。'],
+  ['Месячные значения за {year}.','Monthly values for {year}.','{year} 年的月度数值。'],
   ['Проверка программы','Verify itinerary','核查行程'],
   ['Направление','Direction','路线方向'],
   ['Данные для проверки','Evidence for verification','用于核查的数据'],
   ['Опубликованные и подтверждённые условия','Published and supplier-confirmed conditions','已公布和供应方确认的条件'],
   ['Сопоставить даты, группу и условия','Match dates, group and conditions','核对日期、团队与参观条件'],
+  ['Предварительная программа по опубликованным часам','Draft based on published opening hours','按已公布开放时间拟定的草案'],
+  ['Время остановок ориентировочное. Для группы подтвердите свободный сеанс, запись и вместимость у поставщиков.',
+    'Stop times are indicative. Confirm a slot, booking and capacity for the group with each supplier.',
+    '停留时间为估算。请向供应方确认团队时段、预约及接待人数。'],
+  ['{kind} · время предложено по опубликованному графику','{kind} · proposed time based on published opening hours','{kind} · 根据已公布时间拟定'],
+  ['Срок подачи новой заявки','Deadline for a new application','新申请截止日期'],
+  ['Заявка на комплексную экскурсию подаётся до {date} (за {days} дней).','Apply for a guided tour package by {date} ({days} days in advance).','综合导览服务须在 {date} 前提交申请（提前 {days} 天）。'],
+  ['Срок новой заявки на комплексную экскурсию истёк {date}. Если заявка уже подана, проверьте её статус.',
+    'The deadline for a new guided tour application was {date}. Check the status if you have already applied.','综合导览服务的新申请已于 {date} 截止。如已提交，请核查状态。'],
+  ['Оферта музея','Museum booking terms','博物馆申请条款'],
   ['Карта объектов','Map of places','地点地图'],
   ['Дата визита','Visit date','到访日期'],
   ['Все города','All cities','所有城市'],
@@ -115,6 +129,9 @@ addLocaleMessages([
   ['Два сеанса и ожидание второй подгруппы нужно согласовать с объектом.',
     'Agree both sessions and a waiting arrangement for the second group with the venue.','请与场馆确认两场参观及第二小组的等候安排。'],
   ['Согласуйте два отдельных сеанса с музеем.','Arrange two separate sessions with the museum.','请与博物馆确认两个独立场次。'],
+  ['Группа из {total} чел. проверена для двух сеансов до {size} чел. каждый. Согласуйте оба сеанса с музеем.',
+    'The group of {total} was checked for two sessions of up to {size} people each. Confirm both sessions with the museum.',
+    '已按两场、每场至多 {size} 人核查这个 {total} 人团队。请与博物馆确认两场参观。'],
 ]);
 let data;
 let geodata = {};
@@ -122,6 +139,7 @@ let atlas;
 let composer;
 let knowledge;
 let atlasHash;
+let pilotRouteHash;
 const mapContexts = new Map();
 let options = {...defaultRoute,demo:false};
 let activeRouteAnalysis = null;
@@ -151,11 +169,12 @@ const placeDay = place => place.city==='Суздаль' ? 1 : place.city==='Ки
 const catalogSettings = () => ({...options,date:filters.date || options.date,size:filters.size ?? options.size,demo:false});
 const itemName = item => getLocale()==='zh' ? item.cn || item.name : getLocale()==='en' ? item.en || item.name : item.name;
 
-function visitDate(start, day) {
+function visitDay(start, day) {
   const value = new Date(start+'T12:00:00Z');
   value.setUTCDate(value.getUTCDate()+day);
-  return date(value);
+  return value.toISOString().slice(0,10);
 }
+const visitDate = (start,day)=>date(visitDay(start,day));
 
 function openingLabel(official) {
   if (!official) return 'График не найден';
@@ -201,9 +220,14 @@ function statisticChart(series) {
   }).join('');
   const full = series.years.filter(year=>year.total!==null);
   const years = (full.length ? full : series.years).map(year=>year.year).join(', ');
-  return '<div class="chart" aria-hidden="true">'+columns+'</div><p class="caption">'+
-    safe(t('Среднее по месяцам за {years}. Тёмным выделены три месяца с наименьшими значениями.',{years}))+'</p>'+
-    '<details><summary class="link-button">'+safe(t('Значения по месяцам'))+'</summary><div class="table-wrap"><table><thead><tr><th>'+safe(t('Месяц'))+'</th>'+
+  const chartCaption = series.years.length===1 ? t('Месячные значения за {year}.',{year:years}) :
+    t('Среднее по месяцам за {years}. Тёмным выделены три месяца с наименьшими значениями.',{years});
+  const graph = series.mixedMethodology ? '' : '<div class="chart" aria-hidden="true">'+columns+'</div><p class="caption">'+safe(chartCaption)+'</p>';
+  const methodology = series.methodologyChange ? '<p class="caption">'+safe(t('Начиная с января 2026 года действует обновлённая методика Росстата.'))+' '+
+    (series.mixedMethodology ? safe(t('Среднее и темп изменения между периодами с разной методикой не рассчитаны.'))+' ' : '')+
+    outbound(series.methodologyChange.source,t('Методология Росстата'))+'</p>' : '';
+  return graph+methodology+
+    '<details'+(series.mixedMethodology?' open':'')+'><summary class="link-button">'+safe(t('Значения по месяцам'))+'</summary><div class="table-wrap"><table><thead><tr><th>'+safe(t('Месяц'))+'</th>'+
     series.years.map(year=>'<th scope="col">'+safe(year.year)+'</th>').join('')+'</tr></thead><tbody>'+months.map((month,index)=>
       '<tr><th scope="row">'+safe(statisticsMonth(month))+'</th>'+series.years.map(year=>
         '<td>'+safe(year.monthly[index]==null ? t('нет данных') : formatNumber(year.monthly[index]))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
@@ -263,6 +287,14 @@ function evidenceReason(reason) {
   return t(reason);
 }
 
+function bookingCutoffMarkup(deadline) {
+  const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
+  const label = deadline.date<today ? 'Срок новой заявки на комплексную экскурсию истёк {date}. Если заявка уже подана, проверьте её статус.' :
+    'Заявка на комплексную экскурсию подаётся до {date} (за {days} дней).';
+  return '<p class="detail">'+safe(t(label,{date:date(deadline.date),days:formatNumber(deadline.days)}))+' '+
+    outbound(deadline.url,t('Оферта музея'))+'</p>';
+}
+
 function officialEvidence(place,settings,offset) {
   const evidence = place.publishedConditions;
   const officialDate = visitDate(settings.date,offset);
@@ -273,6 +305,7 @@ function officialEvidence(place,settings,offset) {
   if (!evidence) return '<section class="official-evidence">'+summary+
     '<p class="detail">'+safe(t('В собранных источниках нет условий визита. Уточните часы, запись и допустимый размер группы у объекта.'))+'</p></section>';
   const hours = publishedHours(place,settings.date,offset);
+  const deadline = groupApplicationDeadline(place,visitDay(settings.date,offset));
   const sourceText = text=>'<p lang="ru" data-source-text>'+safe(text)+'</p>';
   const lastEntry = hours?.windows?.length && hours.lastEntryMinutes ?
     '<p class="caption">'+safe(t('Последний вход {time}',{time:hours.windows.map(([,close])=>clockTime(close-hours.lastEntryMinutes)).join(', ')}))+'</p>' : '';
@@ -290,14 +323,15 @@ function officialEvidence(place,settings,offset) {
     '</dt><dd><strong>'+safe(t(openingLabel(hours)))+'</strong>'+
     (hours ? lastEntry+period+(hours.note?'<p class="detail" lang="ru" data-source-text>'+safe(hours.note)+'</p>':'')+
       outbound(hours.url,t('Опубликованный график')) : '')+'</dd>'+
-    (evidence.booking ? '<dt>'+safe(t('Правила записи'))+'</dt><dd>'+sourceText(evidence.booking.text)+outbound(evidence.booking.url,t('Источник'))+'</dd>' : '')+
+    (evidence.booking ? '<dt>'+safe(t('Правила записи'))+'</dt><dd>'+sourceText(evidence.booking.text)+outbound(evidence.booking.url,t('Источник'))+
+      (deadline?bookingCutoffMarkup(deadline):'')+'</dd>' : '')+
     (evidence.limits?.length ? '<dt>'+safe(t('Лимиты отдельных посещений'))+'</dt><dd><ul class="official-links">'+facts(evidence.limits)+'</ul></dd>' : '')+
     (evidence.notes?.length ? '<dt>'+safe(t('Другие сведения'))+'</dt><dd><ul class="official-links">'+facts(evidence.notes)+'</ul></dd>' : '')+
     '</dl><p class="caption">'+safe(t('Сверено с опубликованными источниками {date}. Наличие мест на дату визита проверяется отдельно.',
       {date:date(evidence.checkedAt)}))+'</p></section>';
 }
 
-function placeDetails(id,decisionId,requestedDay,requestedSettings) {
+function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop) {
   const place = data.places.find(x=>x.id===id);
   if (!place) return;
   const decision = data.decisions?.find(item=>item.id===decisionId);
@@ -305,14 +339,16 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings) {
   const audit = settings.demo ? place.audit : place.verifiedAudit;
   const plan = decision?.plan ?? (page()==='route' ? selectedVariant()?.plan ?? review.preview : null);
   const day = plan?.days.findIndex(segment=>segment.stops.some(stop=>stop.id===id));
-  const stop = day>=0 ? plan.days[day].stops.find(item=>item.id===id) : null;
   const offset = Number.isInteger(requestedDay) ? requestedDay : day>=0 ? day : placeDay(place);
+  const stop = requestedStop ?? plan?.days[offset]?.stops.find(item=>item.id===id);
   const requirements = stop?.split ? {...settings,size:Math.ceil(settings.size/2)} : settings;
   const result = assess(place,requirements,offset);
   const field = (label,content)=>'<dt>'+safe(t(label))+'</dt><dd>'+content+'</dd>';
-  dialog.innerHTML = '<div class="section-head"><h2 id="place-title" lang="ru" data-source-text>'+safe(place.name)+'</h2>'+
+  const title = itemName(place);
+  const titleLang = title===place.name ? 'ru' : localeTag();
+  dialog.innerHTML = '<div class="section-head"><h2 id="place-title" lang="'+safe(titleLang)+'" data-source-text>'+safe(title)+'</h2>'+
     button(t('Закрыть'),'close',true)+'</div>'+
-    (getLocale()==='zh'&&place.cn ? '<p class="lang-line" lang="zh-Hans">'+safe(place.cn)+'</p>' : '')+
+    (title!==place.name ? '<p class="lang-line" lang="ru" data-source-text>'+safe(place.name)+'</p>' : '')+
     '<p class="caption">'+safe(t(place.city))+' · '+safe(t(kindNames[place.kind]))+'</p>'+officialEvidence(place,settings,offset)+'<dl class="dialog-fields">'+
     field('Источник сведений об объекте',outbound(place.url,place.url.includes('wikidata')?'Wikidata':t('Страница объекта')))+
     field('Дата проверки',safe(date(place.checkedAt)))+
@@ -331,7 +367,9 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings) {
       field('Под перевод',safe(t(audit.language==='interpreter'
         ? settings.demo?'Предусмотрено в демо':'Подтверждено источником' : 'Требует подтверждения'))) : '')+
     '</dl>'+(settings.demo && audit ? result.reasons.map(reason=>'<p class="detail">'+safe(evidenceReason(reason))+'</p>').join('') : '');
-  if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">'+safe(t('Проверка для двух подгрупп. Согласуйте оба сеанса с музеем.'))+'</p>');
+  if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">'+safe(t(
+    'Группа из {total} чел. проверена для двух сеансов до {size} чел. каждый. Согласуйте оба сеанса с музеем.',
+    {total:formatNumber(settings.size),size:formatNumber(requirements.size)}))+'</p>');
   dialog.showModal();
 }
 
@@ -351,7 +389,8 @@ function renderDay(day,index,settings,decisionId) {
     (decisionId?'':weatherSlot(index))+
     '<ul class="rows">'+day.stops.map(stop=>{
       const template = stop.split ? '{kind} · два сеанса по {size} чел.' : settings.demo ? '{kind} · учебный лимит {size} чел.' : '{kind} · лимит {size} чел.';
-      const status = stop.type==='travel' ? t('Переезд · расчётное время') : t(template,{
+      const status = stop.type==='travel' ? t('Переезд · расчётное время') : stop.provisional ?
+        t('{kind} · время предложено по опубликованному графику',{kind:t(kindNames[stop.type])}) : t(template,{
         kind:t(kindNames[stop.type]),size:formatNumber(stop.split?Math.ceil(settings.size/2):stop.capacity)});
       return '<li class="timeline"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><div class="label-pair">'+
       (stop.id ? '<button type="button" class="link-button" data-source-text data-place="'+safe(stop.id)+'" data-place-day="'+index+'"'+reference+'>'+safe(routeStopName(stop))+'</button>' :
@@ -442,7 +481,7 @@ function approvedVariant(variant) {
   });
 }
 
-function routeDecision(plan) {
+function routeDecision(plan,timetable) {
   const variant = selectedVariant();
   const approved = approvedVariant(variant);
   const approvalVisible = !review.loading && variant?.signature && variant.plan.completeness;
@@ -453,9 +492,11 @@ function routeDecision(plan) {
     '<h2 id="route-program-title" tabindex="-1">'+safe(plan.days.map(day=>t(day.city)).join(' → '))+'</h2>'+
     '<p class="caption">'+safe(t('{date} · {days} дня · {size} чел.',{date:date(plan.settings.date),days:formatNumber(plan.settings.days),size:formatNumber(plan.settings.size)}))+
     (localized?' · '+safe(t('Группа из Китая')):'')+'</p></div>'+routeState(plan)+'</div>'+
-    chinesePreview(plan)+
+    (timetable.publishedPreview ? '<div class="callout"><strong>'+safe(t('Предварительная программа по опубликованным часам'))+'</strong>'+
+      '<p>'+safe(t('Время остановок ориентировочное. Для группы подтвердите свободный сеанс, запись и вместимость у поставщиков.'))+'</p></div>' : '')+
+    chinesePreview(timetable)+
     (plan.themeNote ? '<p class="callout">'+safe(t(plan.themeNote))+'</p>' : '')+
-    '<div class="route-days">'+plan.days.map((day,i)=>renderDay(day,i,plan.settings)).join('')+'</div>'+
+    '<div class="route-days">'+timetable.days.map((day,i)=>renderDay(day,i,plan.settings)).join('')+'</div>'+
     (assumptions.length ? '<div class="callout">'+assumptions.map(note=>'<p>'+safe(t(note))+'</p>').join('')+'</div>' : '')+
     (approvalVisible ? '<div class="route-approval"><div><h3>'+(approved?'Решение сохранено':'Решение специалиста')+'</h3><p class="caption">'+
       (plan.settings.demo?'Согласование в рамках пилота. Подтверждение визитов остаётся за поставщиками.':
@@ -486,7 +527,7 @@ const launchChecks = [
     action:'Запросить у гостиницы доступность номеров и условия заселения для {size} чел.'},
 ];
 
-function pilotReadiness(plan,evidence) {
+function pilotReadiness(plan,evidence,timetable) {
   const {settings} = plan;
   const size = formatNumber(settings.size);
   const checks = evidence.flatMap(({day,index,mealCity,stayCity,candidates})=>
@@ -517,9 +558,15 @@ function pilotReadiness(plan,evidence) {
   const summary = settings.demo
     ? 'Учебные условия показывают механику расчёта. Для поездки нужны сведения от поставщиков.'
     : plan.completeness ? 'Обязательные позиции помещаются в расписание.' : 'В расписании ещё есть незакрытые обязательные позиции.';
+  const deadlines = settings.demo ? [] : timetable.days.flatMap((day,index)=>{
+    const visits = new Set(day.stops.filter(stop=>stop.provisional).map(stop=>stop.id));
+    const results = evidence[index].candidates.filter(({place})=>visits.has(place.id)).map(({place})=>groupApplicationDeadline(place,day.date)).filter(Boolean);
+    return [...new Map(results.map(deadline=>[deadline.date+deadline.url,deadline])).values()];
+  });
   return '<section class="panel pilot-readiness" aria-labelledby="pilot-readiness-title"><div class="section-head"><div>'+
-    '<h2 id="pilot-readiness-title">'+safe(t('Готовность программы'))+'</h2><p class="caption">'+safe(t(summary))+'</p></div>'+
-    routeState(plan)+'</div><h3>'+safe(t('Что подтвердить для запуска'))+'</h3><ul class="pilot-checks">'+
+    '<h2 id="pilot-readiness-title" tabindex="-1">'+safe(t('Готовность программы'))+'</h2><p class="caption">'+safe(t(summary))+'</p></div>'+
+    routeState(plan)+'</div>'+(deadlines.length ? '<div class="callout"><h3>'+safe(t('Срок подачи новой заявки'))+'</h3>'+
+      deadlines.map(bookingCutoffMarkup).join('')+'</div>' : '')+'<h3>'+safe(t('Что подтвердить для запуска'))+'</h3><ul class="pilot-checks">'+
     checks.map(check=>'<li><div><strong>'+safe(t(check.title))+'</strong>'+
       (check.context ? '<p class="caption">'+safe(check.context)+'</p>' : '')+'</div><div><p class="detail">'+safe(check.action)+'</p>'+
       (check.contacts ? check.contacts.length ? '<div class="pilot-check-sources">'+check.contacts.map(({place})=>
@@ -578,8 +625,13 @@ function decisionJournal() {
 }
 
 function routeWorkbench(plan) {
+  const timetable = displayTimetable(plan);
   const evidence = routeEvidence(plan);
-  return pilotReadiness(plan,evidence)+routeVariants()+'<div class="route-review">'+routeDecision(plan)+routeAssistant()+'</div>'+
+  const showVariants = Boolean(!timetable.publishedPreview || review.loading || review.error || review.variants?.length);
+  const showAssistant = !timetable.publishedPreview || review.variants?.length>=2;
+  return pilotReadiness(plan,evidence,timetable)+(showVariants?routeVariants():'')+
+    '<div class="route-review'+(showAssistant?'':' route-review--single')+'">'+routeDecision(plan,timetable)+
+    (showAssistant?routeAssistant():'')+'</div>'+
     (plan.settings.demo ? '' : officialRouteReview(evidence))+decisionJournal();
 }
 
@@ -587,11 +639,15 @@ function currentRoutePlan() {
   return selectedVariant()?.plan ?? review.preview ?? planRoute(data.places,options);
 }
 
+function displayTimetable(plan) {
+  return plan.completeness || plan.settings.demo ? plan : previewPublishedRoute(data.places,plan.settings) ?? plan;
+}
+
 function attachPilotWeather(plan) {
   const placeById = new Map(data.places.map(place=>[place.id,place]));
   const outdoor = stop=>['golden-gate','wood'].includes(stop.id) || ['hike','nature'].includes(placeById.get(stop.id)?.theme);
   const indoor = stop=>placeById.get(stop.id)?.theme==='museum' && !outdoor(stop);
-  const days = plan.days.map((day,index)=>{
+  const days = displayTimetable(plan).days.map((day,index)=>{
     const currentOutdoor = day.stops.some(outdoor);
     const variant = currentOutdoor && review.variants?.find(item=>{
       const other = item.plan.days[index];
@@ -607,11 +663,12 @@ function attachPilotWeather(plan) {
 function routeView(plan) {
   const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
   const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
-  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'))+itineraryTabs(true)+
+  const mapLink = !plan.settings.demo ? '<a class="button-quiet" id="pilot-map-link"></a>' : '';
+  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'),mapLink)+itineraryTabs(true)+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
     '<label class="field">Направление<select name="direction">'+routeDirections.map(item=>selectOption(item.id,localizedDirection(item).title,direction.id)).join('')+
     '</select><small class="caption">'+safe(localizedDirection(direction).description)+'</small></label>'+
-    '<label class="field">Дата начала<input name="date" type="date" required value="'+safe(options.date)+'"></label>'+
+    '<label class="field">Дата начала<input name="date" type="date" min="2000-01-01" max="2099-12-31" required value="'+safe(options.date)+'"></label>'+
     '<label class="field">Длительность<select name="days">'+selectOption(2,'2 дня',options.days)+selectOption(3,'3 дня',options.days)+'</select></label>'+
     '<label class="field">Размер группы<input name="size" type="number" min="1" max="100" required value="'+options.size+'"></label>'+
     '<label class="field">Группа<select name="market">'+selectOption('zh','Группа из Китая',options.market)+selectOption('ru','Российская группа',options.market)+'</select></label>'+
@@ -621,27 +678,46 @@ function routeView(plan) {
     (options.demo ? '<div class="inline-mode">'+chip(t('Учебные данные'),'warn')+
       '<button type="button" class="link-button" data-action="live-conditions">'+safe(t('Проверить по опубликованным условиям'))+'</button></div>' : '')+
     '<button type="submit" class="button">Рассчитать варианты</button>'+
-    '<p class="caption route-dirty" role="status"'+(review.dirty?'':' hidden')+'>Пересчитайте варианты с новыми параметрами.</p></form>'+
+    '<p class="caption route-dirty" id="pilot-route-dirty" role="status"'+(review.dirty?'':' hidden')+'>Пересчитайте варианты с новыми параметрами.</p></form>'+
     '<div class="route-workbench" id="route-workbench">'+routeWorkbench(plan)+'</div></div>';
+}
+
+function updatePilotMapLink(plan) {
+  const link = $('#pilot-map-link');
+  if (!link) return;
+  link.textContent=t(review.dirty?'Пересчитайте программу для карты':'Открыть программу на карте');
+  if (review.dirty) {
+    link.removeAttribute('href');
+    link.setAttribute('role','link');
+    link.setAttribute('tabindex','0');
+    link.setAttribute('aria-disabled','true');
+    link.setAttribute('aria-describedby','pilot-route-dirty');
+  } else {
+    link.href='#impact?'+pilotParameters(plan?.settings ?? options,selectedVariant()?.id);
+    for (const name of ['role','tabindex','aria-disabled','aria-describedby']) link.removeAttribute(name);
+  }
 }
 
 function repaintWorkbench() {
   const workspace = $('#route-workbench');
   if (!workspace) return;
+  const restoreReadinessFocus = document.activeElement?.id==='pilot-readiness-title';
   const chineseOpen = workspace.querySelector('.chinese-preview')?.open;
   const plan = currentRoutePlan();
+  updatePilotMapLink(plan);
   workspace.innerHTML = routeWorkbench(plan);
   localizeDom(workspace);
   attachPilotWeather(plan);
   const preview = workspace.querySelector('.chinese-preview');
   if (preview && chineseOpen) preview.open = true;
+  if (restoreReadinessFocus) $('#pilot-readiness-title')?.focus({preventScroll:true});
 }
 
 function downloadChinese(decisionId) {
   if (!decisionId && (review.dirty || review.loading)) return;
   const plan = decisionId ? data.decisions?.find(item=>item.id===decisionId)?.plan : currentRoutePlan();
   if (!plan) return;
-  const itinerary = chineseItinerary(plan);
+  const itinerary = chineseItinerary(decisionId ? plan : displayTimetable(plan));
   if (!itinerary) return;
   const file = new Blob(['\uFEFF',chineseItineraryText(itinerary)],{type:'text/plain;charset=utf-8'});
   const url = URL.createObjectURL(file);
@@ -664,7 +740,8 @@ async function loadAlternatives() {
     const result = await api('alternatives',options);
     requested.variants = result.options;
     const matching = requested.preview && requested.variants.find(variant=>scheduleKey(variant.plan)===scheduleKey(requested.preview));
-    requested.selectedId = (matching ?? requested.variants[0])?.id;
+    const preferred = requested.preferredVariantId && requested.variants.find(variant=>variant.id===requested.preferredVariantId);
+    requested.selectedId = (preferred || matching || requested.variants[0])?.id;
   } catch(error) {
     requested.error = error.message;
   } finally {
@@ -752,7 +829,8 @@ function agentView() {
   const original = '<p class="detail" lang="ru" data-source-text>'+safe(agent.text)+'</p>';
   const full = summary?.years.filter(year=>year.total!==null) ?? [];
   const selected = (full.length ? full : summary?.years ?? []).map(year=>year.year).join(', ');
-  const brief = summary?.lows.length ? t('Месяцы с наименьшими средними значениями за {years}',{years:selected}) :
+  const brief = summary?.mixedMethodology ? t('Ряды показаны отдельно по годам.') :
+    summary?.lows.length ? t('Месяцы с наименьшими средними значениями за {years}',{years:selected}) :
     t('В подключённой выгрузке нет сопоставимых месячных значений за запрошенный период.');
   const output = summary && getLocale()!=='ru' ? '<p class="detail">'+safe(brief)+'</p>'+
     (summary.lows.length ? '<ul class="rows">'+summary.lows.map(({month,value})=>'<li>'+safe(statisticsMonth(month))+' · '+
@@ -772,16 +850,15 @@ function stats() {
   const pilot=statistics.regionId==='83';
   const provider=statistics.result;
   const stored=data[metric];
-  const selectedYears=statistics.period==='full' ? stored.years.filter(year=>year.total!==null).slice(-3).map(year=>year.year) : [Number(statistics.period)];
-  const series=pilot?statSummary(stored,selectedYears):provider?.summary;
+  const availableYears=stored.availableYears ?? stored.years;
+  const selectedYears=statistics.period==='full' ? [] : [Number(statistics.period)];
+  const series=pilot?statSummary({...stored,years:availableYears},selectedYears):provider?.summary;
   const regionControl='<label class="field">'+safe(t('Территория'))+'<select id="stat-region"'+(statistics.regions?'':' disabled')+'>'+
     statisticRegionsMarkup()+'</select></label>';
-  const available=series?.years.length ? '<h2>'+safe(t(series.name))+'</h2><p class="caption">'+safe(t(statistics.period==='full'?
+  const available=series?.years.length ? '<h2>'+safe(t(series.name))+'</h2><p class="caption">'+safe(t(statistics.period==='full' && !series.mixedMethodology?
     'Средние по полным календарным годам':'Месячные значения'))+'</p>'+
     statisticChart(series)+'<p class="caption status-line">'+outbound(series.publication,t('Росстат'))+' · '+outbound(series.source,t('Выгрузка через Roschart'))+
     ' · '+safe(series.edition)+' · '+safe(timestamp(series.checkedAt))+'</p>'+
-    (series.methodologyChange ? '<p class="caption">'+safe(t('Методика Росстата изменилась с января 2026 года.'))+' '+
-      outbound(series.methodologyChange.source,t('Методология Росстата'))+'</p>':'')+
     (!pilot && provider.sourceStatus==='cached' ? '<p class="caption">'+safe(t('Ряд из сохранённой копии'))+'</p>' :
       statisticsSource(pilot?data.sources[metric]?.status:provider.sourceStatus,pilot?data.sources[metric]?.checkedAt:provider.sourceCheckedAt)) :
     '<p class="empty" role="status">'+safe(t(statistics.loading?'Загружаем региональный ряд…':provider?.reason==='rate-limit'?
@@ -791,7 +868,7 @@ function stats() {
     '<div class="grid"><section class="panel"><div class="filters">'+regionControl+'<label class="field">'+safe(t('Показатель'))+'<select id="metric">'+
     selectOption('nights',t('Ночёвки'),metric)+selectOption('people',t('Размещённые лица'),metric)+'</select></label>'+
     '<label class="field">'+safe(t('Период'))+'<select id="stat-period">'+selectOption('full',t('Последние три полных года'),statistics.period)+
-    stored.years.map(year=>String(year.year)).toReversed().map(year=>selectOption(year,year,statistics.period)).join('')+
+    availableYears.map(year=>String(year.year)).toReversed().map(year=>selectOption(year,year,statistics.period)).join('')+
     '</select></label></div>'+available+'</section>'+
     '<section class="panel"><h2>'+safe(t('Спросить ИИ по статистике'))+'</h2>'+
     (pilot?'<p class="caption">'+
@@ -912,7 +989,19 @@ function sources() {
 function render(scroll=false) {
   if (!data) return;
   const current = page();
-  if (current!=='route' || params().get('scope')!=='pilot') cancelRouteAnalysis(true);
+  const query = params();
+  const isRoutePilot = current==='route' && query.get('scope')==='pilot';
+  const priorForm = isRoutePilot && pilotRouteHash===location.hash && review.dirty ? $('#route-form') : null;
+  if (!isRoutePilot) cancelRouteAnalysis(true);
+  if (isRoutePilot && pilotRouteHash!==location.hash) {
+    const pilot = readPilotParameters(query);
+    if (pilot && (!sameSettings(pilot.settings,options) || pilot.variantId && pilot.variantId!==review.selectedId)) {
+      options=pilot.settings;
+      review=newReview();
+      review.preferredVariantId=pilot.variantId;
+    }
+  }
+  pilotRouteHash=isRoutePilot ? location.hash : null;
   document.title = t(labels[current])+' — ТурКонтур';
   document.querySelectorAll('.top nav a').forEach(a=>{
     if (a.hash==='#'+current) a.setAttribute('aria-current','page');
@@ -924,18 +1013,23 @@ function render(scroll=false) {
   if (current==='impact') {
     if (atlas && atlasHash!==location.hash) saveMapContext();
     if (atlas) atlas.update(data);
-    else atlas=mountAtlas(screen,data,geodata,{
-      programId:params().get('program'),
-      placeId:params().get('place'),
-      initialLayer:params().get('layer'),
-      restored:mapContexts.get(location.hash),
-      onOpenRoute(settings,program,context) {
-        options=settings;
-        review=newReview(program,context);
-        location.hash='route?scope=pilot';
-      },
-      onOpenPlace(id,settings,offset) { placeDetails(id,null,offset,settings); },
-    });
+    else {
+      const pilot = readPilotParameters(query);
+      const saved = mapContexts.get(location.hash);
+      atlas=mountAtlas(screen,data,geodata,{
+        programId:query.get('program'),
+        placeId:query.get('place'),
+        initialLayer:query.get('layer'),
+        pilot,
+        restored:pilot && scroll && saved?.group!=='working-pilot' ? undefined : saved,
+        onOpenRoute(settings,program,context) {
+          options=settings;
+          review=newReview(program,context);
+          location.hash='route?scope=pilot';
+        },
+        onOpenPlace(id,settings,offset,stop) { placeDetails(id,null,offset,settings,stop); },
+      });
+    }
     atlasHash=location.hash;
   } else {
     if (atlas) saveMapContext();
@@ -946,6 +1040,13 @@ function render(scroll=false) {
       screen.innerHTML = {overview:()=>renderOverview(data,overview),catalog,route:()=>routeView(plan),stats,sources}[current]();
       if (current==='stats') void loadStatRegions();
       if (plan) {
+        if (priorForm) for (const field of $('#route-form').elements) {
+          const prior = field.name && priorForm.elements.namedItem(field.name);
+          if (!prior) continue;
+          if (field.type==='checkbox') field.checked=prior.checked;
+          else field.value=prior.value;
+        }
+        updatePilotMapLink(plan);
         attachPilotWeather(plan);
         if (!review.variants && !review.loading && !review.error) void loadAlternatives();
       }
@@ -989,6 +1090,12 @@ function readOptions(form) {
     direction:f.get('direction'),access:f.has('access'),demo:options.demo});
 }
 
+function updatePilotLinkState() {
+  if (options.demo || !readPilotParameters(params())) return;
+  pilotRouteHash='#route?'+pilotParameters(options,selectedVariant()?.id);
+  history.replaceState(null,'',pilotRouteHash);
+}
+
 screen.addEventListener('submit',event=>{
   event.preventDefault();
   const form = event.target;
@@ -1008,8 +1115,9 @@ screen.addEventListener('submit',event=>{
     if (busy) return;
     options = readOptions(form);
     review = newReview(null,review.program);
+    updatePilotLinkState();
     render();
-    $('#route-form button')?.focus({preventScroll:true});
+    $('#pilot-readiness-title')?.focus();
   }
   if (form.id==='route-ai-form') void requestRouteAnalysis();
   if (form.id==='ask-form') runAction(async()=>{
@@ -1041,6 +1149,7 @@ screen.addEventListener('click',event=>{
   if (target.dataset.action==='select-variant') {
     if (busy) return;
     review.selectedId = target.dataset.variant;
+    updatePilotLinkState();
     const fromAi = target.closest('.route-assistant')!==null;
     repaintWorkbench();
     const selector = fromAi ? '.route-ai-suggestions [aria-pressed=true]' : '.route-variant[aria-pressed=true]';
@@ -1093,9 +1202,11 @@ screen.addEventListener('input',event=>{
     localizeDom($('#catalog-rows'));
   }
   if (event.target.form?.id==='route-form') {
-    review.dirty = !sameSettings(readOptions(event.target.form),options);
+    const form = event.target.form;
+    review.dirty = !form.checkValidity() || !sameSettings(readOptions(form),options);
     if (review.dirty && cancelRouteAnalysis(true)) repaintWorkbench();
     $('.route-dirty').hidden = !review.dirty;
+    updatePilotMapLink();
     const approve = $('[data-action="approve-route"]');
     if (approve) approve.disabled = review.dirty || busy;
     const compare = $('#route-ai-form [type=submit]');
@@ -1139,10 +1250,15 @@ screen.addEventListener('change',event=>{
     $('#stat-period')?.focus();
   }
   if (input.name==='direction' && input.form?.id==='route-form') {
+    if (!input.form.reportValidity()) {
+      input.value=options.direction ?? 'vladimir-suzdal';
+      return;
+    }
     const direction = routeDirections.find(item=>item.id===input.value);
     const previous = readOptions(input.form);
     options=routeSettings({...previous,direction:direction.id,theme:direction.theme});
     review=newReview();
+    updatePilotLinkState();
     render();
     $('#route-form [name=direction]').focus();
   }

@@ -42,6 +42,15 @@ addLocaleMessages([
   ['Переезды по городу · около {minutes} мин','Local transfers · around {minutes} min','市内交通 · 约 {minutes} 分钟'],
   ['Переезд к точке · около {minutes} мин, {distance} км по прямой','Transfer to the stop · about {minutes} min, {distance} km straight-line','前往此站 · 约 {minutes} 分钟，直线距离 {distance} 公里'],
   ['Входные данные изменились. Запустите расчёт снова.','Inputs changed. Start a new calculation.','条件已更改，请重新计算。'],
+  ['Показан предыдущий расчёт. Пересчитайте маршрут, чтобы сверить расписание и погоду по новым параметрам.',
+    'This is the previous calculation. Rebuild the itinerary to check the schedule and weather with the new requirements.',
+    '此处显示上次计算结果。请重新编制行程，以便按新条件核查日程和天气。'],
+  ['В запросе неверная дата {value}. Исправьте её в запросе или укажите дату в параметрах.',
+    'The date {value} in your request is invalid. Correct it in the request or set a date in the form.',
+    '需求中的日期 {value} 无效。请更正日期，或在参数中重新选择。'],
+  ['В запросе {value} чел. Укажите размер группы от 1 до 100 человек.',
+    'The request specifies {value} people. Enter a group size from 1 to 100.',
+    '需求中的团队人数为 {value}。请输入 1 至 100 人。'],
   ['Например: Казань на три дня, 12 человек, музеи и неспешные прогулки','For example: three days in Kazan, 12 people, museums and relaxed walks','例如：喀山三日，12人，博物馆与轻松步行'],
   ['Параметры маршрута','Itinerary requirements','行程参数'],
   ['Город начала','Starting city','起点城市'],
@@ -150,6 +159,8 @@ const tr = (value,vars)=>safe(t(value,vars));
 const name = item=>getLocale()==='zh' ? item.cn || item.name : getLocale()==='en' ? item.en || item.name : item.name;
 const regionName = city=>getLocale()==='zh' ? city.regionCn || city.region : getLocale()==='en' ? city.regionEn || city.region : city.region;
 const currentDate = ()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
+const initialRequirements = date=>({date,days:2,size:8,interests:[],transport:'mixed',
+  pace:'normal',market:'ru',access:false,required:[],excludedInterests:[],visitDeadline:null});
 const examples = [
   ['История и музеи · Казань',
     ['Казань на три дня, 12 человек. История и музеи, неспешный темп. Обязательно «Казанский кремль».',
@@ -169,9 +180,9 @@ const examples = [
       '莫斯科和喀山三天，12人，博物馆，自驾。']],
 ];
 const state = {
-  brief:'',lastAppliedBrief:'',query:'',cities:[],selectedCity:null,extraCities:[], settings:{date:currentDate(),days:2,size:8,interests:[],transport:'mixed',
-    pace:'normal',market:'ru',access:false,required:[],excludedInterests:[],visitDeadline:null}, result:null,mapDay:'all',point:null,dirty:false,
-  revision:0,note:'',noteValues:null,findVersion:0,pointDay:null,unsupportedDays:null,
+  brief:'',lastAppliedBrief:'',query:'',cities:[],selectedCity:null,extraCities:[],settings:initialRequirements(currentDate()),
+  result:null,mapDay:'all',point:null,dirty:false,
+  revision:0,note:'',noteValues:null,findVersion:0,pointDay:null,unsupportedDays:null,invalidDate:null,invalidSize:null,
   omitted:[],replacements:[],overrideFields:[],
 };
 const cacheKey='tur-contour.current-draft.v1';
@@ -184,8 +195,10 @@ try {
 
 function retainDraft() {
   if (!state.result) return;
-  const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,unsupportedDays,replacements,overrideFields} = state;
-  try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,unsupportedDays,replacements,overrideFields}));}
+  const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,
+    unsupportedDays,invalidDate,invalidSize,replacements,overrideFields} = state;
+  try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,
+    mapDay,point,pointDay,dirty,omitted,unsupportedDays,invalidDate,invalidSize,replacements,overrideFields}));}
   catch { /* The open draft remains available in memory. */ }
 }
 
@@ -212,7 +225,8 @@ function formMarkup() {
     '<label class="field composer-city"><span>'+tr('Город начала')+'</span><input id="city-query" type="search" value="'+
     safe(state.query)+'" placeholder="'+tr('Название города')+'" autocomplete="off" aria-controls="city-results"></label>'+
     '<div id="city-results"></div><div id="draft-additional-cities"></div><div id="draft-omitted"></div>'+
-    '<div class="composer-fields"><label class="field">'+tr('Дата начала')+'<input type="date" name="date" value="'+safe(settings.date)+'" required></label>'+
+    '<div class="composer-fields"><label class="field">'+tr('Дата начала')+
+    '<input type="date" name="date" min="2000-01-01" max="2099-12-31" value="'+safe(settings.date)+'" required></label>'+
     '<label class="field">'+tr('Длительность')+'<select name="days">'+[2,3].map(day=>'<option value="'+day+'"'+(settings.days===day?' selected':'')+'>'+
     tr('{days} дня',{days:day})+'</option>').join('')+'</select></label>'+
     '<label class="field">'+tr('Размер группы')+'<input type="number" name="size" value="'+settings.size+'" min="1" max="100" required></label></div>'+
@@ -294,10 +308,11 @@ function draftMarkup(result) {
     return '<li><a href="'+safe(item.url)+'" target="_blank" rel="noopener noreferrer" data-source-text>'+safe(item.name)+'</a>'+
       ' · '+tr(status)+safe(date)+(item.city && venues.length>1?' · '+safe(item.city):'')+'</li>';
   }).join('');
-  return '<section class="panel composer-output" aria-labelledby="draft-title"><header class="composer-title"><div><p class="ops-kicker">'+
+  return '<section class="panel composer-output" data-dirty="'+state.dirty+'" aria-labelledby="draft-title"><header class="composer-title"><div><p class="ops-kicker">'+
     tr('Программа для проверки')+'</p><h2 id="draft-title" tabindex="-1" data-source-text>'+safe(venues.map(name).join(' → '))+'</h2><p class="caption">'+
     safe(regionName(location))+' · '+tr('Дата начала · {date} · {days} дня · {size} чел.',{date:formatDate(settings.date),days:settings.days,size:settings.size})+
-    '</p></div></header>'+
+    '</p></div></header><p class="callout composer-stale" role="status"'+(state.dirty?'':' hidden')+'>'+
+    tr('Показан предыдущий расчёт. Пересчитайте маршрут, чтобы сверить расписание и погоду по новым параметрам.')+'</p>'+
     '<section class="composer-evidence"><h3>'+tr('Перед выездом')+'</h3><ul>'+
     plan.required.map(item=>'<li><span data-source-text>'+safe(item.label)+'</span> · '+safe(eligibility(item))+'</li>').join('')+
     result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul></section>'+
@@ -382,6 +397,17 @@ export function mountComposer(container, api) {
     state.note=message;
     state.noteValues=values;
     find('#draft-status').textContent=message?t(message,values):'';
+    const issue=parameterIssue();
+    for (const name of ['date','size','days']) {
+      const field=find('#draft-input').elements[name];
+      if (name===issue?.field && message===issue.message) {
+        field.setAttribute('aria-invalid','true');
+        field.setAttribute('aria-describedby','draft-status');
+      } else {
+        field.removeAttribute('aria-invalid');
+        field.removeAttribute('aria-describedby');
+      }
+    }
   }
   function syncActions() {
     if (!mounted) return;
@@ -484,23 +510,44 @@ export function mountComposer(container, api) {
   function setDirty() {
     state.revision+=1;
     if (!state.result) return;
+    markStale();
+    showNote('Параметры изменились. Соберите черновик заново.');
+  }
+  function markStale() {
     state.dirty=true;
+    const output=find('.composer-output');
+    if (output) {
+      output.dataset.dirty='true';
+      output.querySelector('.composer-stale').hidden=false;
+    }
     const send=find('[data-composer=export]');
     if (send) send.disabled=true;
-    showNote('Параметры изменились. Соберите черновик заново.');
+  }
+  function parameterIssue() {
+    if (state.invalidDate) return {field:'date',message:'В запросе неверная дата {value}. Исправьте её в запросе или укажите дату в параметрах.',values:{value:state.invalidDate}};
+    if (state.invalidSize) return {field:'size',message:'В запросе {value} чел. Укажите размер группы от 1 до 100 человек.',values:{value:state.invalidSize}};
+    if (state.unsupportedDays!=null) return {field:'days',message:'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.',values:{days:state.unsupportedDays}};
+    return null;
   }
   function applyParsing(result,message) {
     const {parsed,cities}=result;
-    const resultSettings={};
+    const resultSettings=initialRequirements(result.referenceDate ?? currentDate());
     for (const key of ['date','days','size','transport','pace','market','access','visitDeadline']) if (parsed[key]!=null) resultSettings[key]=parsed[key];
     resultSettings.interests=parsed.interests;
     resultSettings.required=parsed.required;
     resultSettings.excludedInterests=parsed.excludedInterests??[];
     for (const key of state.overrideFields) delete resultSettings[key];
     state.settings={...state.settings,...resultSettings};
-    state.lastAppliedBrief=state.brief;
-    state.unsupportedDays=parsed.requestedDays && !parsed.days && !state.overrideFields.includes('days') ? parsed.requestedDays : null;
+    state.lastAppliedBrief=state.brief.trim();
+    state.unsupportedDays=parsed.requestedDays!=null && !parsed.days && !state.overrideFields.includes('days') ? parsed.requestedDays : null;
+    state.invalidDate=state.overrideFields.includes('date') ? null : parsed.invalidDate ?? null;
+    state.invalidSize=state.overrideFields.includes('size') ? null : parsed.invalidSize ?? null;
     if (!state.overrideFields.includes('city')) {
+      const previousIds=[state.selectedCity,...state.extraCities].filter(Boolean).map(city=>city.id).join(',');
+      if (previousIds!==cities.map(city=>city.id).join(',')) {
+        state.omitted=[];
+        state.replacements=[];
+      }
       clearTimeout(searchTimer);
       state.findVersion++;
       state.cities=cities;
@@ -508,16 +555,13 @@ export function mountComposer(container, api) {
       state.extraCities=cities.slice(1);
       state.query=state.selectedCity ? name(state.selectedCity) : '';
     }
-    if (state.result) {
-      state.dirty=true;
-      const send=find('[data-composer=export]');
-      if (send) send.disabled=true;
-    }
+    if (state.result) markStale();
     retainDraft();
-    state.note = state.unsupportedDays ? 'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.' :
+    const issue=parameterIssue();
+    state.note = issue?.message ?? (
       state.extraCities.length>2 ? 'Укажите до трёх городов для одного маршрута.' :
-      state.extraCities.length && !state.overrideFields.includes('city') ? 'Несколько городов найдено в тексте. Проверьте порядок.' : message;
-    state.noteValues={days:parsed.requestedDays};
+      state.extraCities.length && !state.overrideFields.includes('city') ? 'Несколько городов найдено в тексте. Проверьте порядок.' : message);
+    state.noteValues=issue?.values ?? null;
     updateExtraction();
   }
   async function analyse() {
@@ -551,18 +595,18 @@ export function mountComposer(container, api) {
         if (!isCurrent(request,revision)) return;
         applyParsing(fast,'');
       }
-      if (state.unsupportedDays || state.extraCities.length>2) {
+      const issue=parameterIssue();
+      if (issue || state.extraCities.length>2) {
         find('#draft-parameters').open=true;
-        showNote(state.unsupportedDays ? 'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.' :
-          'Укажите до трёх городов для одного маршрута.',{days:state.unsupportedDays});
-        (state.unsupportedDays ? form.elements.days : find('#draft-additional-cities button'))?.focus();
+        showNote(issue?.message ?? 'Укажите до трёх городов для одного маршрута.',issue?.values);
+        (issue ? form.elements[issue.field] : find('#draft-additional-cities button'))?.focus();
         return;
       }
       if (!state.selectedCity && state.query.trim()) {
         const response=await api('cities?q='+encodeURIComponent(state.query),undefined,'GET',network);
         if (!isCurrent(request,revision)) return;
         state.cities=response.cities;
-        const possible=state.cities.filter(city=>[city.name,city.en,city.cn].some(value=>value?.toLowerCase()===state.query.trim().toLowerCase()));
+        const possible=state.cities.filter(city=>[city.name,city.en,city.cn,...(city.aliases??[])].some(value=>value?.toLowerCase()===state.query.trim().toLowerCase()));
         if (possible.length===1) state.selectedCity=possible[0];
         if (mounted) cityOptions(true);
       }
@@ -635,6 +679,8 @@ export function mountComposer(container, api) {
     if (control.name==='brief') {
       state.brief=control.value;
       state.unsupportedDays=null;
+      state.invalidDate=null;
+      state.invalidSize=null;
       state.overrideFields=[];
       setDirty();
       syncActions();
@@ -645,6 +691,8 @@ export function mountComposer(container, api) {
       control.name || (control.id.startsWith('city-')?'city':'');
     if (manual && !state.overrideFields.includes(manual)) state.overrideFields.push(manual);
     if (control.name==='days') state.unsupportedDays=null;
+    if (control.name==='date') state.invalidDate=null;
+    if (control.name==='size') state.invalidSize=null;
     setDirty();
     if (control.id==='city-query') {
       state.query=control.value;
@@ -703,6 +751,8 @@ export function mountComposer(container, api) {
       input.value=examples[Number(value)][1][{ru:0,en:1,zh:2}[getLocale()]];
       state.brief=input.value;
       state.unsupportedDays=null;
+      state.invalidDate=null;
+      state.invalidSize=null;
       state.overrideFields=[];
       setDirty();
       syncActions();

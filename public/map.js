@@ -413,15 +413,19 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     if (group.some(place => current.stops.has(place.id))) cityGroup.classList.add('map-city--route');
     if (group.some(place => changedIds.has(place.id))) cityGroup.classList.add('map-city--changed');
     if (group.some(place => place.id === selectedId)) cityGroup.classList.add('map-city--selected');
-    addLandmark(cityGroup, String(group.length)).className = 'map-city__count';
     const label = cityLabel(city);
-    if (!coincident) addLandmark(cityGroup,label).className = 'map-city__name';
+    if (!coincident) {
+      addLandmark(cityGroup,label).className = 'map-city__name';
+      cityGroup.append(document.createTextNode(' '));
+    }
+    addLandmark(cityGroup,String(group.length)).className = 'map-city__count';
     const title = label+' · '+(coincident ? copy.sharedAddress : copy.showPlaces)+' · '+group.length;
+    const accessibleName = (coincident ? String(group.length) : label+' '+group.length)+' · '+(coincident ? copy.sharedAddress : copy.showPlaces);
     const marker = L.marker(coincident ? group[0].point : cityPoints(group, city), {
       title, keyboard: true, zIndexOffset:coincident && group.some(place=>place.id===selectedId) ? 900 : 0,
       icon: L.divIcon({ className: 'map-marker', html: cityGroup, iconSize: [30, 30], iconAnchor: [15, 15] }),
     });
-    decorateMarker(marker,title,(coincident ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
+    decorateMarker(marker,accessibleName,(coincident ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
     if (coincident) {
       const contents = document.createElement('div');
       contents.className = 'map-places-popup';

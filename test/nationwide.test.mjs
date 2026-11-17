@@ -12,6 +12,9 @@ test('countrywide gazetteer finds cities in different languages and regions',asy
   assert.equal(moscow.cities[0].id,'524901');
   assert.equal(moscow.cities[0].cn,'莫斯科');
   assert.equal((await listCities('Vladivostok')).cities[0].id,'2013348');
+  assert.equal((await listCities('符拉迪沃斯托克')).cities[0].id,'2013348');
+  assert.equal((await listCities('海参崴')).cities[0].cn,'符拉迪沃斯托克');
+  assert.equal((await listCities('Yekaterinburg')).cities[0].cn,'叶卡捷琳堡');
   assert.equal((await listCities('喀山')).cities[0].id,'551487');
   assert.equal((await listCities('новгород')).cities[0].name,'Нижний Новгород');
   assert.equal((await listCities('Верхоянск')).cities[0].name,'Верхоянск');
@@ -24,6 +27,19 @@ test('free-text city matching keeps whole words, inflections and multiple cities
   assert.equal((await detectCities('Два дня во Владивостоке'))[0].id,'2013348');
   assert.equal((await detectCities('周末去喀山玩两天'))[0].id,'551487');
   assert.deepEqual(await detectCities('Подмосковный парк и петербургский музей'),[]);
+});
+
+test('national planner resolves common alternate city names and ignores directly excluded destinations',async()=>{
+  for (const [input, expected] of [
+    ['Уфа для восемнадцати гостей, не едем в Казань.',['Уфа']],
+    ['В Москву не едем. Нужна Уфа.',['Уфа']],
+    ['Два дня в Казани. Не едем в Москву.',['Казань']],
+    ['Two days in Saint Petersburg, skip Moscow.',['Санкт-Петербург']],
+    ['Two days in St. Petersburg. Moscow is excluded.',['Санкт-Петербург']],
+    ['符拉迪沃斯托克三天，海边散步。不去莫斯科。',['Владивосток']],
+    ['不去莫斯科。叶卡捷琳堡两天。',['Екатеринбург']],
+    ['Не едем в Казань напрямую. Сначала Уфа, затем Казань.',['Уфа','Казань']],
+  ]) assert.deepEqual((await detectCities(input)).map(city=>city.name),expected);
 });
 
 test('three geographically separate snapshots supply mapped places but leave all visits provisional',async()=>{

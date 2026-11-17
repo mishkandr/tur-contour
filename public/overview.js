@@ -16,6 +16,7 @@ addLocaleMessages([
   ['Все события','All activity','所有变更'],
   ['Подтверждённые источники','Verified sources','已核验的数据源'],
   ['Просмотр изменения','Change details','变更详情'],
+  ['Название в Wikidata расходится с каталогом. Сверьте идентичность объекта.','The Wikidata name differs from the catalogue. Check the place identity.','维基数据中的名称与名录不一致，请核实地点身份。'],
   ['Программ затронуто сейчас: {count}','Itineraries currently affected: {count}','目前受影响的行程：{count}'],
   ['Открыть на карте','Show on map','在地图上查看'],
   ['Сравнить варианты','Compare options','比较方案'],
@@ -44,7 +45,7 @@ const rooms = value=>typeof value==='number' ? formatNumber(value) :
   Array.isArray(value) ? value.join(', ') : (value ?? t('Нет данных'));
 const timestamp = value=>value ? formatDate(value,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : t('Нет данных');
 const shortdate = value=>formatDate(value,{day:'numeric',month:'short',year:'numeric'});
-const changeId = change=>[change.at,change.id,change.key].join('|');
+const changeId = change=>JSON.stringify([change.at,change.id ?? change.name,change.key,change.field,change.url]);
 const action = (label, href, kind='button-quiet')=>'<a class="'+kind+'" href="'+html(href)+'">'+local(label)+' <span aria-hidden="true">↗</span></a>';
 const linkTo = (page,params) => '#'+page+'?'+new URLSearchParams(params);
 
@@ -104,9 +105,10 @@ export function renderOverview(data, view) {
           <div class="ops-signal"><span>${html(t(entry.change.field))}</span><strong>${html(rooms(entry.change.before))} <span aria-hidden="true">→</span> ${html(rooms(entry.change.after))}</strong></div>
           <p class="caption"><a href="${html(entry.change.url)}" target="_blank" rel="noopener noreferrer">${html(entry.change.source)}</a> · ${html(timestamp(entry.change.at))}</p>
           <p class="ops-source-kind"><span class="chip ${entry.change.demo?'warn':'plain'}">${local(entry.change.demo?'Учебное изменение':'Из внешнего источника')}</span></p>
+          ${entry.change.key==='wikiName' && entry.programmes.length ? '<p class="detail">'+local('Название в Wikidata расходится с каталогом. Сверьте идентичность объекта.')+'</p>' : ''}
           <h3>${local('Программ затронуто сейчас: {count}',{count:formatNumber(entry.programmes.length)})}</h3>
           ${entry.programmes.length ? '<ul class="ops-linked">'+entry.programmes.map(record=>`
-            <li><strong>${html(record.title)}</strong><small>${html(t(record.subtitle))} · ${html(shortdate(record.settings.date))} · ${formatNumber(record.settings.size)}</small>
+            <li><strong>${html(record.title)}</strong><small>${html(t(record.subtitle))} · ${html(shortdate(record.settings.date))} · ${formatNumber(record.settings.size)}${record.settings.demo?' · '+local('Учебная программа'):''}</small>
               ${action('Сравнить варианты',programLink(record,entry.change.id))}</li>`).join('')+'</ul>' :
             data.places.some(place=>place.id===entry.change.id) ? action('Открыть на карте',linkTo('impact',{place:entry.change.id,layer:entry.change.demo?'route':'official'})) : ''}
         ` : `<span class="ops-kicker">${local('ИИ · статистика')}</span><h2 id="ops-selected">${local('Ответить на вопрос по данным')}</h2>

@@ -37,6 +37,8 @@ nav a[aria-current="page"]{color:#134333;background:#e6ede4}
 .atlas-map-shell{display:flex;flex-direction:column}
 .atlas-map-top,.atlas-map-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:11px 15px}
 .atlas-map-top{border-bottom:1px solid #d8e2d9}
+.atlas-map-top > label{min-width:0;max-width:100%}
+#pilot-map-link[aria-disabled=true]{color:var(--muted);cursor:not-allowed}
 .atlas-map-bottom{border-top:1px solid #d8e2d9;min-height:47px}
 .atlas-map-label{color:#243e35;font-size:.81rem;font-weight:690}
 .atlas-map-note{font-size:.72rem;color:#5a6b61}

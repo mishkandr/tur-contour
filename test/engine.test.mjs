@@ -29,6 +29,39 @@ test('a current programme issue is attributed only to the matching latest condit
   assert.deepEqual(current[0].affectedProgramIds,[]);
 });
 
+test('one update can introduce two independent reasons for revising the same itinerary',()=>{
+  const id = 'suzdal-kremlin';
+  const audit = structuredClone(baseline);
+  Object.assign(audit.objects[id],{capacity:12,off:[0]});
+  const changed = {...state,audit};
+  const places = objectsFrom(catalog,changed);
+  const programs = impacts(catalog,changed,baseline,snapshot.wiki);
+  const changes = ['capacity','off'].map(key=>({id,key,demo:true,at:'2026-11-18T09:00:00Z',
+    before:baseline.objects[id][key],after:audit.objects[id][key]}));
+  const [capacity,closure] = attributeChanges(changes,places,programs);
+  assert.deepEqual(capacity.affectedProgramIds,['group-cn']);
+  assert.ok(closure.affectedProgramIds.includes('group-cn'));
+});
+
+test('links the latest Wikidata identity conflict only to routes with that unresolved stop',()=>{
+  const id = 'suzdal-kremlin';
+  const {qid} = catalog.find(place=>place.id===id);
+  const before = snapshot.wiki[qid].wikiName;
+  const after = 'Другая запись';
+  const changed = {...state,audit:changedAudit, wiki:{...snapshot.wiki,[qid]:{...snapshot.wiki[qid],wikiName:after}}};
+  const programs = impacts(catalog,changed,baseline,snapshot.wiki);
+  programs.push({id:'elsewhere',issues:[{id:'wood',status:'unknown'}]});
+  const place = objectsFrom(catalog,changed);
+  const change = {id,key:'wikiName',before,after,source:'Wikidata',url:'https://www.wikidata.org/wiki/'+qid,at:'2026-11-18T09:00:00Z'};
+  const older = {...change,before:after,after:before,at:'2026-11-18T08:00:00Z'};
+  const [current,old] = attributeChanges([change,older],place,programs);
+  assert.deepEqual(current.affectedProgramIds,['group-cn','group-small']);
+  assert.equal(current.url,change.url);
+  assert.equal(current.at,change.at);
+  assert.equal(old.affectedProgramIds,undefined);
+  assert.equal(attributeChanges([{...change,before:'Другая старая запись'}],place,programs)[0].affectedProgramIds,undefined);
+});
+
 test('the change affects the larger group and measures all scenarios on the same portfolio',()=>{
   const changed = {...state,audit:changedAudit};
   const [large,small] = impacts(catalog,changed,baseline,snapshot.wiki);

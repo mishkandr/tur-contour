@@ -4,6 +4,7 @@ export { routeDirections };
 
 export const region = 'Владимирская область';
 export const officialStatistics = 'https://rosstat.gov.ru/statistics/turizm';
+const methodologyChange = {from:'2026-01',source:'https://rosstat.gov.ru/storage/mediabank/met168-08042026.pdf'};
 export const metricInfo = {
   people: { name: 'Численность размещённых лиц', unit: 'чел.', key: 'chislennost-razmeschennyh-lic-v-sredstvah' },
   nights: { name: 'Число ночёвок в средствах размещения', unit: 'ночёвок', key: 'chislo-nochevok-v-sredstvah-razmescheniya' },
@@ -36,18 +37,22 @@ export function normalizeStatistics(dataset, metric) {
 
 export function statSummary(series, years) {
   const selected = years.length ? series.years.filter(y => years.includes(y.year)) : series.years.filter(y => y.total !== null).slice(-3);
+  const covered = selected.filter(year=>Number.isFinite(year.total) || year.monthly?.some(Number.isFinite));
+  const revised = covered.some(year=>year.year>=2026);
+  const mixedMethodology = revised && covered.some(year=>year.year<2026);
   const full = selected.filter(y => y.total !== null);
   const comparison = full.length ? full : selected;
   const averages = months.map((month, i) => {
-    const values = comparison.map(y => y.monthly[i]).filter(Number.isFinite);
-    return { month, value: values.length === comparison.length && values.length ? Math.round(values.reduce((a,b) => a+b,0) / values.length) : null };
+    const values = comparison.map(y => y.monthly?.[i]).filter(Number.isFinite);
+    return { month, value: !mixedMethodology && values.length === comparison.length && values.length ? Math.round(values.reduce((a,b) => a+b,0) / values.length) : null };
   });
   const lows = averages.filter(x => x.value !== null).sort((a,b) => a.value - b.value).slice(0,3);
   const latest = full.at(-1);
   const previous = full.at(-2);
-  const summer = latest?.monthly.slice(5,8).reduce((a,b) => a+b,0);
-  return { ...series, years: selected, averages, lows, latest, summerShare: summer ? Math.round(summer * 100 / latest.total) : null,
-    yoy: latest && previous?.year === latest.year-1 && previous.total ? (latest.total / previous.total - 1) * 100 : null };
+  const summer = latest?.monthly?.slice(5,8).reduce((a,b) => a+b,0);
+  return { ...series, years:selected, averages, lows, latest, methodologyChange:revised ? methodologyChange : null,
+    mixedMethodology, summerShare:summer ? Math.round(summer * 100 / latest.total) : null,
+    yoy:!mixedMethodology && latest && previous?.year===latest.year-1 && previous.total ? (latest.total / previous.total - 1) * 100 : null };
 }
 
 export const defaultRoute = { days:2, date:'2026-11-21', size:18, market:'zh', theme:'heritage', access:false, demo:true };
@@ -88,13 +93,17 @@ export function routeSettings(input) {
   };
 }
 
+function conflictingNames(name,wikiName) {
+  const canonical = value=>value.toLowerCase().replaceAll('ё','е').split(' — ')[0].trim();
+  return typeof wikiName==='string' && Boolean(wikiName.trim()) && canonical(name)!==canonical(wikiName);
+}
+
 export function objectsFrom(catalog, state) {
   return catalog.map(place => {
     const wiki = state.wiki?.[place.qid];
-    const canonical = value => value.toLowerCase().replaceAll('ё','е').split(' — ')[0].trim();
     return { ...place, coordinates:wiki?.coordinates ?? null, wikiName:wiki?.wikiName ?? null,
       checkedAt:'2026-11-17', wikiCheckedAt:wiki?.checkedAt ?? null,
-      conflict:Boolean(wiki?.wikiName && canonical(place.name)!==canonical(wiki.wikiName)),
+      conflict:conflictingNames(place.name,wiki?.wikiName),
       wikiLink:place.qid ? 'https://www.wikidata.org/wiki/' + place.qid : null,
       audit:state.audit?.objects?.[place.id] ?? null,
       publishedConditions:state.publishedConditions?.[place.id] ?? null,
@@ -116,6 +125,12 @@ export function publishedHours(place, date, day = 0) {
   }
   const windows = schedule.overrides?.[dayKey] ?? schedule.weekly[visit.getUTCDay()];
   return {...schedule,date:dayKey,windows};
+}
+
+export function groupApplicationDeadline(place, visitDate) {
+  const rule = place.publishedConditions?.booking;
+  if (!rule?.advanceDays || !Number.isFinite(Date.parse(visitDate)) || visitDate<rule.validFrom || visitDate>rule.validUntil) return null;
+  return {date:isoDate(dateFor(visitDate,-rule.advanceDays)),days:rule.advanceDays,url:rule.termsUrl};
 }
 
 export function assess(place, settings, day = 0) {
@@ -178,20 +193,27 @@ function openingWindows(place, audit, settings, day) {
 }
 
 const visitDuration = (audit, split) => split ? audit.minutes * 2 + 15 : audit.minutes;
+const estimatedDuration = {visit:60,food:60,stay:45};
 
-function candidateFor(place, settings, day, splitId) {
+function candidateFor(place, settings, day, splitId, includePublished = false) {
   const audit = conditionsFor(place, settings);
   const split = Boolean(settings.demo && place.kind === 'visit' && place.id === splitId &&
     audit?.capacity < settings.size && audit.capacity * 2 >= settings.size);
   const group = split ? {...settings, size:Math.ceil(settings.size/2)} : settings;
-  if (assess(place,group,day).status !== 'ready') return null;
-  return { place, audit, split, windows:openingWindows(place,audit,settings,day), fit:themeFit(place,settings.theme) };
+  const assessment = assess(place,group,day);
+  const fit = themeFit(place,settings.theme);
+  if (assessment.status==='ready') return {place,audit,split,windows:openingWindows(place,audit,settings,day),fit};
+  if (!includePublished || settings.demo || assessment.status==='blocked' || place.conflict) return null;
+  const hours = publishedHours(place,settings.date,day);
+  if (!hours?.windows?.length) return null;
+  return {place,fit,split:false,provisional:true,sourceUrl:hours.url,
+    windows:hours.windows.map(([open,close])=>[open,close,close-(hours.lastEntryMinutes ?? 0)])};
 }
 
-function buildDay(places, settings, day, splitId, stage) {
+function buildDay(places, settings, day, splitId, stage, includePublished) {
   const city = stage?.city ?? cities[day];
   const date = isoDate(dateFor(settings.date,day));
-  const candidates = places.map(place=>candidateFor(place,settings,day,splitId)).filter(Boolean);
+  const candidates = places.map(place=>candidateFor(place,settings,day,splitId,includePublished)).filter(Boolean);
   const venues = (kind, location = city) => candidates.filter(item=>item.place.kind===kind && item.place.city===location);
   const visits = venues('visit').filter(item=>!stage?.visits || stage.visits.includes(item.place.id))
     .sort((a,b) => Number(b.split)-Number(a.split) || b.fit-a.fit);
@@ -205,7 +227,7 @@ function buildDay(places, settings, day, splitId, stage) {
   if (secondVisit && !stage?.visitsFirst) roles.push(extra);
   if (day<settings.days-1) roles.push({candidates:venues('stay',stayCity), missing:'Ночёвка'});
 
-  const first = {cursor:600, stops:[], missing:[], hasSplit:false, fit:0};
+  const first = {cursor:600, stops:[], missing:[], hasSplit:false, fit:0,provisionalCount:0};
   if (stage) {
     first.cursor = stage.start;
     if (stage.inbound) first.stops.push(regionalTransfer(stage.inbound));
@@ -228,33 +250,35 @@ function buildDay(places, settings, day, splitId, stage) {
         cursor += 45;
       }
       if (role.lunch) cursor = Math.max(cursor,720);
-      const valid = role.candidates.flatMap(({place, audit, split, windows, fit}) => {
+      const valid = role.candidates.flatMap(({place,audit,split,windows,fit,provisional,sourceUrl}) => {
         if (stops.some(stop=>stop.id === place.id)) return [];
-        const duration = visitDuration(audit,split);
+        const duration = provisional ? estimatedDuration[place.kind] : visitDuration(audit,split);
         const window = windows.find(([opens,closes,entry])=>Math.max(cursor,opens)<=entry && Math.max(cursor,opens)+duration<=closes);
         if (!window) return [];
         const [opens] = window;
         const start = Math.max(cursor,opens);
         const end = start + duration;
-        const stop = { type:place.kind, id:place.id, name:place.name, cn:place.cn, url:place.url,
-          theme:place.theme, start:clockTime(start), end:clockTime(end), capacity:audit.capacity, split,
-          booking:audit.booking, verifiedAt:audit.verifiedAt, sourceUrl:audit.sourceUrl,
-          ...(stage ? {en:place.en,formats:place.formats} : {}) };
+        const stop = { type:place.kind,id:place.id,name:place.name,en:place.en,cn:place.cn,url:place.url,
+          theme:place.theme,start:clockTime(start),end:clockTime(end),split,
+          ...(provisional ? {provisional:true,sourceUrl} : {
+            capacity:audit.capacity,booking:audit.booking,verifiedAt:audit.verifiedAt,sourceUrl:audit.sourceUrl,
+          }),...(stage ? {formats:place.formats} : {}) };
         return [{cursor:end+20, stops:[...stops,stop], missing:path.missing,
-          hasSplit:path.hasSplit || split, fit:path.fit+fit}];
+          hasSplit:path.hasSplit || split, fit:path.fit+fit,provisionalCount:path.provisionalCount+Number(Boolean(provisional))}];
       });
       return [...valid,{...path, cursor, stops, missing:[...path.missing,role.missing]}];
     });
   }
 
-  return paths.sort((a,b) => a.missing.length-b.missing.length || Number(b.hasSplit)-Number(a.hasSplit) || b.fit-a.fit)
+  return paths.sort((a,b) => a.missing.length-b.missing.length || a.provisionalCount-b.provisionalCount ||
+    Number(b.hasSplit)-Number(a.hasSplit) || b.fit-a.fit)
     .map(({stops,missing}) => ({city,date,stops,missing,
       ...(stage ? {mealCity,stayCity,cn:stage.cn,en:stage.en,visitIds:stage.visits} : {})}));
 }
 
-function routeCandidates(places, settings, splitId) {
+function routeCandidates(places, settings, splitId, includePublished = false) {
   const stages = scheduleFor(settings);
-  const days = Array.from({length:settings.days},(_,day)=>buildDay(places,settings,day,splitId,stages?.[day]));
+  const days = Array.from({length:settings.days},(_,day)=>buildDay(places,settings,day,splitId,stages?.[day],includePublished));
   const issuesFor = (place,day) => {
     const result = assess(place,settings,day);
     return result.status==='ready' ? [] : [{id:place.id,name:place.name,city:place.city,day,...result}];
@@ -298,6 +322,14 @@ function assembleRoute(settings, days, issues) {
 export function planRoute(places, settings, splitId = null) {
   const {days, issues} = routeCandidates(places,settings,splitId);
   return assembleRoute(settings,days.map(choices=>choices[0]),issues);
+}
+
+export function previewPublishedRoute(places,settings) {
+  if (settings.demo) return null;
+  const {days,issues} = routeCandidates(places,settings,null,true);
+  const itinerary = days.map(choices=>choices[0]);
+  if (!itinerary.some(day=>day.stops.some(stop=>stop.provisional))) return null;
+  return {...assembleRoute(settings,itinerary,issues),completeness:false,publishedPreview:true};
 }
 
 function itineraryKey(plan) {
@@ -395,22 +427,59 @@ export function attributeChanges(changes, places, programs) {
   const byId = new Map(places.map(place=>[place.id,place]));
   const seen = new Set();
   const auditFields = new Set(['capacity','language','hours','off','seasons','minutes','access','booking','validUntil']);
-  return changes.map(change=>{
+  const batches = new Map();
+  const batchesByChange = new Map();
+  const newConflicts = new Map();
+  for (const [index,change] of changes.entries()) {
     const place = byId.get(change.id);
+    if (change.key==='wikiName' && !change.demo) {
+      const key = 'wiki|'+change.id;
+      if (!place || seen.has(key)) continue;
+      seen.add(key);
+      if (place.wikiName===change.after && place.conflict && !conflictingNames(place.name,change.before)) {
+        newConflicts.set(index,place.id);
+      }
+      continue;
+    }
     const auditKey = change.demo ? 'audit' : 'verifiedAudit';
     const audit = place?.[auditKey];
     const key = [auditKey,change.id,change.key].join('|');
-    if (!audit || !auditFields.has(change.key) || seen.has(key)) return change;
+    if (!audit || !auditFields.has(change.key) || seen.has(key)) continue;
     seen.add(key);
-    if (change.before == null || JSON.stringify(audit[change.key])!==JSON.stringify(change.after)) return change;
-    const former = {...place,[auditKey]:{...audit,[change.key]:change.before}};
+    const nullable = ['language','access'].includes(change.key);
+    if (change.before===undefined || (change.before===null && !nullable) ||
+        JSON.stringify(audit[change.key])!==JSON.stringify(change.after)) continue;
+    const batchKey = [auditKey,change.id,change.at].join('|');
+    const batch = batches.get(batchKey) ?? {place,auditKey,audit,before:{}};
+    batch.before[change.key] = change.before;
+    batches.set(batchKey,batch);
+    batchesByChange.set(index,batch);
+  }
+  const worsened = (current,former)=>current.some(issue=>!former.some(previous=>previous.day===issue.day &&
+    (previous.status===issue.status || previous.status==='blocked')));
+  return changes.map((change,index)=>{
+    const identity = newConflicts.get(index);
+    if (identity) {
+      const affectedProgramIds = programs.filter(program=>program.issues.some(issue=>
+        issue.id===identity && issue.status==='unknown')).map(program=>program.id);
+      return {...change,affectedProgramIds};
+    }
+    const batch = batchesByChange.get(index);
+    if (!batch) return change;
+    const {place,auditKey,audit,before} = batch;
+    const previousAudit = {...audit,...before};
+    const previous = {...place,[auditKey]:previousAudit};
+    const withoutChange = {...place,[auditKey]:{...audit,[change.key]:change.before}};
+    const onlyChange = {...place,[auditKey]:{...previousAudit,[change.key]:change.after}};
+    const simultaneous = Object.keys(before).length>1;
     const affectedProgramIds = programs.filter(program=>{
       if (Boolean(program.settings.demo)!==Boolean(change.demo)) return false;
       const current = program.issues.filter(issue=>issue.id===place.id);
       if (!current.length) return false;
-      const formerIssues = reviewRoute([former],program.baseline).issues.filter(issue=>issue.id===place.id);
-      return current.some(issue=>!formerIssues.some(previous=>previous.day===issue.day &&
-        (previous.status===issue.status || previous.status==='blocked')));
+      const atPlace = candidate=>reviewRoute([candidate],program.baseline).issues.filter(issue=>issue.id===place.id);
+      if (worsened(current,atPlace(withoutChange))) return true;
+      // A simultaneous closure can mask a reduced limit, or vice versa.
+      return simultaneous && worsened(atPlace(onlyChange),atPlace(previous));
     }).map(program=>program.id);
     return {...change,affectedProgramIds};
   });
@@ -513,13 +582,19 @@ function priorityForChange(route, byId, state) {
   if (route.added.length) action = 'Сравнить рассчитанный вариант с посещением '+route.added.map(stop=>'«'+stop.name+'»').join(', ')+'.';
   else if (route.shifted.length && route.currentPlan.completeness) action = 'Сверить новое расписание для тех же остановок.';
   else if (!route.currentPlan.completeness) action = 'Подобрать запасные объекты для незаполненных частей программы.';
-  const sources = route.settings.demo ? [{title:'Учебный аудит',url:'/api/audit-version/'+state.audit.version}] :
-    evidenceLinks(changedStops.map(stop=>{
+  const identitySources = changedStops.flatMap(stop=>{
+    const place = byId.get(stop.id);
+    return place?.conflict && place.wikiLink ? [{title:stop.name+' · Wikidata',url:place.wikiLink,checkedAt:place.wikiCheckedAt}] : [];
+  });
+  const visitSources = route.settings.demo ? [{title:'Учебный аудит',url:'/api/audit-version/'+state.audit.version}] :
+    changedStops.flatMap(stop=>{
       const place = byId.get(stop.id);
-      return {title:stop.name,url:place?.verifiedAudit?.sourceUrl ?? place?.publishedConditions?.schedule?.url ?? place?.url};
-    }));
+      return place?.conflict && place.wikiLink ? [] :
+        [{title:stop.name,url:place?.verifiedAudit?.sourceUrl ?? place?.publishedConditions?.schedule?.url ?? place?.url}];
+    });
   return {title:'Перепроверить посещение · '+route.subtitle,
-    text:[route.settings.demo ? 'Учебный сценарий.' : '',reason,action].filter(Boolean).join(' '),urgent:true,sources};
+    text:[route.settings.demo ? 'Учебный сценарий.' : '',reason,action].filter(Boolean).join(' '),urgent:true,
+    sources:evidenceLinks([...identitySources,...visitSources])};
 }
 
 export function recommendations(places,state,affected) {

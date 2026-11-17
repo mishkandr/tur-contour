@@ -261,7 +261,8 @@ function dashboard(snapshot) {
     decisions:snapshot.decisions ?? [],
     portfolio:portfolioImpact(catalog,snapshot,baseline,initial.wiki,true),
     portfolioVerified:portfolioImpact(catalog,snapshot,baseline,initial.wiki,false),
-    nights:statSummary(snapshot.stats.nights,[]), people:statSummary(snapshot.stats.people,[]),
+    nights:{...statSummary(snapshot.stats.nights,[]),availableYears:snapshot.stats.nights.years},
+    people:{...statSummary(snapshot.stats.people,[]),availableYears:snapshot.stats.people.years},
     recommendations:recommendations(places,snapshot,affected),
     readyCount:places.filter(place=>assess(place,defaultRoute,place.city==='Суздаль' ? 1 : 0).status==='ready').length,
   };
@@ -417,6 +418,8 @@ async function answer(question, settings, trustedPlan = null, signal) {
       plan,title:series.name,summary,sourceStatus:source?.status ?? 'snapshot',sourceCheckedAt:source?.checkedAt,
       note:'Владимирская область, средства размещения. Месячные значения рассчитаны как разности накопительных итогов. Пропуски сохраняются. Для загрузки нужен отдельный показатель.',
     };
+    if (summary.mixedMethodology) return {...context,
+      text:'Методика Росстата изменилась с января 2026 года. Значения показаны отдельно по годам. Среднее и темп изменения между периодами с разной методикой не рассчитаны.'};
     if (!summary.years.length || !summary.lows.length) return {...context,
       text:'В подключённой выгрузке нет сопоставимых месячных значений за запрошенный период.'};
     const missing = years.filter(year=>!summary.years.some(x=>x.year===year));
@@ -530,11 +533,14 @@ export async function handleRequest(request,response) {
       const brief = typeof input.text==='string' ? input.text.trim() : '';
       if (brief.length<3 || brief.length>600) return respond(response,400,{error:'Опишите задачу в пределах 600 символов.'});
       const cities = await detectCities(brief);
-      const referenceDate = new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
+      const now = new Date();
+      let referenceDate;
+      try { referenceDate=now.toLocaleDateString('sv-SE',{timeZone:cities[0]?.timezone || 'Europe/Moscow'}); }
+      catch { referenceDate=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'}); }
       const fast = {parsed:parseBrief(brief,referenceDate),mode:'rules'};
       const allowed = input.mode==='ai' && process.env.TUR_NO_LLM!=='1';
       const result = allowed ? await withModel(()=>interpretBrief(brief,{baseUrl:ollamaUrl,model:briefModel,referenceDate,signal}),{...fast,mode:'busy'},signal) : fast;
-      return respond(response,200,{...result,cities});
+      return respond(response,200,{...result,cities,referenceDate});
     }
     if (request.method==='GET' && path==='/api/demo-offers-source') return respond(response,200,demoOffers);
     if (request.method==='POST' && path==='/api/demo-offers') return respond(response,200,getDemoOffers(demoOffers,await readBody(request)));

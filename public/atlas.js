@@ -420,7 +420,7 @@ export function mountAtlas(container, initialData, geodata, { programId, placeId
       if (place) {
         const day = inspectionDay(place);
         const stop = view.layer==='official' ? null : current.days[day]?.stops.find(item=>item.id===value);
-        onOpenPlace(value,inspectionSettings(record()),day,stop);
+        onOpenPlace(value,inspectionSettings(record()),day,stop,button);
       }
       return;
     }

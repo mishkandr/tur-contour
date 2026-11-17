@@ -147,6 +147,8 @@ let knowledge;
 let atlasHash;
 let pilotRouteHash;
 const mapContexts = new Map();
+const passportButtons = 'button[data-place], button[data-atlas="passport"]';
+let passportReturn = null;
 let options = {...defaultRoute,demo:false};
 let activeRouteAnalysis = null;
 let review = newReview();
@@ -338,7 +340,31 @@ function officialEvidence(place,settings,offset) {
       {date:date(evidence.checkedAt)}))+'</p></section>';
 }
 
-function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop) {
+function passportFocus(button) {
+  if (!button?.matches(passportButtons)) return null;
+  const scope = button.closest('[aria-labelledby], #catalog-rows, #atlas-inspector, .route-journal');
+  const label = scope?.getAttribute('aria-labelledby');
+  const selector = scope?.id ? '#'+CSS.escape(scope.id) : label ? '[aria-labelledby="'+CSS.escape(label)+'"]' :
+    scope?.classList.contains('route-journal') ? '.route-journal' : '#screen';
+  return {button,selector,hash:location.hash};
+}
+
+function restorePassportFocus(entry) {
+  if (!entry || entry.hash!==location.hash || dialog.open) return;
+  const {button,selector} = entry;
+  const fields = ['place','placeDay','decision','atlas','value'];
+  const match = button.isConnected ? button : [...($(selector)?.querySelectorAll(passportButtons) ?? [])]
+    .find(candidate=>fields.every(field=>candidate.dataset[field]===button.dataset[field]));
+  if (match) {
+    const disclosure = match.closest('details');
+    if (disclosure) disclosure.open=true;
+    match.focus({preventScroll:true});
+  } else {
+    ($('#route-program-title') ?? $('#content')).focus({preventScroll:true});
+  }
+}
+
+function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop,trigger) {
   const place = data.places.find(x=>x.id===id);
   if (!place) return;
   const decision = data.decisions?.find(item=>item.id===decisionId);
@@ -377,6 +403,7 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop
   if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">'+safe(t(
     'Группа из {total} чел. проверена для двух сеансов до {size} чел. каждый. Согласуйте оба сеанса с музеем.',
     {total:formatNumber(settings.size),size:formatNumber(requirements.size)}))+'</p>');
+  passportReturn=passportFocus(trigger ?? document.activeElement);
   dialog.showModal();
 }
 
@@ -710,6 +737,7 @@ function repaintWorkbench() {
   const workspace = $('#route-workbench');
   if (!workspace) return;
   const restoreReadinessFocus = document.activeElement?.id==='pilot-readiness-title';
+  const returnToPassport = workspace.contains(document.activeElement) ? passportFocus(document.activeElement) : null;
   const chineseOpen = workspace.querySelector('.chinese-preview')?.open;
   const plan = currentRoutePlan();
   updatePilotMapLink(plan);
@@ -719,6 +747,7 @@ function repaintWorkbench() {
   const preview = workspace.querySelector('.chinese-preview');
   if (preview && chineseOpen) preview.open = true;
   if (restoreReadinessFocus) $('#pilot-readiness-title')?.focus({preventScroll:true});
+  restorePassportFocus(returnToPassport);
 }
 
 function downloadChinese(decisionId) {
@@ -1035,7 +1064,7 @@ function render(scroll=false) {
           review=newReview(program,context);
           location.hash='route?scope=pilot';
         },
-        onOpenPlace(id,settings,offset,stop) { placeDetails(id,null,offset,settings,stop); },
+        onOpenPlace(id,settings,offset,stop,trigger) { placeDetails(id,null,offset,settings,stop,trigger); },
       });
     }
     atlasHash=location.hash;
@@ -1153,7 +1182,7 @@ screen.addEventListener('click',event=>{
     [...screen.querySelectorAll('[data-action="'+target.dataset.action+'"]')]
       .find(button=>button.dataset.value===target.dataset.value)?.focus({preventScroll:true});
   }
-  if (target.dataset.place) placeDetails(target.dataset.place,target.dataset.decision,Number(target.dataset.placeDay));
+  if (target.dataset.place) placeDetails(target.dataset.place,target.dataset.decision,Number(target.dataset.placeDay),null,null,target);
   if (target.dataset.action==='select-variant') {
     if (busy) return;
     review.selectedId = target.dataset.variant;
@@ -1279,6 +1308,10 @@ screen.addEventListener('change',event=>{
 });
 dialog.addEventListener('click',event=>{
   if (event.target===dialog||event.target.closest('[data-action=close]')) dialog.close();
+});
+dialog.addEventListener('close',()=>{
+  restorePassportFocus(passportReturn);
+  passportReturn=null;
 });
 $('.skip').addEventListener('click',event=>{
   event.preventDefault();

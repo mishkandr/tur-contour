@@ -64,6 +64,15 @@ addLocaleMessages([
   ['{count} точек','{count} places','{count} 个地点'],
   ['Подходящие точки не найдены','No matching places found','未找到符合条件的地点'],
   ['Исключено по требованиям','Excluded by requirements','按要求排除'],
+  ['По данным карты безбарьерного доступа нет','Map data marks this place as inaccessible','地图数据标记此地点无法无障碍通行'],
+  ['Часть посещений не помещается до {time}. Уточните время или уменьшите число остановок.',
+    'Some visits do not fit before {time}. Adjust the cut-off or reduce the number of stops.',
+    '部分参观无法在 {time} 前完成，请调整截止时间或减少停靠点。'],
+  ['Для части выбранных территорий картографический источник не вернул объекты.',
+    'The mapping source returned no places for some selected locations.','部分所选地区的地图数据未返回地点。'],
+  ['Используется сохранённая выборка точек.','Using a saved collection of places.','当前使用已保存的地点集合。'],
+  ['Указана прямая дистанция между городами. Время выезда и прибытия согласуйте отдельно.',
+    'The intercity distance is straight-line. Confirm departure and arrival times separately.','城际距离为直线距离，请另行确认出发和抵达时间。'],
   ['Проверка условий','Check conditions','核查条件'],
   ['Открыть первоисточник','Open original source','查看原始来源'],
   ['Ориентировочное время','Estimated time','预估时间'],
@@ -197,8 +206,15 @@ function formMarkup() {
 }
 
 function eligibility(item) {
-  return item.scheduled ? 'Объект включён' : item.omitted || item.excludedInterests?.length ? 'Исключено по требованиям' :
+  return item.scheduled ? 'Объект включён' : item.accessBlocked ? 'По данным карты безбарьерного доступа нет' :
+    item.omitted || item.excludedInterests?.length ? 'Исключено по требованиям' :
     item.matched ? 'Объект не попал в расписание' : 'Объект не найден в данных';
+}
+
+function gapLabel(message) {
+  if (message.startsWith('Согласовать переезд ')) return t('Междугородний переезд нужно подтвердить.');
+  const cutoff = /^Часть посещений не помещается до (\d{2}:\d{2})\./u.exec(message);
+  return cutoff ? t('Часть посещений не помещается до {time}. Уточните время или уменьшите число остановок.',{time:cutoff[1]}) : t(message);
 }
 
 function evidenceSources(result) {
@@ -242,7 +258,7 @@ function download(result) {
     ...evidenceSources(result).map(item=>item.name+' · '+item.url), location.sourceUrl,'',
     ...plan.days.flatMap((day,index)=>[t('День {day}',{day:index+1})+' · '+formatDate(day.date)+' · '+(day.cityId ?
       name(result.locations?.find(item=>item.id===day.cityId)??location):name(location)),
-      ...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...day.missing.map(t),'']),
+      ...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...day.missing.map(gapLabel),'']),
     t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>item.label+' · '+t(eligibility(item))),
     ...(plan.interestCoverage??[]).map(({theme,count})=>t(themes[theme]??theme)+' · '+
       (count?t('{count} точек',{count:formatNumber(count)}):t('Подходящие точки не найдены')))];
@@ -311,7 +327,7 @@ export function mountComposer(container, api) {
       '</a><button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>'+
       '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button></div>':'')+
       '</li>').join('')+
-      '</ul>'+day.missing.map(gap=>'<p class="caption">'+tr(gap)+'</p>').join('')+'</section>').join('');
+      '</ul>'+day.missing.map(gap=>'<p class="caption">'+safe(gapLabel(gap))+'</p>').join('')+'</section>').join('');
     map?.update({places:visible,route:{...plan,days:days.map(({day})=>day)},selectedId:state.point,
       dayIndex:state.mapDay==='all'?0:Number(state.mapDay),geodata,frame:frame?'route':false,base:'streets',locale:getLocale(),showPlaces:true});
     retainDraft();

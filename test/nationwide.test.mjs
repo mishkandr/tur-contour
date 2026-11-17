@@ -70,6 +70,20 @@ test('Overpass requests receive only fixed coordinate queries and the pace and m
   assert.equal(dense.plan.required[1].scheduled,false);
 });
 
+test('known wheelchair-inaccessible venues are excluded when step-free access is required', async()=>{
+  const signedOut = {type:'node',id:301,lat:55.752,lon:37.6178,
+    tags:{name:'Музей с лестницей',tourism:'museum',wheelchair:'no'}};
+  const unverified = {type:'node',id:302,lat:55.7525,lon:37.6181,
+    tags:{name:'Музей без сведений о входе',tourism:'museum'}};
+  const fetchImpl=async()=>new Response(JSON.stringify({elements:[signedOut,unverified]}));
+  const draft=await draftItinerary({...request,access:true,required:['Музей с лестницей','Музей без сведений о входе']},{fetchImpl});
+  assert.equal(draft.plan.required[0].accessBlocked,true);
+  assert.equal(draft.plan.required[0].scheduled,false);
+  assert.equal(draft.plan.required[1].scheduled,true);
+  assert.ok(draft.places.every(place=>place.name!=='Музей с лестницей'));
+  assert.ok(draft.plan.days.flatMap(day=>day.stops).every(place=>place.status==='unknown'));
+});
+
 test('uncovered cities keep explicit gaps and never suggest a historical hotel as lodging',async()=>{
   const {cities}=await listCities('Иркутск');
   const cityId=cities[0].id;

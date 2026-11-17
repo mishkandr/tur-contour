@@ -148,7 +148,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
 
   element.classList.add('route-map');
   const map = L.map(element, {
-    zoomControl: false, attributionControl: false, scrollWheelZoom: false, preferCanvas: true,
+    zoomControl: false, attributionControl: false, scrollWheelZoom: false,
     minZoom: 6, maxZoom: 18, zoomSnap: 0.5,
   });
   const referencePane = map.createPane('routeBase');
@@ -552,7 +552,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
 
   map.on('zoomend', drawMarkers);
   const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-    map.invalidateSize({ pan: false, debounceMoveend: true });
+    if (!inactive) map.invalidateSize({ pan: false, debounceMoveend: true });
   }) : null;
   resize?.observe(element);
 
@@ -563,9 +563,11 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       if (!inactive) drawMarkers();
     },
     destroy() {
+      if (inactive) return;
       inactive = true;
       clearTimeout(fallbackTimer);
       resize?.disconnect();
+      map.off('zoomend',drawMarkers);
       map.remove();
     },
   };

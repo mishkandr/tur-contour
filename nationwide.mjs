@@ -442,6 +442,7 @@ function fitScore(place,settings) {
 
 const excludedThemes=(place,settings)=>place?.kind==='visit'
   ? settings.excludedInterests.filter(theme=>place.tags.includes(theme)) : [];
+const accessBlocked=(place,settings)=>settings.access && place?.wheelchairHint==='no';
 
 const time = minutes => [Math.floor(minutes/60),minutes%60].map(part=>String(part).padStart(2,'0')).join(':');
 
@@ -462,7 +463,7 @@ function schedule(contexts,settings) {
 
   for (let day=0; day<settings.days; day+=1) {
     const {location,candidates}=scopes[Math.min(day,scopes.length-1)];
-    const allowed=candidates.filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length);
+    const allowed=candidates.filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
     const stops=[],missing=[];
     const changedCity=day>0 && day<scopes.length;
     const from=changedCity ? scopes[day-1].location : null;
@@ -526,7 +527,8 @@ function schedule(contexts,settings) {
   const requiredResult=required.map(({label,place})=>{
     const excludedInterests=excludedThemes(place,settings);
     return {label,matched:place ? {id:place.id,name:place.name} : null,scheduled:Boolean(place && allScheduled.has(place.id)),
-      ...(excludedInterests.length ? {excludedInterests} : {}),...(omitted.has(place?.id) ? {omitted:true} : {})};
+      ...(excludedInterests.length ? {excludedInterests} : {}),...(omitted.has(place?.id) ? {omitted:true} : {}),
+      ...(accessBlocked(place,settings) ? {accessBlocked:true} : {})};
   });
   return {days,required:requiredResult,interestCoverage:[...coverage].map(([theme,count])=>({theme,count}))};
 }
@@ -565,7 +567,7 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} 
   }
   const omitted=new Set(settings.omittedIds);
   const places=[...new Map(contexts.flatMap(context=>context.places).map(place=>[place.id,place])).values()]
-    .filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length);
+    .filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
   const sources=contexts.map(({location,source})=>({cityId:location.id,city:location.name,...source}));
   const {days,required,interestCoverage}=schedule(contexts,settings);
   const location=locations[0];

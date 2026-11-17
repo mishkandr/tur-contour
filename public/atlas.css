@@ -120,6 +120,42 @@ nav a[aria-current="page"]{color:#134333;background:#e6ede4}
 .atlas-summary-value{font-size:clamp(1.26rem,2.35vw,2.18rem);line-height:1.25;font-weight:730;letter-spacing:-.05em;color:#1d4437}
 .atlas-summary-value small{font-size:.65em;letter-spacing:-.025em}
 .atlas-summary-text{font-size:clamp(1rem,1.85vw,1.43rem);letter-spacing:-.04em;margin-block:5px}
+.portfolio{margin-top:16px;padding:23px 25px;border-radius:14px;background:#183d33;color:#f7faf1;scroll-margin-top:80px}
+.portfolio:focus-visible{outline-color:#347763;outline-offset:3px}
+.portfolio-head{display:flex;justify-content:space-between;gap:20px;align-items:start;margin-bottom:16px}
+.portfolio-head h2{font-size:clamp(1.24rem,2.25vw,1.76rem);line-height:1.15;letter-spacing:-.035em;margin:0 0 7px}
+.portfolio-head p,.portfolio-count span,.portfolio-note{color:#cfdfd2;font-size:.82rem;margin:0}
+.portfolio-count{text-align:right;flex:0 0 auto}
+.portfolio-count strong,.portfolio-count span{display:block}
+.portfolio-count strong{font-size:1.63rem;line-height:1.2;letter-spacing:-.04em}
+.portfolio-count small{font-size:.65em;color:#cfdfd2}
+.portfolio-grid{display:grid;grid-template-columns:minmax(210px,1fr) minmax(0,2fr);align-items:start;gap:10px}
+.portfolio-scope{display:flex;gap:5px;margin-bottom:9px}
+.portfolio-scope .atlas-option{color:#f7faf1;background:#234b3f;border-color:#5b786b}
+.portfolio-scope .atlas-option[aria-pressed="true"]{color:#173e30;background:#e5f0df;border-color:#e5f0df}
+.portfolio-options{display:grid;gap:6px}
+.portfolio-options button{min-height:47px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:9px 12px;border:1px solid #5b786b;background:#234b3f;color:#f7faf1;border-radius:8px;text-align:left;font-size:.83rem}
+.portfolio-options button:hover{background:#305749}
+.portfolio-options button[aria-pressed="true"]{background:#e5f0df;color:#173e30;border-color:#e5f0df;font-weight:720}
+.portfolio-options button:focus-visible,.portfolio-insight summary:focus-visible{outline-color:#e1edaa;outline-offset:2px}
+.portfolio-options strong{font-variant-numeric:tabular-nums}
+.portfolio-insight{border:1px solid #527365;border-radius:9px;padding:12px 15px;background:#20473c}
+.portfolio-result{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.portfolio-result strong{font-size:1.22rem;letter-spacing:-.035em}
+.portfolio-result span,.portfolio-insight p{font-size:.82rem;color:#d7e7d9}
+.portfolio-insight p{margin:4px 0 8px}
+.portfolio-insight details{border-top:1px solid #51766a;padding-top:7px}
+.portfolio-insight summary{width:fit-content;cursor:pointer;font-size:.79rem;color:#eef6ea}
+.portfolio-programs{list-style:none;margin:7px 0 0;padding:0}
+.portfolio-programs li{font-size:.77rem;display:flex;justify-content:space-between;align-items:center;gap:7px 12px;flex-wrap:wrap;padding:6px 0}
+.portfolio-programs li + li{border-top:1px solid #51766a}
+.portfolio-programs li > span small{display:block;color:#d7e7d9}
+.portfolio-programs li > div{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.portfolio-state{display:inline-flex;align-items:center;gap:5px;border-radius:4px;background:#f7e8cc;color:#60360e;font-weight:650;padding:3px 5px}
+.portfolio-state--feasible{background:#e7f2dc;color:#204b35}
+.portfolio-state i{display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor}
+.portfolio-note{margin-top:12px;line-height:1.45}
 .atlas-recommendations{margin-top:16px}
 .atlas-recommendations .rows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
 .atlas-recommendations .rows li{font-size:.91rem}
@@ -177,6 +213,11 @@ nav a[aria-current="page"]{color:#134333;background:#e6ede4}
   .atlas-summary{grid-template-columns:1fr;gap:7px}
   .atlas-summary article{padding:9px 13px}
   .atlas-summary-text{font-size:1.12rem}
+  .portfolio{padding:14px;margin-top:12px}
+  .portfolio-grid{grid-template-columns:minmax(0,1fr)}
+  .portfolio-head{gap:9px;margin-bottom:11px}
+  .portfolio-head p,.portfolio-count span,.portfolio-note{font-size:.76rem}
+  .portfolio-count strong{font-size:1.3rem}
   .atlas-layers{gap:1px}
   .atlas-layers .atlas-option{font-size:.69rem;padding-inline:6px}
 }

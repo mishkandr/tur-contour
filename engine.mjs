@@ -409,19 +409,97 @@ export function portfolioImpact(catalog, state, beforeAudit, beforeWiki, demo) {
   return {total:programmes.length,baselineCount,currentCount,scenarios};
 }
 
-export function recommendations(places,state,affected) {
-  const missing = places.filter(p => p.kind === 'visit' && p.audit?.language !== 'interpreter');
-  const result = [];
-  for (const route of affected.filter(x => x.affected && x.removed.length)) {
-    result.push({ title:'Перепроверить посещение · '+route.subtitle, text:route.issues.map(x => x.name+'. '+x.reasons.join(' ')).join(' ') +
-      (route.added.length ? ' Предложенная замена — '+route.added.map(x=>x.name).join(', ')+'.' : ' Нужен запасной объект.'), urgent:true });
+function evidenceLinks(items) {
+  return [...new Map(items.filter(item=>item.url).map(item=>[item.url,item])).values()];
+}
+
+function pilotDate(places, lowMonths, earliestDate) {
+  if (!lowMonths.length) return null;
+  // Compare only weekends with dated venue schedules in both cities.
+  for (let offset = 0; offset < 366; offset++) {
+    const start = dateFor(earliestDate,offset);
+    if (start.getUTCDay()!==6 || !lowMonths.includes(months[start.getUTCMonth()])) continue;
+    const date = isoDate(start);
+    const covered = cities.slice(0,2).every((city,day)=>places.some(place=>{
+      if (place.city!==city || place.kind!=='visit') return false;
+      const hours = publishedHours(place,date,day);
+      return hours?.validUntil && hours.windows?.length;
+    }));
+    if (covered) return date;
   }
+  return null;
+}
+
+const dateRange = new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/Moscow'});
+
+function study(places, settings) {
+  const candidates = cities.slice(0,2).flatMap((city,day)=>places.filter(place=>place.city===city &&
+    (place.kind!=='stay' || day===0)).map(place=>({place,day,result:assess(place,settings,day),hours:publishedHours(place,settings.date,day)})));
+  const plan = planRoute(places,settings);
+  const dates = dateRange.formatRange(dateFor(plan.days[0].date,0),dateFor(plan.days.at(-1).date,0));
+  return {candidates,plan,dates};
+}
+
+function priorityForChange(route, byId, state) {
+  const changedStops = route.issues.length ? route.issues : route.shifted;
+  const reason = changedStops.map(stop=>stop.name+(stop.reasons?.length ? '. '+stop.reasons.join(' ') : '')).join(' ');
+  let action = 'Сверить новые условия на дату визита перед повторным согласованием.';
+  if (route.added.length) action = 'Сравнить рассчитанный вариант с посещением '+route.added.map(stop=>'«'+stop.name+'»').join(', ')+'.';
+  else if (route.shifted.length && route.currentPlan.completeness) action = 'Сверить новое расписание для тех же остановок.';
+  else if (!route.currentPlan.completeness) action = 'Подобрать запасные объекты для незаполненных частей программы.';
+  const sources = route.settings.demo ? [{title:'Учебный аудит',url:'/api/audit-version/'+state.audit.version}] :
+    evidenceLinks(changedStops.map(stop=>{
+      const place = byId.get(stop.id);
+      return {title:stop.name,url:place?.verifiedAudit?.sourceUrl ?? place?.publishedConditions?.schedule?.url ?? place?.url};
+    }));
+  return {title:'Перепроверить посещение · '+route.subtitle,
+    text:[route.settings.demo ? 'Учебный сценарий.' : '',reason,action].filter(Boolean).join(' '),urgent:true,sources};
+}
+
+export function recommendations(places,state,affected) {
+  const byId = new Map(places.map(place=>[place.id,place]));
+  const result = affected.filter(route=>route.affected).map(route=>priorityForChange(route,byId,state));
   const stats = statSummary(state.stats.nights,[]);
-  const low = stats.lows.map(x=>x.month).join(', ');
-  result.push({title:'Проверить спрос на второй день в низкий сезон',text:low
-    ? 'Месяцы с минимумом ночёвок в сопоставимом ряду — '+low+'. Проверить гипотезу о спросе на второй день с крытой программой и ночёвкой.'
-    : 'Собрать сопоставимый ряд ночёвок, затем выбрать даты для пилота.'});
-  result.push({title:'Согласовать сопровождение китайской группы',text:missing.length+' объектов посещения в учебном каталоге требуют уточнения условий работы с переводчиком. Запросить подтверждение на даты маршрута и по размеру группы.'});
-  result.push({title:'Запросить наличие мест на даты поездки',text:'Подтвердить комнаты, рассадку в ресторанах и транспорт у поставщиков. В каталоге фиксируются источники, а бронь проверяет эксперт.'});
+  const lowMonths = stats.lows.map(item=>item.month);
+  const years = stats.years.map(item=>item.year).join(', ');
+  const statsSource = {title:'Ночёвки · Росстат',url:stats.source ?? stats.publication};
+  const earliestDate = [defaultRoute.date,state.refreshedAt?.slice(0,10)].filter(Boolean).sort().at(-1);
+  const date = pilotDate(places,lowMonths,earliestDate);
+  const settings = {...defaultRoute,date:date ?? earliestDate,demo:false};
+  const {candidates,plan,dates} = study(places,settings);
+  const visits = candidates.filter(item=>item.place.kind==='visit');
+  const scheduled = visits.filter(item=>item.hours?.windows?.length);
+  const scheduleSources = evidenceLinks(scheduled.map(item=>({title:'Опубликованный график',url:item.hours.url})));
+  const low = stats.lows.map(item=>item.month+' · '+number(item.value)+' ночёвок').join(', ');
+  const seasonality = low ? 'Месяцы с низкими средними значениями для средств размещения Владимирской области за '+years+' гг. — '+low+'.' :
+    'Для сравнения нужны сопоставимые месячные ряды ночёвок.';
+  const nextStep = date ? 'Проверить двухдневный пилот Владимир → Суздаль на '+dates+' для группы из '+settings.size+
+    ' человек. Для '+scheduled.length+' из '+visits.length+' позиций каталога для посещения опубликованы часы на эти даты.' :
+    'Сверить графики в обоих городах перед выбором дат двухдневного пилота.';
+  result.push({title:'Проверить спрос на второй день в низкий сезон',text:seasonality+' '+nextStep+
+    ' Для оценки причин спада и спроса на конкретную программу нужны отдельные данные.',sources:evidenceLinks([statsSource,...scheduleSources])});
+
+  const missingLanguage = scheduled.filter(({place,day})=>assess(place,{...settings,market:'ru'},day).status==='ready' &&
+    assess(place,settings,day).status==='unknown');
+  const uncheckedVisits = scheduled.filter(item=>item.result.status!=='ready');
+  const languageTargets = missingLanguage.length ? missingLanguage : uncheckedVisits;
+  if (languageTargets.length || !scheduled.length) {
+    const text = missingLanguage.length ? 'Для '+missingLanguage.length+' объектов условия визита подтверждены для русскоязычной группы, а работу с переводчиком нужно уточнить.' :
+      (uncheckedVisits.length ? 'У '+uncheckedVisits.length+' объектов есть часы посещения на '+dates+', требуется подтверждение группового визита.' :
+      'На даты пилота нет опубликованного расписания объектов, по которым можно оценить условия сопровождения.');
+    const links = evidenceLinks(languageTargets.map(({place})=>({title:place.name,url:place.publishedConditions?.booking?.url ?? place.url}))).slice(0,3);
+    result.push({title:'Согласовать сопровождение китайской группы',text:text+
+      ' Запросить у поставщиков места на сеанс, лимит группы и работу с китайскоязычным сопровождающим.',sources:links});
+  }
+
+  const capacity = candidates.filter(item=>item.place.kind==='stay' || item.place.kind==='food');
+  const missingRoles = plan.days.flatMap((day,index)=>day.missing.filter(role=>['Место для обеда','Ночёвка'].includes(role))
+    .map(role=>role.toLowerCase()+' в день '+(index+1)+' ('+day.city+')'));
+  if (missingRoles.length) {
+    result.push({title:'Запросить наличие мест на даты поездки',text:'На '+dates+' в расчёте для группы из '+settings.size+
+      ' человек требуют подтверждения '+missingRoles.join(', ')+'. Запросить номера на одну ночь, рассадку и обеденное окно. '+
+      'Транспорт и фактические брони проверяет специалист.',sources:evidenceLinks(capacity.filter(item=>item.result.status!=='ready').map(({place})=>
+      ({title:place.name,url:place.publishedConditions?.booking?.url ?? place.url})))});
+  }
   return result;
 }

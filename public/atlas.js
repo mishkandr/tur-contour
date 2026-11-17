@@ -260,7 +260,9 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute, onOpe
     panel.hidden = !panel.firstElementChild;
     if (expanded && panel.querySelector('details')) panel.querySelector('details').open = true;
     find('#atlas-recommendations').innerHTML = '<div class="section-head"><h2>Следующие действия</h2><a href="#sources">Данные и методика ↗</a></div>'+
-      '<ul class="rows">'+data.recommendations.slice(0,3).map(rec=>'<li><h3>'+esc(rec.title)+'</h3><p class="detail">'+esc(rec.text)+'</p></li>').join('')+'</ul>';
+      '<ul class="rows">'+data.recommendations.map(rec=>'<li><h3>'+esc(rec.title)+'</h3><p class="detail">'+esc(rec.text)+'</p>'+
+        (rec.sources?.length ? '<p class="caption atlas-evidence">'+rec.sources.map(source=>'<a href="'+esc(source.url)+
+          '" target="_blank" rel="noopener noreferrer">'+esc(source.title)+'</a>').join(' · ')+'</p>' : '')+'</li>').join('')+'</ul>';
     map?.update({ places, route:official ? null : displayed, alternative:comparison, selectedId:view.selected,
       changedIds:places.filter(place=>place.changed).map(place=>place.id),
       showPlaces:true, base:view.base, geodata, frame:frame&&view.day!=='all' ? 'route' : frame });

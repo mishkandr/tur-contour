@@ -1,0 +1,25 @@
+[Unit]
+Description=TurContour tourism planning application
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=turcontour
+Group=turcontour
+WorkingDirectory=/opt/tur-contour/current
+ExecStart=/usr/local/bin/node server.mjs
+Environment=PORT=4173
+Environment=TUR_STATE_DIR=/var/lib/tur-contour
+EnvironmentFile=-/etc/tur-contour/app.env
+StateDirectory=tur-contour
+StateDirectoryMode=0750
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

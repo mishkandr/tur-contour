@@ -1,0 +1,43 @@
+{
+  "synthetic": true,
+  "exports": [
+    {
+      "id": "sample-a",
+      "name": "Учебная выгрузка OTA A",
+      "format": "flat",
+      "version": "2026-11-17-a",
+      "checkedAt": "2026-11-17T10:00:00+03:00",
+      "records": [
+        {"hotel": "amaks", "checkIn": "2026-11-21", "guests": 2, "rateRub": 5600, "rooms": 3},
+        {"hotel": "amaks", "checkIn": "2026-11-21", "guests": 1, "rateRub": 4300, "rooms": 2},
+        {"hotel": "nposad", "checkIn": "2026-11-21", "guests": 2, "rateRub": 7800, "rooms": 1},
+        {"hotel": "amaks", "checkIn": "2026-11-22", "guests": 2, "rateRub": 5100, "rooms": 4},
+        {"hotel": "nposad", "checkIn": "2026-11-22", "guests": 2, "rateRub": 6900, "rooms": 2}
+      ]
+    },
+    {
+      "id": "sample-b",
+      "name": "Учебная выгрузка OTA B",
+      "format": "nested",
+      "version": "2026-11-17-b",
+      "checkedAt": "2026-11-17T11:00:00+03:00",
+      "properties": [
+        {
+          "id": "amaks",
+          "offers": [
+            {"arrival": "2026-11-21", "occupancy": 2, "charge": {"amount": 5850, "currency": "RUB"}, "listed": 2},
+            {"arrival": "2026-11-21", "occupancy": 1, "charge": {"amount": 4600, "currency": "RUB"}, "listed": 1},
+            {"arrival": "2026-11-22", "occupancy": 2, "charge": {"amount": 5300, "currency": "RUB"}, "listed": 1}
+          ]
+        },
+        {
+          "id": "nposad",
+          "offers": [
+            {"arrival": "2026-11-21", "occupancy": 2, "charge": {"amount": 8200, "currency": "RUB"}, "listed": 0},
+            {"arrival": "2026-11-22", "occupancy": 2, "charge": {"amount": 7350, "currency": "RUB"}, "listed": 3}
+          ]
+        }
+      ]
+    }
+  ]
+}

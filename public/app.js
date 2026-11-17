@@ -1,5 +1,6 @@
 import { mountAtlas } from '/atlas.js';
 import { assess, clockTime, defaultRoute, kindNames, months, number, planRoute, publishedHours, routeSettings } from '/engine.mjs';
+import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
@@ -18,6 +19,7 @@ let review = newReview();
 let agent;
 let busy = false;
 let metric = 'nights';
+let offerSearch = {date:defaultRoute.date,occupancy:2,result:null};
 let filters = {search:'',kind:'all',status:'all',date:''};
 let toastTimer;
 const safe = value => String(value ?? '').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[character]);
@@ -286,7 +288,7 @@ function routeDecision(plan) {
     '<h2 id="route-program-title" tabindex="-1">'+safe(plan.days.map(day=>day.city).join(' → '))+'</h2>'+
     '<p class="caption">'+date(plan.settings.date)+' · '+plan.settings.days+' дня · '+plan.settings.size+' чел.'+
     (localized?' · Группа из Китая':'')+'</p></div>'+routeState(plan)+'</div>'+
-    (localized ? '<p lang="zh-Hans" class="lang-line">行程草案：请确认中文翻译、团队餐饮、住宿及预订。</p>' : '')+
+    chinesePreview(plan)+
     (plan.themeNote ? '<p class="callout">'+safe(plan.themeNote)+'</p>' : '')+
     '<div class="route-days">'+plan.days.map((day,i)=>renderDay(day,i,plan.settings)).join('')+'</div>'+
     (assumptions.length ? '<div class="callout">'+assumptions.map(note=>'<p>'+safe(note)+'</p>').join('')+'</div>' : '')+
@@ -322,6 +324,22 @@ function officialRouteReview(plan) {
     '<p class="detail">Откройте объект, чтобы сверить опубликованный график, правила записи и вопросы для поставщика.</p>'+itinerary.join('')+'</section>';
 }
 
+function chinesePreview(plan) {
+  const itinerary = chineseItinerary(plan);
+  if (!itinerary) return '';
+  const days = itinerary.days.map(day=>'<section class="chinese-day"><h4>'+safe(day.title)+'</h4><p class="caption">'+safe(day.date)+'</p>'+
+    (day.stops.length ? '<ul class="rows">'+day.stops.map(stop=>'<li><time>'+safe(stop.time)+'</time><div><strong>'+safe(stop.name)+'</strong>'+
+      '<p class="caption">'+safe(stop.category)+'</p>'+stop.details.map(detail=>'<p class="detail">'+safe(detail)+'</p>').join('')+
+      (stop.source ? outbound(stop.source,'查看来源') : '')+'</div></li>').join('')+'</ul>' : '<p class="detail">当天尚无可列出的行程项目。</p>')+
+    (day.missing.length ? '<p class="callout">待确认：'+safe(day.missing.join('、'))+'</p>' : '')+'</section>').join('');
+  return '<details class="chinese-preview"><summary><span>Программа на китайском</span><span lang="zh-Hans">中文行程</span></summary>'+
+    '<div class="chinese-body"><div lang="zh-Hans"><h3>'+safe(itinerary.title)+'</h3><p class="caption">'+safe(itinerary.group)+'</p>'+
+    '<p class="callout">'+safe(itinerary.status)+'</p>'+days+'<section class="chinese-preparation"><h4>出发前请确认</h4><ul>'+
+    itinerary.preparation.map(item=>'<li>'+safe(item)+'</li>').join('')+'</ul></section></div>'+
+    '<button type="button" class="button-quiet" data-action="download-chinese"'+(review.dirty||review.loading?' disabled':'')+
+    '>Скачать программу (.txt)</button></div></details>';
+}
+
 function decisionJournal() {
   const recordItems = (data.decisions ?? []).toSorted((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return '<section class="panel route-journal"><div class="section-head"><h2>Журнал решений</h2></div>'+
@@ -329,14 +347,20 @@ function decisionJournal() {
       '<details><summary><span><strong>'+safe(decision.title)+'</strong><span class="caption">'+date(decision.settings.date)+' · '+
       decision.settings.size+' чел. · '+(decision.settings.demo?'Учебная программа':'Рабочая программа')+'</span></span>'+
       '<span class="caption">Согласовано '+timestamp(decision.createdAt)+'</span></summary><div class="route-days">'+
-      decision.plan.days.map((day,i)=>renderDay(day,i,decision.settings,decision.id)).join('')+'</div></details>').join('') :
+      decision.plan.days.map((day,i)=>renderDay(day,i,decision.settings,decision.id)).join('')+'</div>'+
+      (decision.settings.market==='zh' ? '<button type="button" class="button-quiet journal-download" data-action="download-chinese" data-decision="'+
+        safe(decision.id)+'">Скачать программу на китайском (.txt)</button>' : '')+'</details>').join('') :
       '<p class="detail">Здесь появятся версии программ, согласованные специалистом.</p>')+'</section>';
 }
 
 function routeWorkbench() {
-  const plan = selectedVariant()?.plan ?? review.preview ?? planRoute(data.places,options);
+  const plan = currentRoutePlan();
   return routeVariants()+'<div class="route-review">'+routeAssistant()+routeDecision(plan)+'</div>'+
     (plan.settings.demo ? '' : officialRouteReview(plan))+decisionJournal();
+}
+
+function currentRoutePlan() {
+  return selectedVariant()?.plan ?? review.preview ?? planRoute(data.places,options);
 }
 
 function routeView() {
@@ -356,7 +380,28 @@ function routeView() {
 
 function repaintWorkbench() {
   const workspace = $('#route-workbench');
-  if (workspace) workspace.innerHTML = routeWorkbench();
+  if (!workspace) return;
+  const chineseOpen = workspace.querySelector('.chinese-preview')?.open;
+  workspace.innerHTML = routeWorkbench();
+  const preview = workspace.querySelector('.chinese-preview');
+  if (preview && chineseOpen) preview.open = true;
+}
+
+function downloadChinese(decisionId) {
+  if (!decisionId && (review.dirty || review.loading)) return;
+  const plan = decisionId ? data.decisions?.find(item=>item.id===decisionId)?.plan : currentRoutePlan();
+  if (!plan) return;
+  const itinerary = chineseItinerary(plan);
+  if (!itinerary) return;
+  const file = new Blob(['\uFEFF',chineseItineraryText(itinerary)],{type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'turcontour-'+plan.settings.date+'-zh-CN.txt';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 async function loadAlternatives() {
@@ -425,12 +470,19 @@ async function approveRoute() {
   toast('Согласованная программа сохранена.');
 }
 
+function statisticsSource(status,checkedAt) {
+  const text = status==='live' ? 'Обновлено из источника' : status==='error' ? 'Последний доступный снимок' : 'Начальный снимок';
+  return '<p class="caption statistics-source">'+chip(text,status==='error'?'warn':status==='live'?'':'plain')+
+    (checkedAt ? ' Проверка источника: '+timestamp(checkedAt) : '')+'</p>';
+}
+
 function agentView() {
   if (!agent) return '';
   return '<div class="ask-result" aria-live="polite"><h3>'+safe(agent.title)+'</h3><p class="detail">'+safe(agent.text)+'</p>'+
     '<p class="caption status-line">'+safe(agent.plan.mode)+'</p>'+
     (agent.summary ? '<p class="caption">'+outbound(agent.summary.source,'Ряд Roschart')+' · '+outbound(agent.summary.publication,'Первоисточник Росстат')+
-      ' · '+safe(agent.summary.edition)+' · Получено '+timestamp(agent.summary.checkedAt)+'</p><p class="caption">'+safe(agent.note)+'</p>'+
+      ' · '+safe(agent.summary.edition)+' · Данные получены '+timestamp(agent.summary.checkedAt)+'</p>'+
+      statisticsSource(agent.sourceStatus,agent.sourceCheckedAt)+(agent.note ? '<p class="caption">'+safe(agent.note)+'</p>' : '')+
       (agent.summary.years.length?statisticChart(agent.summary):'') : '')+
     (agent.view?'<a href="#'+safe(agent.view)+'">Открыть '+(agent.view==='impact'?'мониторинг':'маршрут')+'</a>':'')+'</div>';
 }
@@ -441,10 +493,27 @@ function stats() {
     '<div class="grid"><section class="panel"><div class="section-head"><div><h2>'+safe(series.name)+'</h2><p class="caption">Средние по полным календарным годам</p></div>'+
     '<label class="field">Показатель<select id="metric">'+selectOption('nights','Ночёвки',metric)+selectOption('people','Размещённые лица',metric)+'</select></label></div>'+
     statisticChart(series)+'<p class="caption status-line">'+outbound(series.publication,'Росстат')+' · '+outbound(series.source,'Выгрузка через Roschart')+
-    ' · '+safe(series.edition)+' · '+timestamp(series.checkedAt)+'</p></section>'+
+    ' · '+safe(series.edition)+' · '+timestamp(series.checkedAt)+'</p>'+statisticsSource(data.sources[metric]?.status,data.sources[metric]?.checkedAt)+'</section>'+
     '<section class="panel"><h2>Запросить анализ</h2><form id="ask-form" class="ask"><input aria-label="Запрос к агенту" type="text" name="question" required maxlength="600" placeholder="Например, когда меньше ночёвок?"><button type="submit" class="button">Спросить</button></form>'+
     '<button class="link-button sample" data-sample="В какие месяцы меньше всего ночёвок за последние три полных года?">Минимум ночёвок за три года</button><br>'+
     '<button class="link-button sample" data-sample="Какие маршруты затронуло изменение лимита?">Какие маршруты затронуты</button>'+agentView()+'</section></div>';
+}
+
+function offerPanel() {
+  const {date:arrival,occupancy,result} = offerSearch;
+  const places = new Map(data.places.map(place=>[place.id,place.name]));
+  const providers = new Map(result?.providers.map(provider=>[provider.id,provider.name]));
+  return '<section class="panel ota-panel"><div class="section-head"><h2>Предложения размещения</h2>'+chip('Учебные данные','warn')+'</div>'+
+    '<p class="detail">Сопоставляем две учебные выгрузки OTA по дате заезда. Для группы свободные номера и условия нужно подтвердить у отеля.</p>'+
+    '<form class="filters ota-form" id="ota-form"><label class="field">Дата заезда<input type="date" name="arrival" required value="'+safe(arrival)+'"></label>'+
+    '<label class="field">Гостей в номере<select name="occupancy">'+selectOption(1,'1 гость',occupancy)+selectOption(2,'2 гостя',occupancy)+
+    '</select></label><button type="submit" class="button-quiet">Сравнить предложения</button></form>'+
+    (result ? '<div aria-live="polite">'+(result.coverage==='snapshot' ? '<ul class="rows">'+result.objects.map(stay=>'<li><h3>'+safe(places.get(stay.id)??stay.id)+'</h3>'+
+      stay.offers.map(offer=>'<p class="detail">'+safe(providers.get(offer.providerId))+' · '+number(offer.priceRub)+' ₽ за ночь · '+number(offer.roomsListed)+
+        ' ном. в выгрузке</p>').join('')+'</li>').join('')+'</ul>' : '<p class="callout">На эту дату и состав номера в учебных выгрузках нет данных.</p>')+
+      '<p class="caption">'+result.providers.map(provider=>safe(provider.name)+' · '+safe(provider.version)+' · '+timestamp(provider.checkedAt)).join('<br>')+'</p></div>' :
+      '<p class="caption">Выгрузки покрывают сценарий 21–22 ноября 2026 года.</p>')+
+    '<p class="caption ota-source">'+outbound('/api/demo-offers-source','Открыть учебные выгрузки')+' · Данные об отелях учитываются по объектам каталога.</p></section>';
 }
 
 function sources() {
@@ -476,7 +545,7 @@ function sources() {
       ' объектам · '+date(published.checkedAt)+'. Снимок собран по страницам музеев, поставщиков и регионального турпортала.</p>'+
       '<p class="caption">Ссылки, область действия лимитов и вопросы к поставщику доступны в <a href="#catalog">каталоге объектов</a>.</p></li>' : '')+
     '<li><h3>'+outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит · версия '+data.auditVersion)+'</h3><p class="caption">Сценарные лимиты, режим работы и условия для групп.</p></li>'+
-    '<li><h3>Материалы МАГ</h3><p class="caption">Методология и сверка. Каталог обогащается опубликованными данными объектов и Wikidata.</p></li></ul></section></div></div>';
+    '<li><h3>Материалы МАГ</h3><p class="caption">Диагностические критерии и контрольные объекты использованы для сверки. Первичные материалы доступны участникам кейса на доске.</p></li></ul></section></div></div>'+offerPanel();
 }
 
 function render(scroll=false) {
@@ -531,6 +600,17 @@ screen.addEventListener('submit',event=>{
   event.preventDefault();
   const form = event.target;
   const button = form.querySelector('[type=submit]');
+  if (form.id==='ota-form') runAction(async()=>{
+    const fields = new FormData(form);
+    const date = fields.get('arrival');
+    const occupancy = Number(fields.get('occupancy'));
+    const result = await api('demo-offers',{date,occupancy});
+    offerSearch = {date,occupancy,result};
+    if (page()==='sources') {
+      $('.ota-panel').outerHTML = offerPanel();
+      $('#ota-form button').focus({preventScroll:true});
+    }
+  },button);
   if (form.id==='route-form') {
     if (busy) return;
     options = readOptions(form);
@@ -541,12 +621,15 @@ screen.addEventListener('submit',event=>{
   if (form.id==='route-ai-form') void requestRouteAnalysis();
   if (form.id==='ask-form') runAction(async()=>{
     const input = form.elements.question;
+    const question = input.value;
     button.textContent = 'Анализ…';
     try {
-      agent = await api('ask',{question:input.value,settings:options});
-      const question = input.value;
-      render();
-      $('#ask-form').elements.question.value = question;
+      agent = await api('ask',{question,settings:options});
+      if (agent.summary) data = await api('state');
+      if (page()==='stats') {
+        render();
+        $('#ask-form').elements.question.value = question;
+      }
     } finally { button.textContent = 'Спросить'; }
   },button);
 });
@@ -565,6 +648,7 @@ screen.addEventListener('click',event=>{
   }
   if (target.dataset.action==='retry-variants') void loadAlternatives();
   if (target.dataset.action==='approve-route') runAction(approveRoute,target);
+  if (target.dataset.action==='download-chinese') downloadChinese(target.dataset.decision);
   if (target.dataset.sample) {
     const form = $('#ask-form');
     form.elements.question.value = target.dataset.sample;
@@ -602,6 +686,8 @@ screen.addEventListener('input',event=>{
     if (approve) approve.disabled = review.dirty || busy;
     const compare = $('#route-ai-form button');
     if (compare) compare.disabled = review.dirty || review.aiLoading;
+    const download = $('.chinese-preview [data-action="download-chinese"]');
+    if (download) download.disabled = review.dirty || review.loading;
   }
   if (event.target.form?.id==='route-ai-form') review.brief = event.target.value;
 });

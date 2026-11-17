@@ -55,6 +55,13 @@ test('the request flow updates evidence, checks routes and persists analyst deci
   const replacement = variants.find(item => !item.plan.days[1].stops.some(stop => stop.id === 'suzdal-kremlin'));
   assert.ok(replacement.plan.completeness);
   assert.ok(replacement.plan.days[1].stops.some(stop => stop.cn));
+  const threeDays = (await request('/api/alternatives',{...defaultRoute,days:3})).payload.options;
+  assert.ok(threeDays.length);
+  assert.deepEqual(threeDays[0].plan.days.map(day=>day.city),['Владимир','Суздаль','Кидекша']);
+  const offerResult = (await request('/api/demo-offers',{date:defaultRoute.date,occupancy:2})).payload;
+  assert.equal(offerResult.synthetic,true);
+  assert.equal(offerResult.providers.length,2);
+  assert.equal(offerResult.groupAvailability,'unconfirmed');
   const approval = {settings:defaultRoute,variantId:replacement.id,planSignature:replacement.signature,programId:'group-cn'};
   const [first,retry] = await Promise.all([request('/api/approve',approval),request('/api/approve',approval)]);
   assert.equal(first.status,200);

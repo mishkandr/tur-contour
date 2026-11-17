@@ -160,6 +160,7 @@ nav a[aria-current="page"]{color:#134333;background:#e6ede4}
 .atlas-recommendations{margin-top:16px}
 .atlas-recommendations .rows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
 .atlas-recommendations .rows li{font-size:.91rem}
+.atlas-evidence{margin-top:8px;line-height:1.5}
 .map-marker{outline-offset:6px}
 .map-pin,.map-city{position:relative;display:grid;place-items:center;width:30px;height:30px}
 .map-pin__core,.map-city__count{min-width:27px;height:27px;padding:0 4px;display:grid;place-items:center;color:#174c3d;background:#f8fcf5;

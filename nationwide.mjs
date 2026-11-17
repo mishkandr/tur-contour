@@ -163,6 +163,8 @@ function asCityId(value) {
   return typeof id==='string' && /^\d{1,12}$/.test(id) ? id : null;
 }
 
+const isPlaceId=id=>typeof id==='string' && /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,79}$/u.test(id);
+
 function readSettings(input) {
   const cityId = asCityId(input.cityId);
   if (!cityId) throw error('Выберите населённый пункт из списка.');
@@ -187,12 +189,18 @@ function readSettings(input) {
   }
   const excludedInterests=[...new Set((Array.isArray(input.excludedInterests) ? input.excludedInterests : []).slice(0,9)
     .filter(value=>themes.has(value) && value!=='any'))];
-  const omittedIds=[...new Set((Array.isArray(input.omittedIds) ? input.omittedIds : []).slice(0,32)
-    .filter(id=>typeof id==='string' && /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,79}$/u.test(id)))];
+  const omittedIds=[...new Set((Array.isArray(input.omittedIds) ? input.omittedIds : []).slice(0,32).filter(isPlaceId))];
+  const replacements=input.replacements ?? [];
+  if (!Array.isArray(replacements) || replacements.length>16 || replacements.some(change=>
+    !change || !Number.isInteger(change.day) || change.day<0 || change.day>2 ||
+    !isPlaceId(change.fromId) || !isPlaceId(change.toId) || change.fromId===change.toId)) {
+    throw error('Укажите до 16 замен с номером дня и разными идентификаторами точек.');
+  }
   const theme = themes.has(input.theme) && !excludedInterests.includes(input.theme) ? input.theme : 'any';
   const interests = [...new Set([theme,...description(input.interests,9,30)
     .filter(value=>themes.has(value) && !excludedInterests.includes(value))])];
   return { cityId,...(additionalCityIds.length ? {additionalCityIds} : {}),...(visitDeadline ? {visitDeadline} : {}),
+    ...(replacements.length ? {replacements:replacements.map(({day,fromId,toId})=>({day,fromId,toId}))} : {}),
     days,date,size,theme,interests,excludedInterests,...(omittedIds.length ? {omittedIds} : {}),market:input.market==='zh' ? 'zh' : 'ru',access:input.access===true,
     transport:Object.hasOwn(transportModes,input.transport) ? input.transport : 'mixed',
     pace:Object.hasOwn(paceModes,input.pace) ? input.pace : 'normal',
@@ -250,7 +258,7 @@ function pointOf(element) {
 }
 
 function fromOsm(elements,city) {
-  const seen = new Set();
+  const seen = new Map();
   const objects = [];
   for (const element of elements.slice(0,320)) {
     if (!element || !['node','way','relation'].includes(element.type) || !Number.isSafeInteger(element.id) || element.id<1) continue;
@@ -259,8 +267,10 @@ function fromOsm(elements,city) {
     const category = classify(tags);
     const name = clean(tags['name:ru'] ?? tags.name);
     const key = category?.kind+'|'+normalize(name);
-    if (!coordinates || distance(coordinates,city.coordinates)>12 || !name || !category || seen.has(key)) continue;
-    seen.add(key);
+    const nearby=seen.get(key) ?? [];
+    if (!coordinates || distance(coordinates,city.coordinates)>12 || !name || !category ||
+        nearby.some(point=>distance(point,coordinates)<0.1)) continue;
+    seen.set(key,[...nearby,coordinates]);
     objects.push({ id:'osm-'+element.type+'-'+element.id,name,en:clean(tags['name:en']) || null,
       cn:clean(tags['name:zh-Hans'] ?? tags['name:zh']) || null,city:city.name,coordinates,...category,status:'unknown',geoStatus:'mapped',
       url:'https://www.openstreetmap.org/'+element.type+'/'+element.id,officialUrl:webAddress(tags.website ?? tags['contact:website']),
@@ -427,9 +437,10 @@ function searchable(place) {
 function matchRequired(required,points) {
   return required.map(label=>{
     const name = normalize(label);
-    const exact = points.find(place=>searchable(place).includes(name));
-    const partial = points.filter(place=>name.length>3 && searchable(place).some(word=>word.includes(name)));
-    return { label,place:exact ?? (partial.length===1 ? partial[0] : null) };
+    const exact = points.filter(place=>searchable(place).includes(name));
+    const matches = exact.length ? exact : points.filter(place=>name.length>3 && searchable(place)
+      .some(word=>(' '+word+' ').includes(' '+name+' ')));
+    return {label,place:matches.length===1 ? matches[0] : null,candidates:matches.slice(0,4)};
   });
 }
 
@@ -445,26 +456,142 @@ const excludedThemes=(place,settings)=>place?.kind==='visit'
 const accessBlocked=(place,settings)=>settings.access && place?.wheelchairHint==='no';
 
 const time = minutes => [Math.floor(minutes/60),minutes%60].map(part=>String(part).padStart(2,'0')).join(':');
+const turnaround=10;
+const endOfDay=17*60+45;
+const lunchWindow={start:12*60,end:14*60+45};
+const maxDayStates=10;
+
+function estimateLeg(origin,destination,settings) {
+  const km=distance(origin.coordinates,destination.coordinates);
+  const travelMode=settings.transport==='mixed' && km<=1.2 ? 'walking' : settings.transport;
+  const mode=transportModes[travelMode];
+  const boarding=settings.size>=20 && travelMode!=='walking' ? 10 : 0;
+  const minutes=km<0.08 ? 0 : 5*Math.ceil((km/mode.speed*60+mode.delay+boarding)/5);
+  return {minutes,distanceKm:Math.round(km*100)/100,fromId:origin.id ?? null,mode:travelMode,estimate:'straight-line',
+    inRange:km<=transportModes[settings.transport].leg};
+}
+
+function pickStops(context) {
+  const {settings,pace,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay}=context;
+  const visit={kind:'visit',duration:pace.duration};
+  const morningCount=visitEnd<=13*60 ? pace.visits : Math.ceil(pace.visits/2);
+  const slots=[
+    ...Array.from({length:morningCount},()=>({...visit,morning:true,earliest:pace.starts,latest:Math.min(12*60+20,visitEnd)})),
+    {kind:'food',duration:50,earliest:lunchWindow.start,latest:lunchWindow.end},
+    ...Array.from({length:pace.visits},()=>({...visit,earliest:13*60,latest:visitEnd})),
+    ...(needsStay ? [{kind:'stay',duration:30,earliest:15*60,latest:endOfDay}] : []),
+  ];
+  const grouped=new Map(['visit','food','stay'].map(kind=>[kind,allowed.filter(place=>place.kind===kind)]));
+  const baseScores=new Map(allowed.map(place=>[place.id,fitScore(place,settings)]));
+  let states=[{stops:[],score:0,visitCount:0,place:origin,cursor:pace.starts}];
+
+  for (const slot of slots) {
+    const next=[];
+    for (const path of states) {
+      next.push(path);
+      if (slot.kind==='visit' && path.visitCount>=pace.visits) continue;
+      const candidates=grouped.get(slot.kind).flatMap(place=>{
+        if (slot.kind==='visit' && (allScheduled.has(place.id) || path.stops.some(stop=>stop.place.id===place.id))) return [];
+        const leg=estimateLeg(path.place,place,settings);
+        const start=Math.max(slot.earliest,path.cursor+leg.minutes);
+        const overnight=slot.kind==='stay' && origin.id===place.id;
+        const end=start+(overnight ? 15 : slot.duration);
+        if (!leg.inRange || end>slot.latest) return [];
+        const mandatory=requested.has(place.id) && !allScheduled.has(place.id);
+        const covered=place.tags.filter(theme=>coverage.get(theme)===0 &&
+          !path.stops.some(stop=>stop.place.tags.includes(theme))).length;
+        const repeatedLunch=slot.kind==='food' && allScheduled.has(place.id);
+        const firstMorningVisit=slot.morning && path.visitCount===0;
+        const score=Number(mandatory)*1000+(slot.kind==='visit' ? 35 : 115)+
+          (baseScores.get(place.id) ?? 0)+covered*11+Number(overnight)*32-Number(repeatedLunch)*45+(firstMorningVisit ? 18 : 0)-leg.minutes/7;
+        return [{place,start,end,leg,score,...(slot.kind==='stay' ? {action:overnight ? 'return' : 'check-in'} : {})}];
+      }).sort((a,b)=>b.score-a.score || a.end-b.end || a.place.id.localeCompare(b.place.id));
+      for (const selected of candidates.slice(0,Math.max(4,requested.size))) {
+        next.push({stops:[...path.stops,selected],score:path.score+selected.score,place:selected.place,
+          cursor:selected.end+turnaround,visitCount:path.visitCount+Number(slot.kind==='visit')});
+      }
+    }
+    const paths=new Set();
+    states=next.sort((a,b)=>b.score-a.score || a.cursor-b.cursor).filter(path=>{
+      const key=path.stops.map(item=>item.place.id).join('|');
+      if (paths.has(key)) return false;
+      paths.add(key);
+      return true;
+    }).slice(0,maxDayStates);
+  }
+  return states[0];
+}
+
+function replacementLegs(place,stops,index,{settings,origin}) {
+  const current=stops[index];
+  const previous=stops[index-1];
+  const next=stops[index+1];
+  const inbound=estimateLeg(previous?.place ?? origin,place,settings);
+  const outbound=next ? estimateLeg(place,next.place,settings) : null;
+  const earliest=previous ? previous.end+turnaround : paceModes[settings.pace].starts;
+  if (!inbound.inRange || earliest+inbound.minutes>current.start ||
+      (outbound && (!outbound.inRange || current.end+turnaround+outbound.minutes>next.start))) return null;
+  return {inbound,outbound};
+}
+
+function alternativeStops(stops,index,context,scheduledIds) {
+  const {settings,allowed,requested}=context;
+  const selected=stops[index];
+  if (requested.has(selected.place.id) || selected.place.kind==='stay') return [];
+  return allowed.flatMap(place=>{
+    if (place.kind!==selected.place.kind || scheduledIds.has(place.id) || requested.has(place.id)) return [];
+    const legs=replacementLegs(place,stops,index,context);
+    if (!legs) return [];
+    const score=fitScore(place,settings)-(legs.inbound.minutes+(legs.outbound?.minutes ?? 0))/7;
+    return [{place,score}];
+  }).sort((a,b)=>b.score-a.score || a.place.id.localeCompare(b.place.id)).slice(0,2)
+    .map(({place})=>({id:place.id,name:place.name,en:place.en,cn:place.cn,url:place.url,status:'unknown'}));
+}
+
+function applyReplacement(days,change,coverage) {
+  const rejected=reason=>({...change,status:'rejected',reason});
+  const day=days[change.day];
+  if (!day) return rejected('day-unavailable');
+  const index=day.chosen.findIndex(stop=>stop.place.id===change.fromId);
+  const current=day.chosen[index];
+  if (!current) return rejected('stop-unavailable');
+  const {context}=day;
+  if (context.requested.has(change.fromId)) return rejected('mandatory-stop');
+  if (current.place.kind==='stay') return rejected('lodging-continuity');
+  if (days.some(item=>item.chosen.some(stop=>stop.place.id===change.toId))) return rejected('already-used');
+  const place=context.allowed.find(candidate=>candidate.id===change.toId && candidate.kind===current.place.kind);
+  if (!place || context.requested.has(change.toId)) return rejected('alternative-unavailable');
+  const legs=replacementLegs(place,day.chosen,index,context);
+  if (!legs) return rejected('transfer-conflict');
+  day.chosen[index]={...current,place,leg:legs.inbound};
+  if (legs.outbound) day.chosen[index+1].leg=legs.outbound;
+  for (const theme of coverage.keys()) {
+    coverage.set(theme,coverage.get(theme)+Number(place.tags.includes(theme))-Number(current.place.tags.includes(theme)));
+  }
+  return {...change,status:'applied'};
+}
 
 function schedule(contexts,settings) {
   const mode=transportModes[settings.transport];
   const pace=paceModes[settings.pace];
   const eligible=context=>context.places.filter(place=>distance(place.coordinates,context.location.coordinates)<=mode.radius);
   const scopes=contexts.map(context=>({location:context.location,candidates:eligible(context)}));
-  const required=matchRequired(settings.required,scopes.flatMap(scope=>scope.candidates));
+  const allCandidates=[...new Map(contexts.flatMap(context=>context.places).map(place=>[place.id,place])).values()];
+  const required=matchRequired(settings.required,allCandidates);
+  const inScope=new Set(scopes.flatMap(scope=>scope.candidates.map(place=>place.id)));
   const requested=new Set(required.flatMap(item=>item.place?.id ?? []));
   const allScheduled=new Set();
   const days=[];
   const coverage=new Map(settings.interests.filter(theme=>theme!=='any').map(theme=>[theme,0]));
   const omitted=new Set(settings.omittedIds);
-  const dayEnd=17*60+45;
   const [deadlineHour,deadlineMinute]=settings.visitDeadline?.split(':').map(Number) ?? [18,0];
-  const visitEnd=Math.min(dayEnd,deadlineHour*60+deadlineMinute);
+  const visitEnd=Math.min(endOfDay,deadlineHour*60+deadlineMinute);
+  let previousStay;
 
   for (let day=0; day<settings.days; day+=1) {
     const {location,candidates}=scopes[Math.min(day,scopes.length-1)];
     const allowed=candidates.filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
-    const stops=[],missing=[];
+    const missing=[];
     const changedCity=day>0 && day<scopes.length;
     const from=changedCity ? scopes[day-1].location : null;
     const transfer=from ? {from:from.name,to:location.name,fromId:from.id,toId:location.id,
@@ -473,64 +600,62 @@ function schedule(contexts,settings) {
     if (transfer) {
       missing.push(`Согласовать переезд ${transfer.from} → ${transfer.to}. ${transfer.distanceKm} км по прямой. Проверьте транспорт и время прибытия.`);
     }
-    let position=location.coordinates;
-    let cursor=pace.starts;
-    function find(kind,duration,earliest = 0,latest = kind==='visit' ? visitEnd : dayEnd) {
-      const eligible=allowed.flatMap(place=>{
-        if (place.kind!==kind || (kind==='visit' && allScheduled.has(place.id))) return [];
-        const km=distance(position,place.coordinates);
-        if (km>mode.leg) return [];
-        const estimatedTransfer=km<0.08 ? 0 : 5*Math.ceil((km/mode.speed*60+mode.delay)/5);
-        const start=Math.max(earliest,cursor+estimatedTransfer);
-        const end=start+duration;
-        if (end>latest) return [];
-        const remainingPriority=requested.has(place.id) && !allScheduled.has(place.id) ? 40 : 0;
-        const uncovered=place.tags.filter(theme=>coverage.get(theme)===0).length;
-        const score=remainingPriority+fitScore(place,settings)+uncovered*8-km*2;
-        return [{place,score,start,end,estimatedTransfer}];
-      });
-      return eligible.sort((a,b)=>b.score-a.score || a.place.id.localeCompare(b.place.id))[0];
-    }
-    function add(candidate) {
-      if (!candidate) return false;
-      const {place,start,end,estimatedTransfer}=candidate;
-      stops.push({id:place.id,type:place.kind,name:place.name,en:place.en,cn:place.cn,coordinates:place.coordinates,url:place.url,
-        start:time(start),end:time(end),estimatedTransfer,status:'unknown',geoStatus:place.geoStatus});
+    const origin=!changedCity && previousStay ? previousStay : {coordinates:location.coordinates};
+    const needsStay=day<settings.days-1;
+    const dayContext={settings,pace,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay};
+    const chosen=pickStops(dayContext);
+    if (visitEnd<endOfDay && chosen.visitCount<pace.visits && pickStops({...dayContext,visitEnd:endOfDay}).visitCount>chosen.visitCount) {
+      missing.push(`Часть посещений не помещается до ${settings.visitDeadline}. Уточните время или уменьшите число остановок.`);
+    } else if (!chosen.visitCount) missing.push('Подобрать первую точку посещения.');
+    else if (chosen.visitCount===1) missing.push('Подобрать вторую точку посещения.');
+    const lunch=chosen.stops.find(stop=>stop.place.kind==='food')?.place;
+    const lastStay=chosen.stops.find(stop=>stop.place.kind==='stay');
+    const overnight=lastStay?.place;
+    if (!lunch) missing.push('Подобрать и согласовать обед для группы.');
+    if (needsStay && !overnight) missing.push('Подобрать и согласовать размещение группы.');
+    for (const {place} of chosen.stops) {
       allScheduled.add(place.id);
       if (place.kind==='visit') {
         for (const interest of place.tags) if (coverage.has(interest)) coverage.set(interest,coverage.get(interest)+1);
       }
-      position=place.coordinates;
-      cursor=end+10;
-      return true;
     }
-    let visitCount=Number(add(find('visit',pace.duration)));
-    let deadlineReached=!visitCount && visitEnd<dayEnd && Boolean(find('visit',pace.duration,0,dayEnd));
-    if (settings.visitDeadline) {
-      while (visitCount<pace.visits && add(find('visit',pace.duration,0,Math.min(12*60,visitEnd)))) visitCount++;
-    }
-    if (!add(find('food',50,12*60))) missing.push('Подобрать и согласовать обед для группы.');
-    while (visitCount<pace.visits) {
-      if (!add(find('visit',pace.duration))) {
-        deadlineReached ||= visitEnd<dayEnd && Boolean(find('visit',pace.duration,0,dayEnd));
-        break;
-      }
-      visitCount++;
-    }
-    if (deadlineReached) missing.push(`Часть посещений не помещается до ${settings.visitDeadline}. Уточните время или уменьшите число остановок.`);
-    else if (!visitCount) missing.push('Подобрать первую точку посещения.');
-    else if (visitCount===1) missing.push('Подобрать вторую точку посещения.');
-    if (day<settings.days-1 && !add(find('stay',30,15*60))) missing.push('Подобрать и согласовать размещение группы.');
-    days.push({city:location.name,cityId:location.id,date:relativeDate(settings.date,day),stops,missing,...(transfer ? {transfer} : {})});
+    days.push({city:location.name,cityId:location.id,date:relativeDate(settings.date,day),
+      chosen:chosen.stops,context:{settings,origin,allowed,requested},missing,needsStay,...(transfer ? {transfer} : {})});
+    previousStay=overnight;
   }
 
-  const requiredResult=required.map(({label,place})=>{
+  const replacements=(settings.replacements ?? []).map(change=>applyReplacement(days,change,coverage));
+  const scheduledIds=new Set(days.flatMap(day=>day.chosen.map(stop=>stop.place.id)));
+  const requiredResult=required.map(({label,place,candidates})=>{
     const excludedInterests=excludedThemes(place,settings);
-    return {label,matched:place ? {id:place.id,name:place.name} : null,scheduled:Boolean(place && allScheduled.has(place.id)),
+    const scheduled=Boolean(place && scheduledIds.has(place.id));
+    const reason=scheduled ? null : !place ? (candidates.length ? 'ambiguous' : 'not-found') :
+      omitted.has(place.id) ? 'omitted' : excludedInterests.length ? 'excluded-interest' : accessBlocked(place,settings) ? 'inaccessible' :
+        !inScope.has(place.id) ? 'out-of-range' : 'no-slot';
+    return {label,matched:place ? {id:place.id,name:place.name} : null,scheduled,
+      ...(reason ? {reason} : {}),...(reason==='ambiguous' ? {candidates:candidates.map(place=>({id:place.id,name:place.name,city:place.city}))} : {}),
       ...(excludedInterests.length ? {excludedInterests} : {}),...(omitted.has(place?.id) ? {omitted:true} : {}),
       ...(accessBlocked(place,settings) ? {accessBlocked:true} : {})};
   });
-  return {days,required:requiredResult,interestCoverage:[...coverage].map(([theme,count])=>({theme,count}))};
+  const meals=new Set();
+  const scheduledDays=days.map(({chosen,context,needsStay,...day})=>{
+    const lunch=chosen.find(stop=>stop.place.kind==='food');
+    const overnight=chosen.find(stop=>stop.place.kind==='stay');
+    const originStayId=context.origin.id;
+    const logistics={arrivalPending:Boolean(day.transfer),...(originStayId ? {originStayId} : {}),
+      lunch:lunch ? {status:'suggested',id:lunch.place.id,...(meals.has(lunch.place.id) ? {repeated:true} : {})} : {status:'missing'},
+      overnight:overnight ? {status:'suggested',id:overnight.place.id,action:overnight.action} : {status:needsStay ? 'missing' : 'not-required'},
+      estimatedTransferMinutes:chosen.reduce((sum,stop)=>sum+stop.leg.minutes,0)};
+    if (lunch) meals.add(lunch.place.id);
+    return {...day,logistics,stops:chosen.map(({place,start,end,leg,action},index)=>({
+      id:place.id,type:place.kind,name:place.name,en:place.en,cn:place.cn,coordinates:place.coordinates,url:place.url,
+      start:time(start),end:time(end),estimatedTransfer:leg.minutes,status:'unknown',geoStatus:place.geoStatus,
+      ...(action ? {action} : {}),
+      required:requested.has(place.id),leg:{minutes:leg.minutes,distanceKm:leg.distanceKm,fromId:leg.fromId,mode:leg.mode,estimate:leg.estimate},
+      alternatives:alternativeStops(chosen,index,context,scheduledIds),
+    }))};
+  });
+  return {days:scheduledDays,required:requiredResult,replacements,interestCoverage:[...coverage].map(([theme,count])=>({theme,count}))};
 }
 
 function mapData(locations,places,sources) {
@@ -569,7 +694,7 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} 
   const places=[...new Map(contexts.flatMap(context=>context.places).map(place=>[place.id,place])).values()]
     .filter(place=>!omitted.has(place.id) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
   const sources=contexts.map(({location,source})=>({cityId:location.id,city:location.name,...source}));
-  const {days,required,interestCoverage}=schedule(contexts,settings);
+  const {days,required,replacements,interestCoverage}=schedule(contexts,settings);
   const location=locations[0];
   const source=contexts[0].source;
   const warnings=['Время остановок и переездов ориентировочное. Для группы нужно подтвердить график, вместимость, питание, размещение и запись.'];
@@ -578,6 +703,6 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} 
   if (locations.length>1) warnings.push('Указана прямая дистанция между городами. Время выезда и прибытия согласуйте отдельно.');
   if (settings.access) warnings.push('Доступность входов, туалетов и перемещений между точками требует отдельной проверки.');
   if (settings.market==='zh') warnings.push('Китайскоязычное сопровождение, перевод и питание для группы необходимо подтвердить.');
-  return {location,locations,settings,plan:{settings,days,required,interestCoverage,completeness:false,assumptions:warnings},places,
+  return {location,locations,settings,plan:{settings,days,required,replacements,interestCoverage,completeness:false,assumptions:warnings},places,
     geodata:mapData(locations,places,sources),source,sources,warnings};
 }

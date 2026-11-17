@@ -39,3 +39,10 @@ test('treats a relaxed pace separately from walking or hiking', () => {
   assert.equal(parsed.pace,'relaxed');
   assert.equal(parsed.transport,'car');
 });
+
+test('reports an unsupported spelled-out duration in every interface language', () => {
+  for (const request of ['Казань на четыре дня','Four days in Kazan','喀山四天']) {
+    assert.equal(parseBrief(request,reference).requestedDays,4);
+    assert.equal(parseBrief(request,reference).days,null);
+  }
+});

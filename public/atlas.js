@@ -77,14 +77,14 @@ export function mountAtlas(container, initialData, geodata, { programId, placeId
       <section class="atlas-map-shell" aria-label="Карта объектов и остановок">
         <div class="atlas-map-top"><label><span class="sr-only">Программа на карте</span><select id="atlas-program"></select></label>
           <div class="atlas-options atlas-days" id="atlas-days" aria-label="Дни маршрута"></div>
-        </div>
-        <div class="atlas-map-scene">
-          <div id="tour-map" role="region" aria-label="Интерактивная карта Владимирской области"></div>
-          <div class="atlas-map-tools" aria-label="Управление картой">
+          <div class="atlas-map-tools" role="group" aria-label="Управление картой">
             <div class="atlas-base" id="atlas-base"></div>
             <button type="button" class="atlas-icon" data-atlas="fit" aria-label="Показать маршрут целиком" title="Показать маршрут целиком">⌖</button>
             <button type="button" class="atlas-icon" data-atlas="expand" aria-label="Развернуть карту" title="Развернуть карту">⛶</button>
           </div>
+        </div>
+        <div class="atlas-map-scene">
+          <div id="tour-map" role="region" aria-label="Интерактивная карта Владимирской области"></div>
         </div>
         <div class="atlas-map-bottom">
           <div class="atlas-options atlas-layers" id="atlas-layers" aria-label="Объекты на карте"></div>

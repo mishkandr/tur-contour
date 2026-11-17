@@ -9,6 +9,7 @@ addLocaleMessages([
   ['Условия подтверждены поставщиком','Supplier-confirmed conditions','供应方已确认的条件'],
   ['Проверка источников','Source check','数据源检查'],
   ['Собрать маршрут','Build an itinerary','编制行程'],
+  ['Маршрут по России','Itinerary across Russia','俄罗斯全境行程'],
   ['Открыть карту','Open map','打开地图'],
   ['Изменения','Changes','变更'],
   ['Влияют на программы','Affect itineraries','影响行程'],
@@ -47,11 +48,6 @@ const changeId = change=>[change.at,change.id,change.key].join('|');
 const action = (label, href, kind='button-quiet')=>'<a class="'+kind+'" href="'+html(href)+'">'+local(label)+' <span aria-hidden="true">↗</span></a>';
 const linkTo = (page,params) => '#'+page+'?'+new URLSearchParams(params);
 
-function related(change, programmes) {
-  return programmes.filter(record=>record.affected && Boolean(record.settings.demo)===Boolean(change.demo) &&
-    record.issues?.some(issue=>issue.id===change.id));
-}
-
 function programLink(record, place) {
   return linkTo('impact',{program:record.id,...(place ? {place} : {})});
 }
@@ -70,7 +66,8 @@ function recordList(records) {
 export function renderOverview(data, view) {
   const programmes = data.affected ?? [];
   const awaiting = programmes.filter(record=>record.affected).length;
-  const timeline = (data.changes ?? []).map(change=>({change,id:changeId(change),programmes:related(change,programmes)}));
+  const timeline = (data.changes ?? []).map(change=>({change,id:changeId(change),
+    programmes:programmes.filter(record=>change.affectedProgramIds?.includes(record.id))}));
   const visible = timeline.filter(entry=>view.filter==='impact' ? entry.programmes.length : view.filter==='external' ? !entry.change.demo : true);
   const entry = visible.find(item=>item.id===view.selected) ?? visible.find(item=>item.programmes.length) ?? visible[0];
   const sortOrder = visible.slice().sort((left,right)=>Number(Boolean(right.programmes.length))-Number(Boolean(left.programmes.length)));
@@ -81,7 +78,7 @@ export function renderOverview(data, view) {
   return `
     <header class="ops-head">
       <div><p class="ops-kicker">${local('Владимирская область')}</p><h1>${local('Обзор региона')}</h1></div>
-      <div class="actions ops-head-actions">${action('Открыть карту','#impact')}${action('Собрать маршрут','#route','button')}</div>
+      <div class="actions ops-head-actions">${action('Проверить программу','#route?scope=pilot','button')}${action('Маршрут по России','#route')}</div>
     </header>
     <div class="ops-metrics" aria-label="${local('Данные Владимирской области')}">
       <a href="#overview?focus=programmes"><span>${local('На контроле')}</span><strong>${formatNumber(programmes.length)}</strong><small>${local('Требуют пересмотра')} · ${formatNumber(awaiting)}</small></a>
@@ -117,8 +114,7 @@ export function renderOverview(data, view) {
       </section>
     </div>
     <section class="panel ops-monitor" id="ops-programmes" tabindex="-1" aria-labelledby="ops-monitor">
-      <header class="section-head"><div><h2 id="ops-monitor">${local('На контроле')}</h2><p class="caption">${local('Дата · группа · режим проверки')}</p></div>
-        ${action('Собрать маршрут','#route')}</header>
+      <header class="section-head"><div><h2 id="ops-monitor">${local('На контроле')}</h2><p class="caption">${local('Дата · группа · режим проверки')}</p></div></header>
       ${scope.length ? '<h3 class="ops-subheading">'+local('Программы в работе')+'</h3>'+recordList(scope):''}
       ${training.length ? '<details class="ops-training" '+(training.some(record=>record.affected)?'open':'')+'><summary>'+local('Учебные программы')+' · '+formatNumber(training.length)+'</summary>'+recordList(training)+'</details>':''}
       ${!training.length&&!scope.length ? recordList([]):''}

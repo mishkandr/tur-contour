@@ -64,6 +64,7 @@ test('Overpass requests receive only fixed coordinate queries and the pace and m
   assert.equal(dense.source.status,'live');
   assert.ok(endpoints.every(url=>!decodeURIComponent(url).includes(required[1]) && url.includes('55.75204')));
   assert.equal(relaxed.plan.required[0].scheduled,false);
+  assert.equal(relaxed.plan.required[0].reason,'out-of-range');
   assert.equal(dense.plan.required[0].scheduled,true);
   const visits = plan=>plan.days.flatMap(day=>day.stops).filter(stop=>stop.type==='visit');
   assert.ok(visits(dense.plan).length>visits(relaxed.plan).length);
@@ -136,6 +137,125 @@ test('visit deadlines constrain sightseeing while preserving afternoon services'
   assert.ok(tooEarly.plan.days.every(day=>day.missing.some(note=>note.includes('09:00'))));
   assert.ok(tooEarly.plan.days.every(day=>day.stops.every(stop=>stop.type!=='visit')));
   await assert.rejects(draftItinerary({...request,visitDeadline:'18:20'}),{status:400});
+});
+
+test('a tight schedule keeps multiple mandatory visits, a realistic lunch window and same-city overnight continuity',async()=>{
+  const city=(await listCities('Тюмень')).cities[0];
+  const [lat,lon]=city.coordinates;
+  const records=[
+    [1,0.003,0.000,{name:'Музей из обязательного списка',tourism:'museum'}],
+    [2,0.004,0.001,{name:'Форт из обязательного списка',historic:'fort'}],
+    [3,0.003,0.001,{name:'Ещё один музей',tourism:'museum'}],
+    [4,0.003,0.0011,{name:'Ресторан А',amenity:'restaurant'}],
+    [5,0.003,0.0012,{name:'Ресторан Б',amenity:'restaurant'}],
+    [6,0.003,0.0013,{name:'Ресторан В',amenity:'restaurant'}],
+    [7,0.003,0.0014,{name:'Отель для группы',tourism:'hotel'}],
+    [8,0.003,0.0015,{name:'Ресторан Г',amenity:'restaurant'}],
+  ];
+  const fetchImpl=async()=>new Response(JSON.stringify({elements:records.map(([id,x,y,tags])=>({
+    type:'node',id,lat:lat+x,lon:lon+y,tags,
+  }))}));
+  const draft=await draftItinerary({...request,cityId:city.id,days:3,pace:'dense',size:24,visitDeadline:'12:00',
+    required:['Музей из обязательного списка','Форт из обязательного списка']},{fetchImpl});
+  const [first,second]=draft.plan.days;
+  assert.ok(draft.plan.required.every(item=>item.scheduled));
+  assert.equal(first.stops.filter(stop=>stop.required).length,2);
+  assert.equal(first.logistics.overnight.status,'suggested');
+  assert.equal(first.logistics.overnight.action,'check-in');
+  assert.equal(second.logistics.originStayId,first.logistics.overnight.id);
+  assert.equal(second.logistics.overnight.action,'return');
+  assert.equal(second.stops[0].leg.fromId,first.logistics.overnight.id);
+  assert.equal(second.stops[0].leg.mode,'walking');
+  assert.notEqual(first.logistics.lunch.id,second.logistics.lunch.id);
+  const proposedLunch=first.stops.find(stop=>stop.type==='food');
+  assert.ok(proposedLunch.start>='12:00' && proposedLunch.end<='14:45');
+  assert.ok(proposedLunch.alternatives.some(option=>option.status==='unknown' && option.url.startsWith('https://')));
+  assert.ok(first.stops.every(stop=>stop.status==='unknown' && stop.leg.estimate==='straight-line'));
+
+  const oneLunch=await draftItinerary({...request,cityId:city.id,days:2,
+    omittedIds:['osm-node-5','osm-node-6','osm-node-8']},{fetchImpl});
+  assert.equal(oneLunch.plan.days[1].logistics.lunch.id,oneLunch.plan.days[0].logistics.lunch.id);
+  assert.equal(oneLunch.plan.days[1].logistics.lunch.repeated,true);
+});
+
+test('scoped replacements keep all required visits, exact slots and other days intact',async()=>{
+  const city=(await listCities('Тюмень')).cities[0];
+  const [lat,lon]=city.coordinates;
+  const element=(id,name,x,tags)=>({type:'node',id,lat:lat+x,lon:lon+0.0002,tags:{name,...tags}});
+  const required=Array.from({length:5},(_,i)=>'Музей обязательный '+(i+1));
+  const nearby=Array.from({length:4},(_,i)=>element(21+i,'Ресторан квартала '+(i+1),0.002+i*0.0001,{amenity:'restaurant'}));
+  const elements=[...required.map((name,i)=>element(i+1,name,0.002+i*0.00008,{tourism:'museum'})),
+    ...nearby,element(25,'Дальний ресторан',0.048,{amenity:'restaurant'}),
+    element(31,'Отель Город',0.0026,{tourism:'hotel'}),element(32,'Отель Парк',0.003,{tourism:'hotel'})];
+  const options={fetchImpl:async()=>new Response(JSON.stringify({elements}))};
+  const input={...request,cityId:city.id,days:3,required};
+  const baseline=await draftItinerary(input,options);
+  const [first,second,third]=baseline.plan.days;
+  const stop=second.stops.find(stop=>stop.type==='food');
+  const alternative=stop.alternatives[0];
+  const operation={day:1,fromId:stop.id,toId:alternative.id};
+  const result=await draftItinerary({...input,replacements:[operation]},options);
+  assert.deepEqual(result.plan.replacements,[{...operation,status:'applied'}]);
+  assert.deepEqual(result.plan.required,baseline.plan.required);
+  assert.ok(result.plan.required.every(stop=>stop.scheduled));
+  const project=day=>day.stops.map(({alternatives,...rest})=>rest);
+  assert.deepEqual(project(result.plan.days[0]),project(first));
+  assert.deepEqual(project(result.plan.days[2]),project(third));
+  const replacedDay=result.plan.days[1];
+  const index=second.stops.indexOf(stop);
+  assert.equal(replacedDay.stops[index].id,alternative.id);
+  assert.equal(replacedDay.stops[index].start,stop.start);
+  assert.equal(replacedDay.stops[index].end,stop.end);
+  assert.equal(replacedDay.stops[index+1].leg.fromId,alternative.id);
+  assert.equal(replacedDay.logistics.lunch.id,alternative.id);
+  assert.ok(replacedDay.stops[index].alternatives.some(item=>item.id===stop.id));
+  assert.equal(replacedDay.stops[index].status,'unknown');
+  const restore={day:1,fromId:alternative.id,toId:stop.id};
+  const restored=await draftItinerary({...input,replacements:[operation,restore]},options);
+  assert.deepEqual(restored.plan.replacements.map(change=>change.status),['applied','applied']);
+  assert.deepEqual(restored.plan.days,baseline.plan.days);
+
+  const protectedStop=second.stops.find(stop=>stop.required);
+  const rejected=await draftItinerary({...input,replacements:[
+    {...operation,fromId:protectedStop.id},
+    {...operation,fromId:second.logistics.overnight.id},
+    {...operation,toId:first.logistics.lunch.id},
+    {...operation,toId:'osm-node-25'},
+    {...operation,toId:'osm-node-999'},
+    {...operation,fromId:'osm-node-999'},
+  ]},options);
+  assert.deepEqual(rejected.plan.replacements.map(change=>change.reason),[
+    'mandatory-stop','lodging-continuity','already-used','transfer-conflict','alternative-unavailable','stop-unavailable',
+  ]);
+  assert.deepEqual(rejected.plan.days,baseline.plan.days);
+  await assert.rejects(draftItinerary({...input,replacements:[{...operation,toId:operation.fromId}]},options),{status:400});
+});
+
+test('a relaxed Kazan plan uses the morning while keeping mandatory visits and group lunch',async()=>{
+  const {plan}=await draftItinerary({...request,cityId:'551487',date:'2026-11-21',days:3,size:12,market:'ru',
+    pace:'relaxed',interests:['heritage','museum'],required:['Казанский кремль']},{fetchImpl:offline});
+  const [morning,lunch]=plan.days[0].stops;
+  assert.equal(morning.type,'visit');
+  assert.equal(morning.required,true);
+  assert.ok(morning.start<'12:00');
+  assert.equal(lunch.type,'food');
+  assert.ok(lunch.start>='12:00' && lunch.end<='14:45');
+  assert.equal(plan.required[0].scheduled,true);
+});
+
+test('similarly named venues require a choice and out-of-range lunch remains a gap',async()=>{
+  const city=(await listCities('Тюмень')).cities[0];
+  const [lat,lon]=city.coordinates;
+  const elements=[
+    {type:'node',id:1,lat,lon,tags:{name:'Музей природы у реки',tourism:'museum'}},
+    {type:'node',id:2,lat:lat+0.003,lon,tags:{name:'Музей природы в центре',tourism:'museum'}},
+    {type:'node',id:3,lat:lat+0.049,lon,tags:{name:'Далёкий ресторан',amenity:'restaurant'}},
+  ];
+  const result=await draftItinerary({...request,cityId:city.id,transport:'walking',required:['Музей природы']},
+    {fetchImpl:async()=>new Response(JSON.stringify({elements}))});
+  assert.equal(result.plan.required[0].reason,'ambiguous');
+  assert.equal(result.plan.required[0].candidates.length,2);
+  assert.ok(result.plan.days.every(day=>day.logistics.lunch.status==='missing'));
 });
 
 test('excluded themes outrank mandatory names and themed coverage counts only scheduled stops',async()=>{

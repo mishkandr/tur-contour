@@ -391,6 +391,31 @@ export function impacts(catalog, state, beforeAudit, beforeWiki) {
   });
 }
 
+export function attributeChanges(changes, places, programs) {
+  const byId = new Map(places.map(place=>[place.id,place]));
+  const seen = new Set();
+  const auditFields = new Set(['capacity','language','hours','off','seasons','minutes','access','booking','validUntil']);
+  return changes.map(change=>{
+    const place = byId.get(change.id);
+    const auditKey = change.demo ? 'audit' : 'verifiedAudit';
+    const audit = place?.[auditKey];
+    const key = [auditKey,change.id,change.key].join('|');
+    if (!audit || !auditFields.has(change.key) || seen.has(key)) return change;
+    seen.add(key);
+    if (change.before == null || JSON.stringify(audit[change.key])!==JSON.stringify(change.after)) return change;
+    const former = {...place,[auditKey]:{...audit,[change.key]:change.before}};
+    const affectedProgramIds = programs.filter(program=>{
+      if (Boolean(program.settings.demo)!==Boolean(change.demo)) return false;
+      const current = program.issues.filter(issue=>issue.id===place.id);
+      if (!current.length) return false;
+      const formerIssues = reviewRoute([former],program.baseline).issues.filter(issue=>issue.id===place.id);
+      return current.some(issue=>!formerIssues.some(previous=>previous.day===issue.day &&
+        (previous.status===issue.status || previous.status==='blocked')));
+    }).map(program=>program.id);
+    return {...change,affectedProgramIds};
+  });
+}
+
 function capacityReductions(programmes, places, beforeAudit) {
   const byId = new Map(places.map(place=>[place.id,place]));
   const reductions = new Map();

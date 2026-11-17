@@ -4,7 +4,7 @@ import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, localizeDom, setLocale, t } from '/locale.js';
 import { renderOverview } from '/overview.js';
 import { itineraryTabs, mountComposer } from '/composer.js';
-import { mountKnowledge } from '/knowledge.js';
+import { aiWaitingMarkup, mountKnowledge, updateAiWait } from '/knowledge.js';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
@@ -59,6 +59,61 @@ addLocaleMessages([
   ['На эти даты варианты не найдены. Измените параметры программы или уточните данные объектов.',
     'No options found for these dates. Change the itinerary requirements or check place conditions.',
     '这些日期未找到方案。请修改行程参数或核实地点条件。'],
+  ['Сравниваем проверенные варианты…','Comparing verified options…','正在比较已核查的方案…'],
+  ['Готовность программы','Itinerary readiness','行程准备情况'],
+  ['Что подтвердить для запуска','What to confirm before launch','启动前需要确认的事项'],
+  ['Обязательные позиции помещаются в расписание.','Required stops fit the schedule.','所需停留点均可纳入日程。'],
+  ['В расписании ещё есть незакрытые обязательные позиции.','Some required slots in the itinerary remain unfilled.','行程中仍有必需的环节尚未落实。'],
+  ['Учебные условия показывают механику расчёта. Для поездки нужны сведения от поставщиков.','Training conditions illustrate the calculation. Ask suppliers for actual trip conditions.','演示条件仅用于说明计算方式。实际出行条件需向供应方确认。'],
+  ['{city} · день {day} · {date}','{city} · day {day} · {date}','{city} · 第 {day} 天 · {date}'],
+  ['Посещения','Visits','参观'],
+  ['Питание','Meals','餐饮'],
+  ['Ночёвка','Overnight stay','住宿一晚'],
+  ['Подтверждённая точка посещения','Confirmed visit','已确认的参观地点'],
+  ['Вторая точка посещения','Second visit','第二个参观地点'],
+  ['Место для обеда','Lunch venue','午餐地点'],
+  ['Требуется подтверждение: {items}.','Confirm: {items}.','待确认：{items}。'],
+  ['Запросить у объектов время визита, запись и лимит для группы из {size} чел.','Ask venues for a visit time, booking requirements and a limit that fits {size} people.','请向场馆确认参观时段、预约要求及能否接待 {size} 人。'],
+  ['Запросить у ресторана время обеда и рассадку для {size} чел.','Ask the restaurant for a lunch slot and seating for {size} people.','请向餐厅确认午餐时段及 {size} 人的座位。'],
+  ['Запросить у гостиницы доступность номеров и условия заселения для {size} чел.','Ask the hotel for available rooms and check-in conditions for {size} people.','请向酒店确认 {size} 人所需客房及入住条件。'],
+  ['Проверить условия в паспорте объекта','Check conditions in the place record','在地点档案中核查条件'],
+  ['В каталоге на эту дату нет объекта без известного ограничения.','The catalogue lists no candidate without a known restriction on this date.','目录中当天暂无没有已知限制的候选地点。'],
+  ['Транспорт','Transport','交通'],
+  ['Сверить с перевозчиком время выезда, место посадки и наличие транспорта для группы.','Agree departure time, pickup point and group transport availability with the carrier.','请向交通服务方确认出发时间、上车地点及团队用车。'],
+  ['Китайскоязычное сопровождение','Chinese-language support','中文陪同服务'],
+  ['Подтвердить сопровождающего и согласовать работу с переводчиком у объектов.','Confirm the escort and arrange interpreter access with venues.','请确认中文陪同人员，并与场馆协调翻译事宜。'],
+  ['Семейный формат','Family itinerary','亲子行程'],
+  ['Уточнить возрастные ограничения, длительность визитов для детей и семейные услуги у объектов.','Ask venues about age restrictions, suitable visit lengths for children and family services.','请向场馆确认年龄限制、适合儿童的参观时长及亲子服务。'],
+  ['Романтический формат','Romantic itinerary','浪漫行程'],
+  ['Сверить с организатором темп программы. У заведений уточнить условия обслуживания пары.','Agree the pace with the organiser and check arrangements for couples with the venues.','请与组织方确认行程节奏，并向场馆核实双人服务安排。'],
+  ['Условия пешей части','Walking conditions','徒步条件'],
+  ['Сверить с организатором состояние тропы, доступность на дату и запасной вариант.','Check trail conditions, accessibility on the date and a backup with the organiser.','请与组织方确认步道状况、当天可通行性及备用方案。'],
+  ['Ключевая остановка для формата','Key stop for this format','本行程类型的核心停留点'],
+  ['Найти подходящий объект и подтвердить условия посещения на дату.','Find a suitable place and confirm the visit conditions for the date.','寻找合适地点，并确认当天的参观条件。'],
+  ['Подтверждение брони','Booking confirmation','预订确认'],
+  ['Подтвердить у поставщиков наличие мест и запись на выбранные даты.','Confirm availability and reservations for the selected dates with suppliers.','请向供应方确认所选日期的名额及预约。'],
+  ['{kind} · два сеанса по {size} чел.','{kind} · two sessions of {size} people','{kind} · 两场，每场 {size} 人'],
+  ['{kind} · лимит {size} чел.','{kind} · limit {size} people','{kind} · 上限 {size} 人'],
+  ['{kind} · учебный лимит {size} чел.','{kind} · training limit {size} people','{kind} · 演示上限 {size} 人'],
+  ['{city} · {day}','{city} · {day}','{city} · {day}'],
+  ['Требуют внимания {count} из {total}','{count} of {total} need attention','{total} 项中有 {count} 项需关注'],
+  ['Для выбранного формата требуется ключевая остановка с подходящими условиями на дату поездки.',
+    'This format requires a key stop with suitable conditions on the travel date.','此行程类型需要一个在出行日期符合条件的核心停留点。'],
+  ['В пилотном каталоге нет подтверждённых объектов для этого формата. Культурные остановки показаны для справки.',
+    'The pilot catalogue has no confirmed places for this format. Cultural stops are shown for reference.','试点目录中暂无适合此行程类型的已确认地点。文化景点仅供参考。'],
+  ['Приоритет у музеев. Возрастные условия и семейные услуги нужно уточнить у объектов.',
+    'Museums take priority. Confirm age requirements and family services with venues.','优先安排博物馆。请向场馆确认年龄要求及亲子服务。'],
+  ['Приоритет у архитектурных остановок и коротких визитов.',
+    'Architectural stops and short visits take priority.','优先安排建筑景点和短时参观。'],
+  ['Время переездов ориентировочное. Сверьте время в пути и точки посадки с перевозчиком, а групповые места с поставщиками.',
+    'Transfer times are estimates. Check journey time and pickup points with the carrier and group availability with suppliers.','交通时间为估算值。请向交通服务方确认行车时间和上车地点，并向供应方确认团队名额。'],
+  ['Переезды и запас между остановками рассчитаны по схеме пилота. Транспорт и брони подтверждаются отдельно.',
+    'Transfers and buffers between stops follow the pilot plan. Confirm transport and reservations separately.','交通和各停留点间的预留时间按试点方案估算。交通与预约需单独确认。'],
+  ['Перед пешей частью проверьте состояние тропы, световой день и доступность после паводка или снегопада.',
+    'Before walking, check trail conditions, daylight and access after flooding or snowfall.','徒步前请核查步道状况、日照时间及洪水或降雪后的通行情况。'],
+  ['Два сеанса и ожидание второй подгруппы нужно согласовать с объектом.',
+    'Agree both sessions and a waiting arrangement for the second group with the venue.','请与场馆确认两场参观及第二小组的等候安排。'],
+  ['Согласуйте два отдельных сеанса с музеем.','Arrange two separate sessions with the museum.','请与博物馆确认两个独立场次。'],
 ]);
 let data;
 let geodata = {};
@@ -68,6 +123,7 @@ let knowledge;
 let atlasHash;
 const mapContexts = new Map();
 let options = {...defaultRoute,demo:false};
+let activeRouteAnalysis = null;
 let review = newReview();
 const overview = {filter:'external',selected:null};
 let agent;
@@ -107,16 +163,17 @@ function openingLabel(official) {
   return official.windows.map(([open,close])=>clockTime(open)+'–'+clockTime(close)).join(', ');
 }
 
-async function api(path,body,method=body===undefined ? 'GET' : 'POST') {
-  const res = await fetch('/api/'+path,{method,headers:body===undefined ? {} : {'Content-Type':'application/json'},body:body===undefined ? undefined : JSON.stringify(body)});
+async function api(path,body,method=body===undefined ? 'GET' : 'POST',{signal}={}) {
+  const res = await fetch('/api/'+path,{method,signal,headers:body===undefined ? {} : {'Content-Type':'application/json'},body:body===undefined ? undefined : JSON.stringify(body)});
   const result = await res.json();
   if (!res.ok) throw Object.assign(new Error(result.error || 'Действие не выполнено'), { status:res.status });
   return result;
 }
 
 function newReview(preview = null, program = null) {
+  cancelRouteAnalysis();
   return { preview, program, variants:null, selectedId:null, loading:false, error:'', brief:'', analysis:null,
-    aiLoading:false, dirty:false, approval:null };
+    dirty:false, approval:null };
 }
 
 function toast(message) {
@@ -277,16 +334,31 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings) {
   dialog.showModal();
 }
 
+function routeCity(day) {
+  return itemName({...day,name:t(day.city)});
+}
+
+function routeStopName(stop) {
+  if (stop.type!=='travel') return itemName(stop);
+  const label = itemName(stop);
+  return label===stop.name ? label.split(' → ').map(city=>t(city)).join(' → ') : label;
+}
+
 function renderDay(day,index,settings,decisionId) {
   const reference = decisionId ? ' data-decision="'+safe(decisionId)+'"' : '';
-  return '<section class="route-day"><div class="route-day-head"><p class="caption">'+safe(t('День {day}',{day:index+1}))+' · '+date(day.date)+'</p><h3>'+safe(itemName({...day,name:day.city}))+'</h3></div>'+
-    '<ul class="rows">'+day.stops.map(stop=>'<li class="timeline"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><div class="label-pair">'+
-      (stop.id ? '<button type="button" class="link-button" data-source-text data-place="'+safe(stop.id)+'" data-place-day="'+index+'"'+reference+'>'+safe(itemName(stop))+'</button>' :
-        '<strong data-source-text>'+safe(itemName(stop))+'</strong>')+
+  return '<section class="route-day"><div class="route-day-head"><p class="caption">'+safe(t('День {day}',{day:formatNumber(index+1)}))+' · '+date(day.date)+'</p><h3>'+safe(routeCity(day))+'</h3></div>'+
+    '<ul class="rows">'+day.stops.map(stop=>{
+      const template = stop.split ? '{kind} · два сеанса по {size} чел.' : settings.demo ? '{kind} · учебный лимит {size} чел.' : '{kind} · лимит {size} чел.';
+      const status = stop.type==='travel' ? t('Переезд · расчётное время') : t(template,{
+        kind:t(kindNames[stop.type]),size:formatNumber(stop.split?Math.ceil(settings.size/2):stop.capacity)});
+      return '<li class="timeline"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><div class="label-pair">'+
+      (stop.id ? '<button type="button" class="link-button" data-source-text data-place="'+safe(stop.id)+'" data-place-day="'+index+'"'+reference+'>'+safe(routeStopName(stop))+'</button>' :
+        '<strong data-source-text>'+safe(routeStopName(stop))+'</strong>')+
       (getLocale()!=='zh' && settings.market==='zh' && stop.cn ? '<span lang="zh-Hans" class="lang-line">'+safe(stop.cn)+'</span>':'')+
-      '<span class="caption">'+(stop.type==='travel'?'Переезд · расчётное время':kindNames[stop.type]+
-        (stop.split?' · два сеанса по '+Math.ceil(settings.size/2)+' чел.':' · лимит '+safe(stop.capacity)+' чел.'+(settings.demo?' в демо':'')))+'</span></div></li>').join('')+
-    '</ul>'+(day.missing.length?'<p class="callout">Требуется подтверждение: '+safe(day.missing.join(', '))+'.</p>':'')+'</section>';
+      '<span class="caption">'+safe(status)+'</span></div></li>';
+    }).join('')+
+    '</ul>'+(day.missing.length?'<p class="callout">'+safe(t('Требуется подтверждение: {items}.',{
+      items:day.missing.map(item=>t(item)).join(getLocale()==='zh'?'、':', ')}))+'</p>':'')+'</section>';
 }
 
 function scheduleKey(plan) {
@@ -337,6 +409,7 @@ function routeVariants() {
 
 function routeAssistant() {
   const analysis = review.analysis;
+  const request = activeRouteAnalysis?.review===review ? activeRouteAnalysis : null;
   const suggestions = analysis?.status==='live' ? analysis.suggestions.flatMap(suggestion=>{
     const variant = review.variants?.find(item=>item.id===suggestion.id);
     return variant ? ['<li><button type="button" class="link-button" data-action="select-variant" data-variant="'+safe(variant.id)+'" aria-pressed="'+
@@ -347,12 +420,13 @@ function routeAssistant() {
     '<p class="detail">ИИ оценивает, какой вариант лучше сохраняет замысел программы. Расписание и лимиты проверяет сервис.</p>'+
     (eligible ? '<form id="route-ai-form"><label class="field">Что важно сохранить <span class="caption">Необязательно</span>'+
       '<textarea name="brief" maxlength="400" rows="3" placeholder="Например, сохранить знакомство с архитектурой Суздаля"'+
-      (review.aiLoading?' readonly':'')+'>'+safe(review.brief)+'</textarea></label>'+
-      '<button type="submit" class="button-quiet"'+(review.aiLoading||review.dirty?' disabled':'')+'>'+
-      (review.aiLoading?'Сравниваем…':'Сравнить варианты с ИИ')+'</button></form>' :
+      (request?' readonly':'')+'>'+safe(review.brief)+'</textarea></label>'+
+      '<button type="submit" class="button-quiet"'+(analysis?' aria-describedby="route-ai-message"':'')+
+      (request||review.dirty?' disabled':'')+'>'+
+      (['unavailable','cancelled'].includes(analysis?.status)?'Повторить запрос':'Сравнить варианты с ИИ')+'</button></form>' :
       '<p class="caption route-ai-empty">Для сравнения нужны два варианта, прошедших проверку.</p>')+
-    (review.aiLoading ? '<p class="caption status-line" role="status">Готовим подсказку…</p>' : '')+
-    (analysis ? '<div class="route-ai-result" aria-live="polite"><p class="'+(analysis.status==='live'?'caption':'callout')+'">'+safe(analysis.message)+'</p>'+
+    (request ? aiWaitingMarkup('Сравниваем проверенные варианты…',request.startedAt,'cancel-route-ai') : '')+
+    (analysis ? '<div class="route-ai-result"><p id="route-ai-message" role="status" class="'+(analysis.status==='unavailable'?'callout':'caption')+'">'+safe(analysis.message)+'</p>'+
       (suggestions?'<ol class="route-ai-suggestions">'+suggestions+'</ol>':'')+'</div>' : '')+'</section>';
 }
 
@@ -378,9 +452,9 @@ function routeDecision(plan) {
     '<p class="caption">'+safe(t('{date} · {days} дня · {size} чел.',{date:date(plan.settings.date),days:formatNumber(plan.settings.days),size:formatNumber(plan.settings.size)}))+
     (localized?' · '+safe(t('Группа из Китая')):'')+'</p></div>'+routeState(plan)+'</div>'+
     chinesePreview(plan)+
-    (plan.themeNote ? '<p class="callout">'+safe(plan.themeNote)+'</p>' : '')+
+    (plan.themeNote ? '<p class="callout">'+safe(t(plan.themeNote))+'</p>' : '')+
     '<div class="route-days">'+plan.days.map((day,i)=>renderDay(day,i,plan.settings)).join('')+'</div>'+
-    (assumptions.length ? '<div class="callout">'+assumptions.map(note=>'<p>'+safe(note)+'</p>').join('')+'</div>' : '')+
+    (assumptions.length ? '<div class="callout">'+assumptions.map(note=>'<p>'+safe(t(note))+'</p>').join('')+'</div>' : '')+
     (approvalVisible ? '<div class="route-approval"><div><h3>'+(approved?'Решение сохранено':'Решение специалиста')+'</h3><p class="caption">'+
       (plan.settings.demo?'Согласование в рамках пилота. Подтверждение визитов остаётся за поставщиками.':
         'Согласование записывает эту версию программы в журнал. Подтвердите бронирование у поставщиков.')+
@@ -388,27 +462,85 @@ function routeDecision(plan) {
         '<button type="button" class="button" data-action="approve-route"'+(review.dirty?' disabled':'')+'>Согласовать вариант</button>')+'</div>' : '')+'</section>';
 }
 
-function officialRouteReview(plan) {
+function routeEvidence(plan) {
   const {settings} = plan;
-  const itinerary = plan.days.map((day,index)=>{
-    const candidates = data.places.flatMap(place=>{
-      const mealCity = day.mealCity ?? (day.city==='Кидекша'?'Суздаль':day.city);
-      const stayCity = day.stayCity ?? day.city;
-      const relevant = place.kind==='visit' && place.city===day.city && (!day.visitIds || day.visitIds.includes(place.id)) ||
-        place.kind==='food' && place.city===mealCity || place.kind==='stay' && index<settings.days-1 && place.city===stayCity;
-      if (!relevant) return [];
-      const result = assess(place,settings,index);
-      return [{place,result,hours:publishedHours(place,settings.date,index)}];
-    });
+  return plan.days.map((day,index)=>{
+    const mealCity = day.mealCity ?? (day.city==='Кидекша'?'Суздаль':day.city);
+    const stayCity = day.stayCity ?? day.city;
+    const candidates = data.places.filter(place=>
+      place.kind==='visit' && place.city===day.city && (!day.visitIds || day.visitIds.includes(place.id)) ||
+      place.kind==='food' && place.city===mealCity || place.kind==='stay' && index<settings.days-1 && place.city===stayCity
+    ).map(place=>({place,result:assess(place,settings,index),hours:publishedHours(place,settings.date,index)}));
+    return {day,index,mealCity,stayCity,candidates};
+  });
+}
+
+const launchChecks = [
+  {kind:'visit',title:'Посещения',slots:['Подтверждённая точка посещения','Вторая точка посещения'],
+    action:'Запросить у объектов время визита, запись и лимит для группы из {size} чел.'},
+  {kind:'food',title:'Питание',slots:['Место для обеда'],
+    action:'Запросить у ресторана время обеда и рассадку для {size} чел.'},
+  {kind:'stay',title:'Ночёвка',slots:['Ночёвка'],
+    action:'Запросить у гостиницы доступность номеров и условия заселения для {size} чел.'},
+];
+
+function pilotReadiness(plan,evidence) {
+  const {settings} = plan;
+  const size = formatNumber(settings.size);
+  const checks = evidence.flatMap(({day,index,mealCity,stayCity,candidates})=>
+    launchChecks.filter(check=>check.slots.some(slot=>day.missing.includes(slot))).map(check=>{
+      const selected = new Set(day.stops.filter(stop=>stop.type===check.kind).map(stop=>stop.id));
+      const contacts = candidates.filter(({place,result})=>place.kind===check.kind && result.status!=='blocked' && !selected.has(place.id))
+        .toSorted((a,b)=>Number(Boolean(b.hours?.windows?.length || b.place.publishedConditions))-
+          Number(Boolean(a.hours?.windows?.length || a.place.publishedConditions))).slice(0,2);
+      const city = check.kind==='food' ? mealCity : check.kind==='stay' ? stayCity : day.city;
+      return {title:check.title,action:t(check.action,{size}),index,contacts,
+        context:t('{city} · день {day} · {date}',{city:t(city),day:formatNumber(index+1),date:date(day.date)})};
+    })
+  );
+  if (!plan.completeness && !checks.length) checks.push({title:'Ключевая остановка для формата',
+    action:t('Найти подходящий объект и подтвердить условия посещения на дату.')});
+  if (settings.theme==='family') checks.push({title:'Семейный формат',
+    action:t('Уточнить возрастные ограничения, длительность визитов для детей и семейные услуги у объектов.')});
+  if (settings.theme==='romantic') checks.push({title:'Романтический формат',
+    action:t('Сверить с организатором темп программы. У заведений уточнить условия обслуживания пары.')});
+  if (['hike','nature'].includes(settings.theme)) checks.push({title:'Условия пешей части',
+    action:t('Сверить с организатором состояние тропы, доступность на дату и запасной вариант.')});
+  if (settings.market==='zh') checks.push({title:'Китайскоязычное сопровождение',
+    action:t('Подтвердить сопровождающего и согласовать работу с переводчиком у объектов.')});
+  if (plan.days.some(day=>day.stops.some(stop=>stop.type==='travel'))) checks.push({title:'Транспорт',
+    action:t('Сверить с перевозчиком время выезда, место посадки и наличие транспорта для группы.')});
+  if (plan.completeness) checks.push({title:'Подтверждение брони',
+    action:t('Подтвердить у поставщиков наличие мест и запись на выбранные даты.')});
+  const summary = settings.demo
+    ? 'Учебные условия показывают механику расчёта. Для поездки нужны сведения от поставщиков.'
+    : plan.completeness ? 'Обязательные позиции помещаются в расписание.' : 'В расписании ещё есть незакрытые обязательные позиции.';
+  return '<section class="panel pilot-readiness" aria-labelledby="pilot-readiness-title"><div class="section-head"><div>'+
+    '<h2 id="pilot-readiness-title">'+safe(t('Готовность программы'))+'</h2><p class="caption">'+safe(t(summary))+'</p></div>'+
+    routeState(plan)+'</div><h3>'+safe(t('Что подтвердить для запуска'))+'</h3><ul class="pilot-checks">'+
+    checks.map(check=>'<li><div><strong>'+safe(t(check.title))+'</strong>'+
+      (check.context ? '<p class="caption">'+safe(check.context)+'</p>' : '')+'</div><div><p class="detail">'+safe(check.action)+'</p>'+
+      (check.contacts ? check.contacts.length ? '<div class="pilot-check-sources">'+check.contacts.map(({place})=>
+        '<button type="button" class="link-button" title="'+safe(t('Проверить условия в паспорте объекта'))+
+          '" data-place="'+safe(place.id)+'" data-place-day="'+check.index+'" data-source-text>'+safe(itemName(place))+'</button>').join('')+'</div>'
+        : '<p class="caption">'+safe(t('В каталоге на эту дату нет объекта без известного ограничения.'))+'</p>' : '')+
+      '</div></li>').join('')+'</ul></section>';
+}
+
+function officialRouteReview(evidence) {
+  const itinerary = evidence.map(({day,index,candidates})=>{
     const unresolved = candidates.filter(item=>item.result.status!=='ready').length;
     const rows = candidates.map(({place,result,hours})=>
-      '<li><div><button type="button" class="link-button" data-place="'+safe(place.id)+'" data-place-day="'+index+'">'+safe(place.name)+'</button>'+
-      '<p class="caption">'+safe(kindNames[place.kind])+' · '+safe(openingLabel(hours))+'</p>'+
-      (result.reasons.length ? '<p class="detail">'+safe(result.reasons[0])+'</p>' : '')+'</div>'+
-      chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</li>').join('');
-    return '<details'+(index===0?' open':'')+'><summary><span>День '+(index+1)+' · '+safe(day.city)+'<small>'+date(day.date)+'</small></span>'+
-      '<span class="caption">Требуют внимания '+unresolved+' из '+candidates.length+'</span></summary>'+
-      (rows ? '<ul class="rows official-route-rows">'+rows+'</ul>' : '<p class="detail">В каталоге пока нет объектов для этого дня.</p>')+'</details>';
+      '<li><div><button type="button" class="link-button" data-source-text data-place="'+safe(place.id)+'" data-place-day="'+index+'">'+safe(itemName(place))+'</button>'+
+      '<p class="caption">'+safe(t(kindNames[place.kind]))+' · '+safe(t(openingLabel(hours)))+'</p>'+
+      (result.reasons.length ? '<p class="detail"'+(place.publishedConditions?.clarify?.includes(result.reasons[0])?' lang="ru" data-source-text':'')+
+        '>'+safe(evidenceReason(result.reasons[0]))+'</p>' : '')+'</div>'+
+      chip(t(statusText[result.status]),result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</li>').join('');
+    const summary = t('{city} · {day}',{city:routeCity(day),day:t('День {day}',{day:formatNumber(index+1)})});
+    return '<details><summary><span>'+safe(summary)+'<small>'+date(day.date)+'</small></span>'+
+      '<span class="caption">'+safe(t('Требуют внимания {count} из {total}',{count:formatNumber(unresolved),total:formatNumber(candidates.length)}))+'</span></summary>'+
+      (rows ? '<ul class="rows official-route-rows">'+rows+'</ul>' : '<p class="detail">'+
+        safe(t('В каталоге пока нет объектов для этого дня.'))+'</p>')+'</details>';
   });
   return '<section class="panel official-route" aria-labelledby="official-route-title"><div class="section-head"><h2 id="official-route-title">Проверка условий на даты поездки</h2></div>'+
     '<p class="detail">Откройте объект, чтобы сверить опубликованный график, правила записи и вопросы для поставщика.</p>'+itinerary.join('')+'</section>';
@@ -445,8 +577,9 @@ function decisionJournal() {
 
 function routeWorkbench() {
   const plan = currentRoutePlan();
-  return routeVariants()+'<div class="route-review">'+routeAssistant()+routeDecision(plan)+'</div>'+
-    (plan.settings.demo ? '' : officialRouteReview(plan))+decisionJournal();
+  const evidence = routeEvidence(plan);
+  return pilotReadiness(plan,evidence)+routeVariants()+'<div class="route-review">'+routeDecision(plan)+routeAssistant()+'</div>'+
+    (plan.settings.demo ? '' : officialRouteReview(evidence))+decisionJournal();
 }
 
 function currentRoutePlan() {
@@ -456,7 +589,7 @@ function currentRoutePlan() {
 function routeView() {
   const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
   const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
-  return head(t('Проверка программы'))+itineraryTabs(true)+
+  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'))+itineraryTabs(true)+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
     '<label class="field">Направление<select name="direction">'+routeDirections.map(item=>selectOption(item.id,localizedDirection(item).title,direction.id)).join('')+
     '</select><small class="caption">'+safe(localizedDirection(direction).description)+'</small></label>'+
@@ -503,6 +636,7 @@ function downloadChinese(decisionId) {
 
 async function loadAlternatives() {
   const requested = review;
+  cancelRouteAnalysis();
   requested.loading = true;
   requested.error = '';
   repaintWorkbench();
@@ -519,21 +653,40 @@ async function loadAlternatives() {
   }
 }
 
+function cancelRouteAnalysis(announce=false) {
+  if (!activeRouteAnalysis) return false;
+  const request=activeRouteAnalysis;
+  activeRouteAnalysis=null;
+  clearInterval(request.timer);
+  request.controller.abort();
+  if (announce) request.review.analysis={status:'cancelled',message:'Запрос отменён.',suggestions:[]};
+  return true;
+}
+
 async function requestRouteAnalysis() {
   const requested = review;
-  if (requested.dirty || requested.aiLoading) return;
-  requested.aiLoading = true;
+  if (requested.dirty || activeRouteAnalysis) return;
+  const request={review:requested,controller:new AbortController(),startedAt:Date.now()};
+  activeRouteAnalysis=request;
   requested.analysis = null;
   repaintWorkbench();
+  $('[data-action="cancel-route-ai"]')?.focus({preventScroll:true});
+  request.timer=setInterval(()=>updateAiWait($('.route-assistant'),request.startedAt),1000);
   try {
-    requested.analysis = await api('route-ai',{settings:options,brief:requested.brief,programId:requested.program?.id});
+    const result=await api('route-ai',{settings:options,brief:requested.brief,programId:requested.program?.id},'POST',{signal:request.controller.signal});
+    if (activeRouteAnalysis===request) requested.analysis=result;
   } catch(error) {
-    requested.analysis = {status:'unavailable',message:error.message,suggestions:[]};
+    if (activeRouteAnalysis===request) requested.analysis={status:'unavailable',
+      message:error.status ? error.message : 'Запрос не завершился. Повторите попытку.',suggestions:[]};
   } finally {
-    requested.aiLoading = false;
-    if (requested===review) {
-      repaintWorkbench();
-      $('#route-ai-form button')?.focus({preventScroll:true});
+    if (activeRouteAnalysis===request) {
+      activeRouteAnalysis=null;
+      clearInterval(request.timer);
+      if (requested===review && page()==='route' && params().get('scope')==='pilot') {
+        const restoreFocus=document.activeElement===$('[data-action="cancel-route-ai"]');
+        repaintWorkbench();
+        if (restoreFocus) $('#route-ai-form [type=submit]')?.focus({preventScroll:true});
+      }
     }
   }
 }
@@ -739,6 +892,7 @@ function sources() {
 function render(scroll=false) {
   if (!data) return;
   const current = page();
+  if (current!=='route' || params().get('scope')!=='pilot') cancelRouteAnalysis(true);
   document.title = t(labels[current])+' — ТурКонтур';
   document.querySelectorAll('.top nav a').forEach(a=>{
     if (a.hash==='#'+current) a.setAttribute('aria-current','page');
@@ -869,6 +1023,10 @@ screen.addEventListener('click',event=>{
     $(selector)?.focus({preventScroll:true});
   }
   if (target.dataset.action==='retry-variants') void loadAlternatives();
+  if (target.dataset.action==='cancel-route-ai' && cancelRouteAnalysis(true)) {
+    repaintWorkbench();
+    $('#route-ai-form [type=submit]')?.focus({preventScroll:true});
+  }
   if (target.dataset.action==='live-conditions') {
     options={...options,demo:false};
     review=newReview();
@@ -912,11 +1070,12 @@ screen.addEventListener('input',event=>{
   }
   if (event.target.form?.id==='route-form') {
     review.dirty = !sameSettings(readOptions(event.target.form),options);
+    if (review.dirty && cancelRouteAnalysis(true)) repaintWorkbench();
     $('.route-dirty').hidden = !review.dirty;
     const approve = $('[data-action="approve-route"]');
     if (approve) approve.disabled = review.dirty || busy;
-    const compare = $('#route-ai-form button');
-    if (compare) compare.disabled = review.dirty || review.aiLoading;
+    const compare = $('#route-ai-form [type=submit]');
+    if (compare) compare.disabled = review.dirty || Boolean(activeRouteAnalysis);
     const download = $('.chinese-preview [data-action="download-chinese"]');
     if (download) download.disabled = review.dirty || review.loading;
   }
@@ -993,7 +1152,7 @@ try {
   [data, geodata] = await Promise.all([api('state'), api('map').catch(()=>({}))]);
   render();
   if (!data.refreshedAt) setTimeout(async()=>{
-    if (!busy && !dialog.open && !screen.contains(document.activeElement)) {
+    if (!busy && !dialog.open && !activeRouteAnalysis && !knowledge?.waiting && !screen.contains(document.activeElement)) {
       try { data = await api('state'); render(); } catch { /* last rendered state remains usable */ }
     }
   },8000);

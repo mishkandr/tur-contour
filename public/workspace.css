@@ -112,24 +112,27 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .itinerary-tabs a[aria-current=page]{box-shadow:inset 0 -2px var(--accent)}
 .composer-layout{display:grid;grid-template-columns:minmax(320px,.72fr) minmax(0,1fr);gap:16px;align-items:start}
 .composer-layout:has(.composer-result:empty){grid-template-columns:minmax(0,1fr)}
-.composer-layout:has(.composer-result:empty) .composer-inputs{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+.composer-layout:has(.composer-result:empty) .composer-inputs{width:min(100%,780px)}
 .composer-result:empty{display:none}
-.composer-inputs{min-width:0;display:grid;gap:16px}
-.composer-brief,.composer-form{display:grid;gap:11px}
-.composer-brief{background:#edf1e4;border-color:#d3ddcc}
-.composer-brief .field>span,.knowledge-feed label>span{font-size:1rem;font-weight:730}
-.composer-brief .button,#knowledge-form .button{justify-self:start}
-.composer-brief #brief-status:empty,.composer-form #draft-status:empty{display:none}
+.composer-inputs,.composer-result{min-width:0}
+.composer-form,.composer-parameters{display:grid;gap:11px}
+.composer-parameters{padding-top:8px}
+.composer-parameters>div:empty,.composer-form #draft-status:empty{display:none}
+.composer-request>span,.knowledge-feed label>span{font-size:1rem;font-weight:730}
+.composer-primary{display:flex;gap:6px 16px;flex-wrap:wrap;align-items:center;margin-block:3px 5px}
+.composer-primary button{min-height:44px;text-align:start;white-space:normal}
+.composer-primary .link-button:disabled{color:var(--muted);text-decoration:none;cursor:default}
+#knowledge-form .button{justify-self:start}
 .brief-examples{border-top:1px solid #d3ddcc;padding-top:7px}
 .brief-examples summary{cursor:pointer;color:#365b4d;font-size:.84rem;font-weight:640;padding:4px 0}
 .brief-examples ul{margin:4px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:5px;list-style:none}
 .brief-examples button{width:100%;min-height:38px;white-space:normal;padding:.4rem;font-size:.79rem}
 .composer-visit-deadline{margin-top:.5rem;max-width:12rem}
-.composer-brief textarea,.knowledge-feed textarea {
+.composer-request textarea,.knowledge-feed textarea {
   background:var(--white);color:var(--ink);border:1px solid #becbbd;border-radius:7px;padding:.7rem .8rem;resize:vertical;
   width:100%;min-height:98px;font-weight:450;font-size:.95rem;line-height:1.5
 }
-.composer-brief textarea::placeholder,.knowledge-feed textarea::placeholder{color:var(--muted)}
+.composer-request textarea::placeholder,.knowledge-feed textarea::placeholder{color:var(--muted)}
 .composer-fields{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:9px}
 .composer-form details{border-top:1px solid var(--line);padding-top:9px}
 .composer-form summary{cursor:pointer;font-size:.91rem;font-weight:680;padding:6px 0}
@@ -154,6 +157,9 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-map-scene{height:clamp(255px,31vw,395px);position:relative;isolation:isolate;background:#e7ebdf}
 #draft-map{position:absolute;inset:0;background:#e7ebdf}
 .composer-day{margin-top:15px}
+.composer-day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+.composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
+.composer-logistics li{margin:0}
 .composer-stops{margin:7px 0;padding:0;list-style:none}
 .composer-stops li{border-top:1px solid var(--line);padding:3px 0}
 .composer-stops li>button{background:transparent;border:1px solid transparent;color:var(--ink);min-height:44px;width:100%;display:grid;
@@ -163,9 +169,15 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-stops button time{font-variant-numeric:tabular-nums}
 .composer-stop-actions{padding:.3rem 8px .3rem max(9ch,84px);display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;font-size:.8rem}
 .composer-stop-actions>*{min-height:36px;display:inline-flex;align-items:center}
+.composer-stop-actions .composer-alternatives{flex-basis:100%;display:block}
+.composer-alternatives summary{cursor:pointer;padding-block:8px}
+.composer-alternatives ul{list-style:none;padding:0}
+.composer-alternatives button{min-height:40px;text-align:start}
+.composer-swap-status:empty{display:none}
 .composer-evidence{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
 .composer-evidence ul{padding-inline-start:1.2rem;font-size:.86rem;color:var(--muted)}
 .composer-evidence li+li{margin-top:5px}
+.composer-export{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
 .atlas-search{margin-top:12px}
 .atlas-inspect-fields{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;margin-top:.7rem}
 .atlas-inspect-fields label{font-size:.78rem}
@@ -193,6 +205,13 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .knowledge-references h3{font-size:.84rem}
 .knowledge-references li{display:flex;gap:7px 12px;justify-content:space-between;flex-wrap:wrap;font-size:.81rem}
 .knowledge-references li+li{margin-top:5px}
+.ai-wait{display:grid;gap:9px;border:1px solid var(--line);border-radius:8px;background:var(--light);padding:12px;margin-block-start:10px}
+.ai-wait-head{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap}
+.ai-wait-head p{margin:0;font-weight:650}
+.ai-wait-time{font-variant-numeric:tabular-nums;white-space:nowrap}
+.ai-wait progress{inline-size:100%;block-size:7px;accent-color:var(--accent)}
+.ai-wait button,.ai-request-result button{justify-self:start}
+.ai-request-result{display:grid;gap:8px;justify-items:start}
 
 @media(max-width:1010px){
   .top-inner{gap:16px}.top-region{display:none}.locale-picker{margin-left:auto}
@@ -201,7 +220,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 }
 @media(max-width:760px){
   .top-inner{display:grid;grid-template-columns:1fr auto;gap:5px 10px;padding:9px 16px 0;min-height:0}
-  .top nav{grid-row:2;grid-column:1/-1;overflow:auto;padding:0 0 5px;scrollbar-width:thin;width:100%}
+  .top nav{grid-row:2;grid-column:1/-1;flex-wrap:wrap;overflow:visible;padding:0 0 5px;width:100%}
   .top nav a{min-height:40px;padding:.35rem .64rem;font-size:.82rem}
   .locale-picker{grid-column:2;grid-row:1}
   .ops-board{grid-template-columns:minmax(0,1fr)}
@@ -214,9 +233,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .ops-metrics .ops-check{font-size:.89rem}
   .atlas-map-scene{min-height:360px}
   .atlas-inspector{scroll-margin-top:9px}
-  .composer-layout,.composer-layout:has(.composer-result:empty) .composer-inputs,.knowledge-layout{grid-template-columns:minmax(0,1fr)}
-  .composer-layout:not(:has(.composer-result:empty)) .composer-result{order:-1}
-  .knowledge-samples{order:-1}
+  .composer-layout,.knowledge-layout{grid-template-columns:minmax(0,1fr)}
   .knowledge-samples ul{grid-template-columns:1fr 1fr}
   .itinerary-tabs a{padding-inline:.6rem;font-size:.82rem;white-space:normal}
   .route-review{grid-template-areas:"program" "assistant"}
@@ -249,6 +266,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .composer-title{align-items:start;flex-direction:column}
   .composer-stops li>button{grid-template-columns:8ch minmax(0,1fr)}
   .composer-stops button small{grid-column:2}
+  .composer-stop-actions{padding-inline-start:8px}
   .knowledge-items{grid-template-columns:1fr;gap:.2rem}
   .knowledge-items dd+dt{margin-top:.5rem}
 }

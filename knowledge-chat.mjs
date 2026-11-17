@@ -421,11 +421,12 @@ async function statisticsAnswer(data,question,query,settings,scope,askStats,loca
 
 const supportedIntents = new Set(['statistics','sources','schedule','changes','impact','places','recommendations','route']);
 
-export async function classifyKnowledge(question,{model,baseUrl,fetchImpl=fetch}) {
+export async function classifyKnowledge(question,{model,baseUrl,signal,fetchImpl=fetch}) {
   const labels = [...supportedIntents,'unknown'];
+  const timeout=AbortSignal.timeout(36000);
   try {
     const response = await fetchImpl(new URL('/api/chat',baseUrl),{
-      method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(36000),
+      method:'POST',headers:{'Content-Type':'application/json'},signal:signal ? AbortSignal.any([signal,timeout]) : timeout,
       body:JSON.stringify({model,stream:false,think:false,keep_alive:'15m',
         options:{temperature:0,num_ctx:2048,num_predict:20},
         format:{type:'object',additionalProperties:false,required:['intent'],properties:{intent:{type:'string',enum:labels}}},

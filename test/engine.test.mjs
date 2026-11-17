@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { assess, defaultRoute, impacts, objectsFrom, planRoute, portfolioImpact, reviewRoute, routeAlternatives, routeSettings } from '../engine.mjs';
+import { assess, attributeChanges, defaultRoute, impacts, objectsFrom, planRoute, portfolioImpact, reviewRoute, routeAlternatives, routeSettings } from '../engine.mjs';
 
 const load = name => JSON.parse(readFileSync(new URL('../data/'+name+'.json',import.meta.url),'utf8'));
 const catalog = load('catalog');
@@ -9,6 +9,25 @@ const snapshot = load('snapshot');
 const baseline = load('demo-audit');
 const changedAudit = load('demo-audit-change');
 const state = {...snapshot,audit:baseline};
+
+test('a current programme issue is attributed only to the matching latest condition change',()=>{
+  const id = 'suzdal-kremlin';
+  const changed = {...state,audit:changedAudit};
+  const places = objectsFrom(catalog,changed);
+  const programs = impacts(catalog,changed,baseline,snapshot.wiki);
+  const reduction = {id,key:'capacity',demo:true,before:baseline.objects[id].capacity,after:changedAudit.objects[id].capacity};
+  const restored = {...reduction,before:reduction.after,after:reduction.before};
+  const loweredAgain = {...reduction,before:16};
+  const unrelated = {id,key:'minutes',demo:true,before:1,after:changedAudit.objects[id].minutes};
+  const [latest, older, repeated, other] = attributeChanges([reduction,restored,reduction,unrelated],places,programs);
+  assert.deepEqual(latest.affectedProgramIds,['group-cn']);
+  assert.equal(older.affectedProgramIds,undefined);
+  assert.equal(repeated.affectedProgramIds,undefined);
+  assert.deepEqual(other.affectedProgramIds,[]);
+  assert.deepEqual(attributeChanges([loweredAgain],places,programs)[0].affectedProgramIds,[]);
+  const current = attributeChanges([restored,reduction],objectsFrom(catalog,state),impacts(catalog,state,baseline,snapshot.wiki));
+  assert.deepEqual(current[0].affectedProgramIds,[]);
+});
 
 test('the change affects the larger group and measures all scenarios on the same portfolio',()=>{
   const changed = {...state,audit:changedAudit};

@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import {
   region, metricInfo, normalizeStatistics, statSummary, number, routeSettings, defaultRoute, trackedRoutes, objectsFrom,
-  planRoute, routeAlternatives, portfolioImpact, impacts, recommendations, fieldNames, assess,
+  planRoute, routeAlternatives, portfolioImpact, impacts, attributeChanges, recommendations, fieldNames, assess,
 } from './engine.mjs';
 import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
@@ -61,16 +61,25 @@ function serial(action) {
   return result;
 }
 
-async function withModel(action, fallback) {
+async function withModel(action, fallback, signal) {
+  if (signal?.aborted) return fallback;
   if (modelBusy) {
     if (waitingModel) return fallback;
     const acquired = await new Promise(resolve=>{
-      const timer=setTimeout(()=>{waitingModel=null;resolve(false);},5000);
-      waitingModel=()=>{clearTimeout(timer);waitingModel=null;resolve(true);};
+      const finish=acquired=>{
+        clearTimeout(timer);
+        signal?.removeEventListener('abort',cancel);
+        waitingModel=null;
+        resolve(acquired);
+      };
+      const cancel=()=>finish(false);
+      const timer=setTimeout(cancel,5000);
+      waitingModel=()=>finish(true);
+      signal?.addEventListener('abort',cancel,{once:true});
     });
     if (!acquired) return fallback;
   } else modelBusy = true;
-  try { return await action(); }
+  try { return signal?.aborted ? fallback : await action(); }
   finally {
     if (waitingModel) waitingModel();
     else modelBusy = false;
@@ -236,7 +245,7 @@ function dashboard(snapshot) {
   const places = objectsFrom(catalog,snapshot);
   const affected = impacts(catalog,snapshot,baseline,initial.wiki);
   return {
-    region, places, affected, changes:snapshot.changes, sources:snapshot.sources,
+    region, places, affected, changes:attributeChanges(snapshot.changes,places,affected), sources:snapshot.sources,
     refreshedAt:snapshot.refreshedAt, auditVersion:snapshot.audit.version, auditCheckedAt:snapshot.auditCheckedAt,
     publishedConditions: {
       objectCount:Object.keys(publishedConditions).length,
@@ -307,7 +316,7 @@ async function approve(input) {
   });
 }
 
-async function adviseOnRoutes(input) {
+async function adviseOnRoutes(input,signal) {
   const settings = routeSettings(input.settings ?? {});
   const snapshot = state;
   const alternatives = availableOptions(snapshot,settings);
@@ -320,9 +329,9 @@ async function adviseOnRoutes(input) {
     impacts(catalog,snapshot,baseline,initial.wiki).find(item => item.id === input.programId);
   const issue = program && JSON.stringify(program.settings) === JSON.stringify(settings)
     ? program.issues.map(item => item.name + '. ' + item.reasons.join(' ')).join(' ') : '';
-  return withModel(()=>suggestRoute({settings,alternatives,issue,brief},{model:ollamaModel,baseUrl:ollamaUrl}),{
+  return withModel(()=>suggestRoute({settings,alternatives,issue,brief},{model:ollamaModel,baseUrl:ollamaUrl,signal}),{
     status:'unavailable',model:ollamaModel,suggestions:[],message:'Модель обрабатывает другой запрос. Повторите позже или сравните варианты вручную.',
-  });
+  },signal);
 }
 
 function fallbackQuery(question) {
@@ -360,12 +369,13 @@ function unsupportedStatistics(question) {
   return null;
 }
 
-async function interpret(question) {
+async function interpret(question,signal) {
   const fallback = fallbackQuery(question);
   if (process.env.TUR_NO_LLM === '1') return {...fallback, mode:'Базовый разбор'};
+  const timeout=AbortSignal.timeout(55000);
   try {
     const data = await fetchJson(ollamaUrl+'/api/chat',{
-      method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(55000),
+      method:'POST',headers:{'Content-Type':'application/json'},signal:signal ? AbortSignal.any([signal,timeout]) : timeout,
       body:JSON.stringify({
         model:ollamaModel,stream:false,think:false,keep_alive:'15m',options:{temperature:0,num_predict:130,num_ctx:4096},
         messages:[
@@ -390,10 +400,11 @@ async function interpret(question) {
   }
 }
 
-async function answer(question, settings, trustedPlan = null) {
+async function answer(question, settings, trustedPlan = null, signal) {
   const unsupported = !trustedPlan && unsupportedStatistics(question);
   if (unsupported) return {plan:{intent:'clarify',mode:'Проверка доступных показателей'},title:'Охват данных',text:unsupported};
-  const plan = trustedPlan ?? await withModel(()=>interpret(question),{...fallbackQuery(question),mode:'Базовый разбор · модель занята'});
+  const plan = trustedPlan ?? await withModel(()=>interpret(question,signal),{...fallbackQuery(question),mode:'Базовый разбор · модель занята'},signal);
+  signal?.throwIfAborted();
   if (plan.intent === 'statistics') {
     const snapshot = await refresh(plan.metric);
     const series = snapshot.stats[plan.metric];
@@ -439,8 +450,17 @@ async function answer(question, settings, trustedPlan = null) {
 }
 
 function respond(response,status,data) {
+  if (response.destroyed) return;
   response.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
   response.end(JSON.stringify(data));
+}
+
+function clientSignal(response) {
+  const controller=new AbortController();
+  const disconnect=()=>{ if (!response.writableFinished) controller.abort(); };
+  if (response.destroyed) disconnect();
+  else response.once?.('close',disconnect);
+  return controller.signal;
 }
 
 async function readBody(request) {
@@ -491,14 +511,17 @@ export async function handleRequest(request,response) {
     if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
     if (request.method==='POST' && path==='/api/draft') return respond(response,200,await draftItinerary(await readBody(request)));
     if (request.method==='POST' && path==='/api/knowledge') {
+      const signal=clientSignal(response);
       const input=await readBody(request);
       const question=typeof input.question==='string'?input.question.trim():'';
       if (question.length<3 || question.length>600) return respond(response,400,{error:'Задайте вопрос в пределах 600 символов.'});
       return respond(response,200,await answerKnowledge({question,locale:input.locale,dashboard:dashboard(state),
-        settings:input.settings,scope:input.regionId},{askStats:answer,detectCities,lookupDraft:draftItinerary,getRegionalStats:regionalStatistics.get,
-        classify:text=>process.env.TUR_NO_LLM==='1' ? null : withModel(()=>classifyKnowledge(text,{model:ollamaModel,baseUrl:ollamaUrl}),null)}));
+        settings:input.settings,scope:input.regionId},{askStats:(text,settings,plan)=>answer(text,settings,plan,signal),
+        detectCities,lookupDraft:draftItinerary,getRegionalStats:regionalStatistics.get,
+        classify:text=>process.env.TUR_NO_LLM==='1' ? null : withModel(()=>classifyKnowledge(text,{model:ollamaModel,baseUrl:ollamaUrl,signal}),null,signal)}));
     }
     if (request.method==='POST' && path==='/api/brief') {
+      const signal=clientSignal(response);
       const input = await readBody(request);
       const brief = typeof input.text==='string' ? input.text.trim() : '';
       if (brief.length<3 || brief.length>600) return respond(response,400,{error:'Опишите задачу в пределах 600 символов.'});
@@ -506,7 +529,7 @@ export async function handleRequest(request,response) {
       const referenceDate = new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
       const fast = {parsed:parseBrief(brief,referenceDate),mode:'rules'};
       const allowed = input.mode==='ai' && process.env.TUR_NO_LLM!=='1';
-      const result = allowed ? await withModel(()=>interpretBrief(brief,{baseUrl:ollamaUrl,model:briefModel,referenceDate}),{...fast,mode:'busy'}) : fast;
+      const result = allowed ? await withModel(()=>interpretBrief(brief,{baseUrl:ollamaUrl,model:briefModel,referenceDate,signal}),{...fast,mode:'busy'},signal) : fast;
       return respond(response,200,{...result,cities});
     }
     if (request.method==='GET' && path==='/api/demo-offers-source') return respond(response,200,demoOffers);
@@ -527,7 +550,10 @@ export async function handleRequest(request,response) {
       const settings = routeSettings(await readBody(request));
       return respond(response,200,{options:availableOptions(state,settings)});
     }
-    if (request.method==='POST' && path==='/api/route-ai') return respond(response,200,await adviseOnRoutes(await readBody(request)));
+    if (request.method==='POST' && path==='/api/route-ai') {
+      const signal=clientSignal(response);
+      return respond(response,200,await adviseOnRoutes(await readBody(request),signal));
+    }
     if (request.method==='POST' && path==='/api/approve') return respond(response,200,await approve(await readBody(request)));
     if (request.method==='POST' && path==='/api/scenario') {
       const settings = routeSettings(await readBody(request));
@@ -565,6 +591,7 @@ export async function handleRequest(request,response) {
     }
     return respond(response,404,{error:'Страница недоступна'});
   } catch (error) {
+    if (response.destroyed) return;
     console.error(path,error.message);
     return respond(response,error.status || 500,{error:error.status ? error.message : 'Действие не выполнено. Попробуйте снова.'});
   }

@@ -50,8 +50,8 @@ nav a[aria-current="page"]{color:#134333;background:#e6ede4}
 #tour-map .leaflet-control-scale-line{border-color:#4f685b;background:#f7faf4db;color:#243b31;font-size:10px}
 #tour-map .leaflet-control-zoom{border:1px solid #b8c9bc;border-radius:9px;box-shadow:0 4px 14px #15382e1a;overflow:hidden}
 #tour-map .leaflet-control-zoom a{color:#1b5141}
-.atlas-map-tools{position:absolute;z-index:600;top:13px;left:13px;display:flex;align-items:center;gap:7px}
-.atlas-base,.atlas-icon{border:1px solid #b9cbbd;background:#fcfffaf5;border-radius:9px;box-shadow:0 3px 14px #15382e18}
+.atlas-map-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.atlas-base,.atlas-icon{border:1px solid #b9cbbd;background:#fcfffaf5;border-radius:8px}
 .atlas-base{display:flex;padding:3px}
 .atlas-icon{min-width:34px;min-height:34px;color:#21533f;font-size:1.09rem;font-weight:660;line-height:1}
 .atlas-icon:hover{background:#e4efe4}

@@ -1,4 +1,4 @@
-import { addLocaleMessages, formatDate, getLocale, t } from '/locale.js';
+import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/locale.js';
 
 addLocaleMessages([
   ['Вопрос по данным','Ask the data','询问数据'],
@@ -7,6 +7,12 @@ addLocaleMessages([
   ['Например: работает ли Суздальский кремль 21 ноября для группы из 18 человек?','For example: is the Suzdal Kremlin open on 21 November for a group of 18?','例如：11月21日苏兹达尔克里姆林宫可接待18人的团队吗？'],
   ['Спросить','Ask','提问'],
   ['Проверяем источники…','Checking sources…','正在核查数据源…'],
+  ['Отменить запрос','Cancel request','取消请求'],
+  ['Повторить запрос','Retry request','重试请求'],
+  ['Запрос отменён.','Request canceled.','请求已取消。'],
+  ['Запрос не завершился. Повторите попытку.','The request did not complete. Please retry.','请求未完成，请重试。'],
+  ['Ответ готов.','Answer ready.','回答已就绪。'],
+  ['Прошло {seconds} с','{seconds}s elapsed','已用 {seconds} 秒'],
   ['Источники ответа','Sources for this answer','答案来源'],
   ['ИИ распознал тему','AI identified the topic','人工智能识别了主题'],
   ['Условия для группы','Group visit conditions','团队参观条件'],
@@ -30,6 +36,24 @@ const labelMap = [
 const thread=[];
 let draft='';
 
+function elapsedLabel(startedAt) {
+  return t('Прошло {seconds} с',{seconds:formatNumber(Math.floor(Math.max(0,Date.now()-startedAt)/1000))});
+}
+
+export function aiWaitingMarkup(label, startedAt, cancelAction) {
+  const statusId=safe(cancelAction)+'-status';
+  return '<div class="ai-wait"><div class="ai-wait-head"><p class="detail" id="'+statusId+'" role="status">'+tr(label)+'</p>'+
+    '<span class="caption ai-wait-time" data-ai-elapsed aria-hidden="true">'+safe(elapsedLabel(startedAt))+'</span></div>'+
+    '<progress aria-labelledby="'+statusId+'"></progress><button type="button" class="button-quiet" data-action="'+safe(cancelAction)+
+    '" aria-describedby="'+statusId+'">'+
+    tr('Отменить запрос')+'</button></div>';
+}
+
+export function updateAiWait(container, startedAt) {
+  const elapsed=container?.querySelector('[data-ai-elapsed]');
+  if (elapsed) elapsed.textContent=elapsedLabel(startedAt);
+}
+
 function external(url,label,css='') {
   const href = safeUrl(url);
   if (!href) return safe(label);
@@ -37,7 +61,6 @@ function external(url,label,css='') {
 }
 
 function responseMarkup(answer) {
-  if (!answer) return '<p class="caption" role="status">'+tr('Проверяем источники…')+'</p>';
   const items = Array.isArray(answer.items) ? answer.items : [];
   const sources = Array.isArray(answer.sources) ? answer.sources : [];
   const actions = Array.isArray(answer.actions) ? answer.actions : [];
@@ -58,38 +81,94 @@ export function mountKnowledge(container, api, settings, regionId) {
   const find = selector=>container.querySelector(selector);
   const lang=()=>({ru:1,en:2,zh:3})[getLocale()];
   let active=true;
+  let pending;
   container.innerHTML='<header class="page-head"><h1>'+tr('Вопрос по данным')+'</h1></header><div class="knowledge-layout">'+
-    '<section class="panel knowledge-feed" aria-label="'+tr('Вопрос по данным')+'"><div id="knowledge-thread" aria-live="polite"></div>'+
+    '<section class="panel knowledge-feed" aria-label="'+tr('Вопрос по данным')+'"><div id="knowledge-thread"></div>'+
+    '<p id="knowledge-announcement" class="sr-only" role="status"></p>'+
     '<form id="knowledge-form"><label class="field"><span>'+tr('Вопрос ИИ')+'</span><textarea name="question" required minlength="3" maxlength="600" rows="3" placeholder="'+
     tr('Например: работает ли Суздальский кремль 21 ноября для группы из 18 человек?')+'">'+safe(draft)+'</textarea></label>'+
     '<button class="button" type="submit">'+tr('Спросить')+'</button></form></section><aside class="panel knowledge-samples"><h2>'+
     tr('Задайте вопрос по данным')+'</h2><ul>'+labelMap.map((entry,i)=>'<li><button type="button" class="button-quiet" data-knowledge-example="'+i+'">'+
     tr(entry[0])+'</button></li>').join('')+'</ul></aside></div>';
   const form=find('#knowledge-form');
+  const history=find('#knowledge-thread');
+  const submit=form.querySelector('[type=submit]');
+  function paintEntry(entry,index) {
+    if (entry.answer) return responseMarkup(entry.answer);
+    if (pending?.entry===entry) return aiWaitingMarkup('Проверяем источники…',pending.startedAt,'cancel-knowledge');
+    const label = entry.error ? t(entry.error) : t('Запрос отменён.');
+    return '<div class="ai-request-result"><p class="'+(entry.error?'callout':'caption')+'">'+safe(label)+'</p>'+
+      '<button type="button" class="button-quiet" data-action="retry-knowledge" data-entry="'+index+'"'+(pending?' disabled':'')+'>'+
+      tr('Повторить запрос')+'</button></div>';
+  }
   function paint(move=false) {
     if (!active) return;
-    find('#knowledge-thread').innerHTML=thread.map(entry=>'<article class="knowledge-message"><p class="knowledge-question" data-source-text>'+safe(entry.question)+
-      '</p>'+responseMarkup(entry.answer)+'</article>').join('');
-    const pending=thread.some(entry=>!entry.answer);
-    form.querySelector('button').disabled=pending;
-    form.querySelector('button').textContent=t(pending?'Проверяем источники…':'Спросить');
-    if (move) find('.knowledge-message:last-child')?.scrollIntoView({block:'nearest'});
+    history.innerHTML=thread.map((entry,index)=>'<article class="knowledge-message"><p class="knowledge-question" data-source-text>'+safe(entry.question)+
+      '</p>'+paintEntry(entry,index)+'</article>').join('');
+    submit.disabled=Boolean(pending);
+    if (move) find('[data-action="cancel-knowledge"]')?.scrollIntoView({block:'nearest'});
   }
-  async function send(event) {
+  function focusRetry(entry) {
+    find('[data-action="retry-knowledge"][data-entry="'+thread.indexOf(entry)+'"]')?.focus({preventScroll:true});
+  }
+  function cancel(announce=false) {
+    if (!pending) return;
+    const request=pending;
+    pending=null;
+    clearInterval(request.timer);
+    request.controller.abort();
+    if (!announce) return;
+    paint();
+    find('#knowledge-announcement').textContent=t('Запрос отменён.');
+    focusRetry(request.entry);
+  }
+  async function ask(entry) {
+    if (pending) return;
+    const request={entry,controller:new AbortController(),startedAt:Date.now()};
+    pending=request;
+    entry.error='';
+    find('#knowledge-announcement').textContent='';
+    paint(true);
+    find('[data-action="cancel-knowledge"]').focus({preventScroll:true});
+    request.timer=setInterval(()=>updateAiWait(history,request.startedAt),1000);
+    try {
+      const answer=await api('knowledge',{...entry.query,locale:getLocale()},'POST',{signal:request.controller.signal});
+      if (pending===request) entry.answer=answer;
+    } catch(error) {
+      if (pending===request) entry.error=error.status ? error.message : 'Запрос не завершился. Повторите попытку.';
+    } finally {
+      if (pending===request) {
+        const restoreFocus=document.activeElement===find('[data-action="cancel-knowledge"]');
+        pending=null;
+        clearInterval(request.timer);
+        paint();
+        find('#knowledge-announcement').textContent=t(entry.error || 'Ответ готов.');
+        if (restoreFocus) {
+          if (entry.error) focusRetry(entry);
+          else form.elements.question.focus({preventScroll:true});
+        }
+      }
+    }
+  }
+  function send(event) {
     event.preventDefault();
     const question=form.elements.question.value.trim();
-    if (question.length<3 || thread.some(entry=>!entry.answer)) return;
-    const entry={question,answer:null};
+    if (question.length<3 || pending) return;
+    const entry={question,query:{question,settings,regionId},answer:null};
     thread.push(entry);
     if (thread.length>16) thread.shift();
     draft='';
     form.elements.question.value='';
-    paint(true);
-    try {entry.answer=await api('knowledge',{question,locale:getLocale(),settings,regionId});}
-    catch(error) {entry.answer={title:t('Вопрос по данным'),text:t(error.message)};}
-    paint(true);
+    void ask(entry);
   }
-  function samples(event) {
+  function actions(event) {
+    const control=event.target.closest('[data-action="cancel-knowledge"],[data-action="retry-knowledge"]');
+    if (control?.dataset.action==='cancel-knowledge') { cancel(true); return; }
+    if (control?.dataset.action==='retry-knowledge') {
+      const entry=thread[Number(control.dataset.entry)];
+      if (entry && !entry.answer) void ask(entry);
+      return;
+    }
     const button=event.target.closest('[data-knowledge-example]');
     if (!button) return;
     const index=Number(button.dataset.knowledgeExample);
@@ -101,7 +180,16 @@ export function mountKnowledge(container, api, settings, regionId) {
   const input=()=>{draft=form.elements.question.value;};
   form.addEventListener('submit',send);
   form.addEventListener('input',input);
-  container.addEventListener('click',samples);
+  container.addEventListener('click',actions);
   paint();
-  return {destroy(){active=false;container.removeEventListener('click',samples);}};
+  return {
+    get waiting(){ return Boolean(pending); },
+    destroy(){
+      active=false;
+      cancel();
+      form.removeEventListener('submit',send);
+      form.removeEventListener('input',input);
+      container.removeEventListener('click',actions);
+    },
+  };
 }

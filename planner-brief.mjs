@@ -17,10 +17,15 @@ const exclusions = {
   craft:/без\s+(?:ремес|мастер-класс)|(?:no|without|skip)\s+(?:crafts?|workshops?)|不要手工/iu,
   pilgrimage:/без\s+(?:храм|монастыр)|(?:no|without|skip)\s+(?:churches|monasteries|pilgrimage)|不参观修道院/iu,
 };
-const digitWords = { два:2,двух:2,три:3,трех:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9,
-  десять:10,двенадцать:12,пятнадцать:15,восемнадцать:18,двадцать:20,two:2,three:3,ten:10,twelve:12,eighteen:18,
-  二:2,两:2,三:3,十:10,十二:12,十八:18,二十:20 };
+const digitWords = { один:1,одного:1,два:2,двух:2,три:3,трех:3,четыре:4,четырех:4,пять:5,пяти:5,шесть:6,шести:6,семь:7,
+  восемь:8,девять:9,десять:10,двенадцать:12,пятнадцать:15,восемнадцать:18,двадцать:20,
+  one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,twelve:12,eighteen:18,
+  一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9,十:10,十二:12,十八:18,二十:20 };
 const integer = text=> Number(text) || digitWords[text];
+const dayWords=Object.keys(digitWords).filter(word=>/^[a-zа-я]+$/u.test(word)).join('|');
+const chineseDayWords=Object.keys(digitWords).filter(word=>/^\p{Script=Han}+$/u.test(word)).sort((a,b)=>b.length-a.length).join('|');
+const duration=new RegExp('(?<![\\p{L}\\d])(\\d{1,3}|'+dayWords+')\\s*(?:-?\\s*(?:дн|день|дня|дней)|days?)(?!\\p{L})|'+
+  '(?<!\\d)(\\d{1,3}|'+chineseDayWords+')\\s*天','u');
 const enumValue = (value,expected)=>expected.includes(value) ? value : null;
 const sameFold = text=>String(text).normalize('NFKC').toLocaleLowerCase().replaceAll('ё','е');
 const supportedDate = value=>typeof value==='string' && /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
@@ -50,7 +55,8 @@ function dateIn(text, referenceDate) {
 
 export function parseBrief(brief, referenceDate = new Date().toISOString().slice(0,10)) {
   const text = sameFold(brief);
-  const days = text.match(/(\d{1,2}|дв[ау]|тр[ие]|two|three|[两二三])\s*(?:-?\s*(?:дн|день|дня|дней)|days?(?![a-z])|天)/iu);
+  const days = text.match(duration);
+  const requestedDays = days ? integer(days[1] ?? days[2]) : null;
   const size = text.match(/(\d{1,3}|двенадцать|восемнадцать|десять|двадцать|twelve|eighteen|ten|十二|十八|二十|十)\s*(?:чел(?:овек(?:а)?)?\.?|участник\p{L}*|гост\p{L}*|people|persons?|guests?|人)/iu);
   const excludedInterests = Object.entries(exclusions).filter(([,pattern])=>pattern.test(text)).map(([theme])=>theme);
   const interests = Object.entries(themePatterns).filter(([theme,pattern])=>pattern.test(text) && !excludedInterests.includes(theme)).map(([theme])=>theme);
@@ -62,9 +68,9 @@ export function parseBrief(brief, referenceDate = new Date().toISOString().slice
   const access = /безбарьер|коляск|маломобиль|wheelchair|step-free|无障碍|轮椅/u.test(text) || null;
   const visitDeadline = text.match(/(?:только\s+)?(?:до|before|until)\s+((?:09|1[0-8]):[0-5]\d)(?!\d)/iu)?.[1] ??
     (/до обеда|к обеду|до полудня|before noon|before lunch|中午前|午餐前/u.test(text) ? '12:00' : null);
-  const required = [...new Set([...String(brief).matchAll(/[«“"]([^»”"\n]{2,90})[»”"]/gu)].map(match=>match[1].trim()))].slice(0,5);
-  return {date:dateIn(text,referenceDate),days:[2,3].includes(integer(days?.[1])) ? integer(days[1]) : null,
-    requestedDays:days ? integer(days[1]) : null, size:integer(size?.[1])>0 && integer(size?.[1])<=100 ? integer(size[1]) : null,
+  const required = [...new Set([...String(brief).matchAll(/[«“"]([^»”"\n]{2,90})[»”"]/gu)].map(match=>match[1].trim()))];
+  return {date:dateIn(text,referenceDate),days:[2,3].includes(requestedDays) ? requestedDays : null,
+    requestedDays, size:integer(size?.[1])>0 && integer(size?.[1])<=100 ? integer(size[1]) : null,
     theme:interests[0] ?? null, interests, excludedInterests, pace, transport, market, access, required, visitDeadline};
 }
 
@@ -88,15 +94,16 @@ const merge = (direct, inferred, original) => {
     transport:direct.transport ?? enumValue(inferred.transport,['walking','mixed','car']),
     market:direct.market ?? enumValue(inferred.market,['ru','zh']),
     access:direct.access ?? (inferred.access===true ? true : null),
-    required:[...new Set([...direct.required,...literal])].slice(0,5)};
+    required:[...new Set([...direct.required,...literal])]};
 };
 
 export async function interpretBrief(brief, {baseUrl,model,signal,referenceDate}={}) {
   const direct = parseBrief(brief,referenceDate);
   if (!baseUrl || !model) return {parsed:direct,mode:'rules'};
+  const timeout=AbortSignal.timeout(105000);
   try {
     const response = await fetch(baseUrl+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-      signal:signal ?? AbortSignal.timeout(105000),body:JSON.stringify({
+      signal:signal ? AbortSignal.any([signal,timeout]) : timeout,body:JSON.stringify({
         model,stream:false,think:false,keep_alive:'2m',format:parseSchema,
         options:{temperature:0,num_ctx:1536,num_predict:92,num_thread:3},
         messages:[

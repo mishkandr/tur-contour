@@ -1,13 +1,46 @@
 import { createRouteMap } from '/map.js';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/locale.js';
+import { aiWaitingMarkup, updateAiWait } from '/knowledge.js';
 
 addLocaleMessages([
   ['Конструктор маршрутов','Itinerary builder','行程编制'],
   ['По России','Across Russia','俄罗斯全境'],
   ['Владимирская область · проверка','Vladimir Oblast · verification','弗拉基米尔州 · 核查'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
-  ['Разобрать запрос с ИИ','Extract requirements with AI','用人工智能提取需求'],
-  ['Разбираем запрос…','Reading the request…','正在解析需求…'],
+  ['Собрать маршрут','Build itinerary','编制行程'],
+  ['Пересчитать маршрут','Rebuild itinerary','重新计算行程'],
+  ['Уточнить условия с ИИ','Refine requirements with AI','用人工智能细化条件'],
+  ['Ввести параметры вручную','Enter details manually','手动输入参数'],
+  ['Изменить параметры','Edit requirements','编辑参数'],
+  ['Программа по дням','Day-by-day itinerary','每日行程'],
+  ['Параметры по умолчанию: {date}, {days} дня, {size} чел.','Defaults: {date}, {days} days, {size} people.','默认参数：{date}，{days} 天，{size} 人。'],
+  ['Дата начала · {date} · {days} дня · {size} чел.','Starts {date} · {days} days · {size} people','{date} 出发 · {days} 天 · {size} 人'],
+  ['Смотрим даты, группу и города в запросе…','Reading dates, group size and cities…','正在读取日期、团队人数与城市…'],
+  ['ИИ уточняет условия…','AI is refining the requirements…','人工智能正在细化条件…'],
+  ['Подбираем объекты и составляем программу…','Finding places and building the itinerary…','正在查找地点并安排行程…'],
+  ['Запрос отменён. Введённые параметры сохранены.','Request cancelled. Your input is still here.','请求已取消，已输入条件保留。'],
+  ['Укажите до трёх городов для одного маршрута.','Enter no more than three cities for one itinerary.','一个行程最多可选三个城市。'],
+  ['Измените запрос или откройте параметры и выберите город.','Edit your request or open the form and pick a city.','请修改需求，或打开参数并选择城市。'],
+  ['Программа для проверки','Itinerary for review','待核实行程'],
+  ['Перед выездом','Before departure','出发前'],
+  ['Карта и источники','Map and sources','地图和数据源'],
+  ['Обязательная остановка','Required stop','必到地点'],
+  ['Варианты замены','Replacement candidates','替换候选'],
+  ['Заменить на {place}','Replace with {place}','替换为 {place}'],
+  ['Замену не удалось поставить на то же время. Программа сохранена.','The replacement no longer fits the same time slot. Your itinerary is unchanged.','替换地点不再适合该时段，原行程已保留。'],
+  ['Часть прежних замен больше не подходит к новым параметрам. Проверьте расписание.','Some previous replacements no longer fit the new requirements. Review the schedule.','部分先前的替换不再符合新参数，请核查日程。'],
+  ['Проверяем замену для этого времени…','Checking the replacement for this time slot…','正在核验替换地点是否适合此时段…'],
+  ['Найдено несколько совпадений: {places}. Уточните название и город.','Several matches: {places}. Specify the place and city.','找到多个匹配地点：{places}。请注明地点与城市。'],
+  ['Объект вне зоны выбранного транспорта','Place lies outside the selected transport radius','地点超出所选交通方式的范围'],
+  ['Точка исключена вручную','Place was manually excluded','地点已手动排除'],
+  ['В расписании нет подходящего времени','No suitable time slot in the itinerary','行程中无合适时段'],
+  ['Обед · подтвердить для группы','Lunch · confirm for the group','午餐 · 待确认团队安排'],
+  ['Обед в том же месте · подтвердить для группы','Lunch at the same venue · confirm for the group','在同一地点用午餐 · 待确认团队安排'],
+  ['Ночёвка · подтвердить для группы','Overnight stay · confirm for the group','住宿 · 待确认团队安排'],
+  ['Та же гостиница · подтвердить вторую ночь','Same hotel · confirm the additional night','同一家酒店 · 待确认续住'],
+  ['Переезды по городу · около {minutes} мин','Local transfers · around {minutes} min','市内交通 · 约 {minutes} 分钟'],
+  ['Переезд к точке · около {minutes} мин, {distance} км по прямой','Transfer to the stop · about {minutes} min, {distance} km straight-line','前往此站 · 约 {minutes} 分钟，直线距离 {distance} 公里'],
+  ['Входные данные изменились. Запустите расчёт снова.','Inputs changed. Start a new calculation.','条件已更改，请重新计算。'],
   ['Например: Казань на три дня, 12 человек, музеи и неспешные прогулки','For example: three days in Kazan, 12 people, museums and relaxed walks','例如：喀山三日，12人，博物馆与轻松步行'],
   ['Параметры маршрута','Itinerary requirements','行程参数'],
   ['Город начала','Starting city','起点城市'],
@@ -34,16 +67,12 @@ addLocaleMessages([
   ['Обычный','Regular','常规'],
   ['Насыщенный','Packed','紧凑'],
   ['Обязательные объекты','Required places','必到地点'],
+  ['Можно выбрать до 10 обязательных объектов. Уберите лишние из списка.','You can choose up to ten required places. Remove some from the list.','最多可选十个必到地点，请从列表中移除多余地点。'],
   ['Названия через запятую','Names separated by commas','用逗号分隔名称'],
   ['Китайскоязычное сопровождение','Chinese-language support','中文服务'],
   ['Безбарьерный доступ','Step-free access','无障碍通行'],
-  ['Собрать черновик','Build draft','生成草案'],
-  ['Подбираем точки…','Finding places…','正在查找地点…'],
-  ['Требования извлечены. Проверьте поля.','Requirements extracted. Review the fields.','已提取需求，请核对字段。'],
-  ['Поля заполнены. ИИ ещё уточняет запрос.','Fields filled. AI is still refining the request.','字段已填写，人工智能仍在细化需求。'],
   ['ИИ разобрал запрос. Проверьте поля.','AI interpreted the request. Review the fields.','人工智能已解析需求，请核对字段。'],
   ['Параметры заполнены автоматически. ИИ сейчас недоступен.','Fields filled automatically. AI is currently unavailable.','已自动填写参数，人工智能暂不可用。'],
-  ['Найдено несколько городов. Укажите начальный город.','Several cities found. Choose the starting city.','找到多个城市，请选择起点城市。'],
   ['Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.','Your request specifies {days} days. Choose a two- or three-day draft.','需求为 {days} 天，您可选择生成两天或三天行程。'],
   ['Типы посещений','Visit types','参观类型'],
   ['История и архитектура','History and architecture','历史与建筑'],
@@ -141,21 +170,21 @@ const examples = [
 const state = {
   brief:'',lastAppliedBrief:'',query:'',cities:[],selectedCity:null,extraCities:[], settings:{date:currentDate(),days:2,size:8,interests:[],transport:'mixed',
     pace:'normal',market:'ru',access:false,required:[],excludedInterests:[],visitDeadline:null}, result:null,mapDay:'all',point:null,dirty:false,
-  revision:0,note:'',noteValues:null, parsePending:false, findVersion:0, buildPending:false,pointDay:null,
-  omitted:[],
+  revision:0,note:'',noteValues:null,findVersion:0,pointDay:null,unsupportedDays:null,
+  omitted:[],replacements:[],overrideFields:[],
 };
 const cacheKey='tur-contour.current-draft.v1';
 try {
   const saved=JSON.parse(sessionStorage.getItem(cacheKey)??'null');
   if (saved?.settings && saved?.result?.plan?.days?.length) {
-    Object.assign(state,saved,{parsePending:false,buildPending:false});
+    Object.assign(state,saved);
   }
 } catch { /* A disabled or full session store leaves the current page usable. */ }
 
 function retainDraft() {
   if (!state.result) return;
-  const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted} = state;
-  try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted}));}
+  const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,unsupportedDays,replacements,overrideFields} = state;
+  try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,unsupportedDays,replacements,overrideFields}));}
   catch { /* The open draft remains available in memory. */ }
 }
 
@@ -169,15 +198,16 @@ export function itineraryTabs(pilot) {
 
 function formMarkup() {
   const settings = state.settings;
-  return '<div class="composer-inputs"><form id="brief-input" class="panel composer-brief">'+
-    '<label class="field"><span>'+tr('Опишите, что нужно группе')+'</span><textarea name="brief" rows="3" minlength="3" maxlength="600" required placeholder="'+
+  return '<div class="composer-inputs"><form id="draft-input" class="panel composer-form" novalidate>'+
+    '<label class="field composer-request"><span>'+tr('Опишите, что нужно группе')+'</span><textarea name="brief" aria-describedby="draft-defaults" rows="4" maxlength="600" placeholder="'+
     tr('Например: Казань на три дня, 12 человек, музеи и неспешные прогулки')+'">'+safe(state.brief)+'</textarea></label>'+
-    '<button type="submit" class="button"'+(state.parsePending?' disabled':'')+'>'+tr(state.parsePending?'Разбираем запрос…':'Разобрать запрос с ИИ')+'</button>'+
-    '<p id="brief-status" class="caption" role="status">'+(state.note ? tr(state.note,state.noteValues) : '')+'</p>'+
+    '<p class="caption" id="draft-defaults"></p><div class="composer-primary"><button type="submit" class="button">'+tr(state.result?'Пересчитать маршрут':'Собрать маршрут')+'</button>'+
+    '<button type="button" class="link-button" data-composer="refine">'+tr('Уточнить условия с ИИ')+'</button></div>'+
+    '<div id="composer-progress" hidden></div><p id="draft-status" class="caption" role="status">'+(state.note ? tr(state.note,state.noteValues) : '')+'</p>'+
     '<details class="brief-examples"><summary>'+tr('Примеры запросов')+'</summary><ul>'+examples.map(([label],index)=>
       '<li><button class="button-quiet" type="button" data-composer="example" data-value="'+index+'">'+tr(label)+'</button></li>').join('')+
-    '</ul></details></form>'+
-    '<form id="draft-input" class="panel composer-form"><h2>'+tr('Параметры маршрута')+'</h2>'+
+    '</ul></details><details id="draft-parameters"><summary>'+tr(state.result?'Изменить параметры':'Ввести параметры вручную')+'</summary>'+
+    '<div class="composer-parameters">'+
     '<label class="field composer-city"><span>'+tr('Город начала')+'</span><input id="city-query" type="search" value="'+
     safe(state.query)+'" placeholder="'+tr('Название города')+'" autocomplete="off" aria-controls="city-results"></label>'+
     '<div id="city-results"></div><div id="draft-additional-cities"></div><div id="draft-omitted"></div>'+
@@ -195,20 +225,24 @@ function formMarkup() {
     '<div class="composer-fields"><label class="field">'+tr('Транспорт')+'<select name="transport">'+
     options({mixed:'Смешанный',walking:'Пешком',car:'Автомобиль или автобус'},settings.transport)+'</select></label>'+
     '<label class="field">'+tr('Темп')+'<select name="pace">'+options({normal:'Обычный',relaxed:'Неспешный',dense:'Насыщенный'},settings.pace)+'</select></label>'+
-    '<label class="field">'+tr('Обязательные объекты')+'<input name="required" maxlength="400" placeholder="'+tr('Названия через запятую')+
+    '<label class="field">'+tr('Обязательные объекты')+'<input name="required" maxlength="1000" placeholder="'+tr('Названия через запятую')+
     '" value="'+safe(settings.required.join(', '))+'"></label></div>'+
     '<label class="field composer-visit-deadline">'+tr('Закончить посещения до')+'<input type="time" min="09:00" max="18:00" name="visitDeadline" value="'+
     safe(settings.visitDeadline??'')+'"></label>'+
     '<label class="check"><input type="checkbox" name="china"'+(settings.market==='zh'?' checked':'')+'>'+tr('Китайскоязычное сопровождение')+'</label>'+
     '<label class="check"><input type="checkbox" name="access"'+(settings.access?' checked':'')+'>'+tr('Безбарьерный доступ')+'</label>'+
-    '</details><div class="actions"><button type="submit" class="button"'+(state.buildPending?' disabled':'')+'>'+
-    tr(state.buildPending?'Подбираем точки…':'Собрать черновик')+'</button></div><p id="draft-status" class="caption" role="status"></p></form></div>';
+    '</details></div></details></form></div>';
 }
 
 function eligibility(item) {
-  return item.scheduled ? 'Объект включён' : item.accessBlocked ? 'По данным карты безбарьерного доступа нет' :
+  if (item.reason==='ambiguous') return t('Найдено несколько совпадений: {places}. Уточните название и город.',
+    {places:item.candidates.map(candidate=>candidate.name+' ('+candidate.city+')').join(', ')});
+  if (item.reason==='out-of-range') return t('Объект вне зоны выбранного транспорта');
+  if (item.reason==='omitted') return t('Точка исключена вручную');
+  if (item.reason==='no-slot') return t('В расписании нет подходящего времени');
+  return t(item.scheduled ? 'Объект включён' : item.accessBlocked ? 'По данным карты безбарьерного доступа нет' :
     item.omitted || item.excludedInterests?.length ? 'Исключено по требованиям' :
-    item.matched ? 'Объект не попал в расписание' : 'Объект не найден в данных';
+    item.matched ? 'Объект не попал в расписание' : 'Объект не найден в данных');
 }
 
 function gapLabel(message) {
@@ -229,6 +263,16 @@ function coverageMarkup(coverage) {
     (count?tr('{count} точек',{count:formatNumber(count)}):tr('Подходящие точки не найдены'))+'</span></li>').join('')+'</ul></div>';
 }
 
+function dayLogistics(day) {
+  if (!day.logistics) return [];
+  const {lunch,overnight,estimatedTransferMinutes}=day.logistics;
+  return [
+    ...(lunch.status==='suggested' ? [t(lunch.repeated?'Обед в том же месте · подтвердить для группы':'Обед · подтвердить для группы')] : []),
+    ...(overnight.status==='suggested' ? [t(overnight.action==='return'?'Та же гостиница · подтвердить вторую ночь':'Ночёвка · подтвердить для группы')] : []),
+    ...(estimatedTransferMinutes ? [t('Переезды по городу · около {minutes} мин',{minutes:formatNumber(estimatedTransferMinutes)})] : []),
+  ];
+}
+
 function draftMarkup(result) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
@@ -239,17 +283,20 @@ function draftMarkup(result) {
       ' · '+tr(status)+safe(date)+(item.city && venues.length>1?' · '+safe(item.city):'')+'</li>';
   }).join('');
   return '<section class="panel composer-output" aria-labelledby="draft-title"><header class="composer-title"><div><p class="ops-kicker">'+
-    tr('Черновик')+'</p><h2 id="draft-title" tabindex="-1" data-source-text>'+safe(venues.map(name).join(' → '))+'</h2><p class="caption">'+
-    safe(regionName(location))+' · '+safe(formatDate(settings.date))+' · '+formatNumber(settings.size)+'</p></div><button class="button-quiet" type="button" data-composer="export"'+
-    (state.dirty?' disabled':'')+'>'+tr('Скачать черновик')+'</button></header><ul class="caption composer-source">'+sources+
-    '<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul>'+
+    tr('Программа для проверки')+'</p><h2 id="draft-title" tabindex="-1" data-source-text>'+safe(venues.map(name).join(' → '))+'</h2><p class="caption">'+
+    safe(regionName(location))+' · '+tr('Дата начала · {date} · {days} дня · {size} чел.',{date:formatDate(settings.date),days:settings.days,size:settings.size})+
+    '</p></div></header>'+
+    '<section class="composer-evidence"><h3>'+tr('Перед выездом')+'</h3><ul>'+
+    plan.required.map(item=>'<li><span data-source-text>'+safe(item.label)+'</span> · '+safe(eligibility(item))+'</li>').join('')+
+    result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul></section>'+
     coverageMarkup(plan.interestCoverage)+
-    '<div class="composer-map-frame"><div class="atlas-map-top"><div class="atlas-options" id="draft-days" aria-label="'+tr('Дни маршрута')+'"></div>'+
+    '<div class="composer-day-head"><h3>'+tr('Программа по дням')+'</h3><div class="atlas-options" id="draft-days" role="group" aria-label="'+tr('Дни маршрута')+'"></div></div>'+
+    '<div id="draft-timeline"></div><div class="composer-map-frame"><div class="atlas-map-top"><h3>'+tr('Карта и источники')+'</h3>'+
     '<button class="button-quiet" data-composer="fit" type="button">'+tr('Целиком')+'</button></div><div class="composer-map-scene">'+
-    '<div id="draft-map" role="region" aria-label="'+tr('Карта черновика')+'"></div></div></div>'+
-    '<div id="draft-timeline"></div><section class="composer-evidence"><h3>'+tr('Проверка условий')+'</h3><ul>'+
-    result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+
-    plan.required.map(item=>'<li><span data-source-text>'+safe(item.label)+'</span> · '+tr(eligibility(item))+'</li>').join('')+'</ul></section></section>';
+    '<div id="draft-map" role="region" aria-label="'+tr('Карта черновика')+'"></div></div></div><ul class="caption composer-source">'+sources+
+    '<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul>'+
+    '<div class="composer-export"><button class="button-quiet" type="button" data-composer="export"'+
+    (state.dirty?' disabled':'')+'>'+tr('Скачать черновик')+'</button></div></section>';
 }
 
 function download(result) {
@@ -258,8 +305,8 @@ function download(result) {
     ...evidenceSources(result).map(item=>item.name+' · '+item.url), location.sourceUrl,'',
     ...plan.days.flatMap((day,index)=>[t('День {day}',{day:index+1})+' · '+formatDate(day.date)+' · '+(day.cityId ?
       name(result.locations?.find(item=>item.id===day.cityId)??location):name(location)),
-      ...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...day.missing.map(gapLabel),'']),
-    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>item.label+' · '+t(eligibility(item))),
+      ...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...dayLogistics(day),...day.missing.map(gapLabel),'']),
+    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>item.label+' · '+eligibility(item)),
     ...(plan.interestCoverage??[]).map(({theme,count})=>t(themes[theme]??theme)+' · '+
       (count?t('{count} точек',{count:formatNumber(count)}):t('Подходящие точки не найдены')))];
   const file = URL.createObjectURL(new Blob(['\uFEFF',lines.join('\n')],{type:'text/plain;charset=utf-8'}));
@@ -274,6 +321,7 @@ export function mountComposer(container, api) {
   const find = selector=>container.querySelector(selector);
   let map;
   let searchTimer;
+  let pending;
   let mounted=true;
   container.innerHTML = '<header class="page-head"><h1>'+tr('Конструктор маршрутов')+'</h1></header>'+
     itineraryTabs(false)+'<div class="composer-layout">'+formMarkup()+'<div class="composer-result" id="composer-result"></div></div>';
@@ -306,8 +354,58 @@ export function mountComposer(container, api) {
     if (state.settings.excludedInterests.length) find('#draft-exclusions').open=true;
     find('#city-query').value=state.query;
     cityOptions();
-    find('#brief-status').textContent=state.note?t(state.note,state.noteValues):'';
+    showNote(state.note,state.noteValues);
+    showDefaults();
   }
+  function showDefaults() {
+    const {date,days,size}=state.settings;
+    if (!date || !Number.isFinite(Date.parse(date))) {find('#draft-defaults').textContent='';return;}
+    const scope=state.selectedCity ? [state.selectedCity,...state.extraCities].map(name).join(' → ')+' · ' : '';
+    find('#draft-defaults').textContent=scope+t(state.selectedCity ? 'Дата начала · {date} · {days} дня · {size} чел.' :
+      'Параметры по умолчанию: {date}, {days} дня, {size} чел.',{date:formatDate(date),days,size});
+  }
+  function showNote(message, values) {
+    if (!mounted) return;
+    state.note=message;
+    state.noteValues=values;
+    find('#draft-status').textContent=message?t(message,values):'';
+  }
+  function syncActions() {
+    if (!mounted) return;
+    const form=find('#draft-input');
+    const submit=form.querySelector('[type=submit]');
+    submit.disabled=Boolean(pending);
+    submit.textContent=t(state.result?'Пересчитать маршрут':'Собрать маршрут');
+    find('#draft-parameters > summary').textContent=t(state.result?'Изменить параметры':'Ввести параметры вручную');
+    find('[data-composer=refine]').disabled=Boolean(pending) || state.brief.trim().length<3;
+  }
+  function phase(label) {
+    const node=pending.progress;
+    node.innerHTML=aiWaitingMarkup(label,pending.startedAt,'cancel-composer');
+    node.hidden=false;
+  }
+  function start(label, feedback) {
+    const progress=feedback?.querySelector('.composer-swap-progress')??find('#composer-progress');
+    const request={controller:new AbortController(),startedAt:Date.now(),progress,feedback};
+    pending=request;
+    request.timer=setInterval(()=>updateAiWait(progress,request.startedAt),1000);
+    showNote('');
+    if (feedback) feedback.querySelector('.composer-swap-status').textContent='';
+    phase(label);
+    syncActions();
+    return request;
+  }
+  function finish(request) {
+    if (pending!==request) return;
+    clearInterval(request.timer);
+    pending=null;
+    if (!mounted) return;
+    const node=request.progress;
+    node.hidden=true;
+    node.replaceChildren();
+    syncActions();
+  }
+  const isCurrent = (request,revision)=>mounted && pending===request && state.revision===revision;
   function paintDays(frame=false) {
     const {plan,places,geodata} = state.result;
     const days=plan.days.map((day,index)=>({day,index})).filter(({index})=>state.mapDay==='all'||String(index)===state.mapDay);
@@ -319,13 +417,21 @@ export function mountComposer(container, api) {
     find('#draft-timeline').innerHTML = days.map(({day,index})=>'<section class="composer-day"><h3>'+tr('День {day}',{day:index+1})+
       ' · '+safe(formatDate(day.date))+(state.result.locations?.length>1?' · '+safe(name(state.result.locations.find(city=>city.id===day.cityId)??{name:day.city})): '')+
       '</h3>'+(day.transfer ? '<p class="caption">'+tr('{from} → {to} · {distance} км по прямой',{
-        from:day.transfer.from?.name??day.transfer.from,to:day.transfer.to?.name??day.transfer.to,distance:formatNumber(day.transfer.distanceKm)})+'</p>' : '')+
+        from:name(state.result.locations?.find(city=>city.id===day.transfer.fromId)??{name:day.transfer.from}),
+        to:name(state.result.locations?.find(city=>city.id===day.transfer.toId)??{name:day.transfer.to}),distance:formatNumber(day.transfer.distanceKm)})+'</p>' : '')+
+      '<ul class="composer-logistics caption">'+dayLogistics(day).map(item=>'<li>'+safe(item)+'</li>').join('')+'</ul>'+
       '<ul class="composer-stops">'+day.stops.map(stop=>'<li><button type="button" data-composer="stop" data-value="'+
       safe(stop.id)+'" data-day="'+index+'" aria-pressed="'+(state.point===stop.id && state.pointDay===index)+'"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><span data-source-text>'+safe(name(stop))+
-      '</span><small>'+tr(kind[stop.type])+'</small></button>'+
+      '</span><small>'+tr(stop.required?'Обязательная остановка':kind[stop.type])+'</small></button>'+
       (state.point===stop.id && state.pointDay===index?'<div class="composer-stop-actions"><a href="'+safe(stop.url)+'" target="_blank" rel="noopener noreferrer">'+tr('Открыть первоисточник')+
-      '</a><button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>'+
-      '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button></div>':'')+
+      '</a>'+(stop.leg?.minutes?'<span class="caption">'+tr('Переезд к точке · около {minutes} мин, {distance} км по прямой',{
+        minutes:formatNumber(stop.leg.minutes),distance:formatNumber(stop.leg.distanceKm)})+'</span>':'')+
+      (stop.required?'':'<button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>')+
+      '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button>'+
+      (!state.dirty && stop.alternatives?.length?'<details class="composer-alternatives"><summary>'+tr('Варианты замены')+'</summary><ul>'+stop.alternatives.map(alternative=>
+        '<li><button type="button" class="link-button" data-composer="replace-stop" data-previous="'+safe(stop.id)+'" data-value="'+safe(alternative.id)+'">'+
+      tr('Заменить на {place}',{place:name(alternative)})+'</button></li>').join('')+'</ul><div class="composer-swap-feedback">'+
+      '<div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p></div></details>':'')+'</div>':'')+
       '</li>').join('')+
       '</ul>'+day.missing.map(gap=>'<p class="caption">'+safe(gapLabel(gap))+'</p>').join('')+'</section>').join('');
     map?.update({places:visible,route:{...plan,days:days.map(({day})=>day)},selectedId:state.point,
@@ -338,6 +444,7 @@ export function mountComposer(container, api) {
     if (!state.result) return;
     find('#composer-result').innerHTML=draftMarkup(state.result);
     map=createRouteMap(find('#draft-map'),{locale:getLocale(),onSelect(id,_place,context){
+      if (pending?.feedback) {pending.controller.abort();finish(pending);}
       state.point=id;
       const day=context?.dayIndex;
       const days=state.result.plan.days;
@@ -358,7 +465,7 @@ export function mountComposer(container, api) {
       excludedInterests:fields.getAll('excludedInterest'),
       theme:fields.getAll('interest')[0]??'any',transport:fields.get('transport'),pace:fields.get('pace'),
       market:fields.has('china')?'zh':'ru',access:fields.has('access'),visitDeadline:fields.get('visitDeadline')||null,
-      required:String(fields.get('required')).split(/[,，;]/u).map(name=>name.trim()).filter(Boolean).slice(0,5)};
+      required:[...new Set(String(fields.get('required')).split(/[,，;]/u).map(name=>name.trim()).filter(Boolean))]};
   }
   function setDirty() {
     state.revision+=1;
@@ -366,7 +473,7 @@ export function mountComposer(container, api) {
     state.dirty=true;
     const send=find('[data-composer=export]');
     if (send) send.disabled=true;
-    find('#draft-status').textContent=t('Параметры изменились. Соберите черновик заново.');
+    showNote('Параметры изменились. Соберите черновик заново.');
   }
   function applyParsing(result,message) {
     const {parsed,cities}=result;
@@ -375,111 +482,164 @@ export function mountComposer(container, api) {
     resultSettings.interests=parsed.interests;
     resultSettings.required=parsed.required;
     resultSettings.excludedInterests=parsed.excludedInterests??[];
+    for (const key of state.overrideFields) delete resultSettings[key];
     state.settings={...state.settings,...resultSettings};
     state.lastAppliedBrief=state.brief;
-    if (cities.length) {
+    state.unsupportedDays=parsed.requestedDays && !parsed.days && !state.overrideFields.includes('days') ? parsed.requestedDays : null;
+    if (!state.overrideFields.includes('city')) {
+      clearTimeout(searchTimer);
+      state.findVersion++;
       state.cities=cities;
-      state.selectedCity=cities[0];
-      state.extraCities=cities.slice(1,3);
-      state.query=name(state.selectedCity);
+      state.selectedCity=cities[0]??null;
+      state.extraCities=cities.slice(1);
+      state.query=state.selectedCity ? name(state.selectedCity) : '';
     }
-    if (state.result) state.dirty=true;
-    if (state.result && mounted) find('#draft-status').textContent=t('Параметры изменились. Соберите черновик заново.');
+    if (state.result) {
+      state.dirty=true;
+      const send=find('[data-composer=export]');
+      if (send) send.disabled=true;
+    }
     retainDraft();
-    state.note = cities.length>1 ? 'Несколько городов найдено в тексте. Проверьте порядок.' :
-      parsed.requestedDays && !parsed.days ? 'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.' : message;
+    state.note = state.unsupportedDays ? 'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.' :
+      state.extraCities.length>2 ? 'Укажите до трёх городов для одного маршрута.' :
+      state.extraCities.length && !state.overrideFields.includes('city') ? 'Несколько городов найдено в тексте. Проверьте порядок.' : message;
     state.noteValues={days:parsed.requestedDays};
     updateExtraction();
   }
-  async function analyse(form) {
-    if (state.parsePending) return;
-    const submit=form.querySelector('[type=submit]');
-    state.parsePending=true;
-    submit.disabled=true;
-    submit.textContent=t('Разбираем запрос…');
-    state.brief=String(new FormData(form).get('brief')).trim();
+  async function analyse() {
+    if (pending || state.brief.trim().length<3) return;
+    const request=start('ИИ уточняет условия…');
     const revision=state.revision;
     try {
-      const fast=await api('brief',{text:state.brief,mode:'rules'});
-      if (state.revision===revision) applyParsing(fast,'Поля заполнены. ИИ ещё уточняет запрос.');
-      const deep=await api('brief',{text:state.brief,mode:'ai'});
-      if (state.revision===revision) applyParsing(deep,deep.mode==='ai'?'ИИ разобрал запрос. Проверьте поля.':
-        'Параметры заполнены автоматически. ИИ сейчас недоступен.');
+      const deep=await api('brief',{text:state.brief.trim(),mode:'ai'},'POST',{signal:request.controller.signal});
+      if (isCurrent(request,revision)) {
+        applyParsing(deep,deep.mode==='ai'?'ИИ разобрал запрос. Проверьте поля.':
+          'Параметры заполнены автоматически. ИИ сейчас недоступен.');
+        find('#draft-parameters').open=true;
+      }
     } catch(error) {
-      if (mounted) find('#brief-status').textContent=t(error.message);
+      if (isCurrent(request,revision)) showNote(error.message);
     } finally {
-      state.parsePending=false;
-      const button = mounted && find('#brief-input [type=submit]');
-      if (button) {button.disabled=false;button.textContent=t('Разобрать запрос с ИИ');}
+      finish(request);
     }
   }
-  async function build(form) {
-    if (state.buildPending) return;
-    const submit=form.querySelector('[type=submit]');
-    state.buildPending=true;
-    submit.disabled=true;
-    submit.textContent=t('Подбираем точки…');
+  async function build(form,replacement,feedback) {
+    if (pending) return;
+    const brief=state.brief.trim();
+    const parseNew = brief.length>=3 && brief!==state.lastAppliedBrief;
+    const request=start(replacement?'Проверяем замену для этого времени…':
+      parseNew?'Смотрим даты, группу и города в запросе…':'Подбираем объекты и составляем программу…',feedback);
     const revision=++state.revision;
+    const network={signal:request.controller.signal};
     try {
-      if (state.brief.trim().length>=3 && state.brief.trim()!==state.lastAppliedBrief) {
-        const fast=await api('brief',{text:state.brief.trim(),mode:'rules'});
-        if (state.revision===revision) applyParsing(fast,'Требования извлечены. Проверьте поля.');
+      if (parseNew) {
+        const fast=await api('brief',{text:brief,mode:'rules'},'POST',network);
+        if (!isCurrent(request,revision)) return;
+        applyParsing(fast,'');
+      }
+      if (state.unsupportedDays || state.extraCities.length>2) {
+        find('#draft-parameters').open=true;
+        showNote(state.unsupportedDays ? 'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.' :
+          'Укажите до трёх городов для одного маршрута.',{days:state.unsupportedDays});
+        (state.unsupportedDays ? form.elements.days : find('#draft-additional-cities button'))?.focus();
         return;
       }
       if (!state.selectedCity && state.query.trim()) {
-        const response=await api('cities?q='+encodeURIComponent(state.query));
+        const response=await api('cities?q='+encodeURIComponent(state.query),undefined,'GET',network);
+        if (!isCurrent(request,revision)) return;
         state.cities=response.cities;
         const possible=state.cities.filter(city=>[city.name,city.en,city.cn].some(value=>value?.toLowerCase()===state.query.trim().toLowerCase()));
         if (possible.length===1) state.selectedCity=possible[0];
         if (mounted) cityOptions(true);
       }
       if (!state.selectedCity) {
-        if (mounted) {
-          find('#draft-status').textContent=t('Выберите город');
-          (find('#city-id')??find('#city-query')).focus();
-        }
+        find('#draft-parameters').open=true;
+        showNote('Измените запрос или откройте параметры и выберите город.');
+        (find('#city-id')??find('#city-query')).focus();
+        return;
+      }
+      if (!form.checkValidity()) {
+        find('#draft-parameters').open=true;
+        find('#draft-advanced').open=true;
+        form.reportValidity();
         return;
       }
       state.settings=settingsFrom(form);
-      if (state.extraCities.length>=state.settings.days) {
-        if (mounted) find('#draft-status').textContent=t('Городов больше, чем дней. Уберите лишние города или увеличьте длительность.');
+      if (state.settings.required.length>10) {
+        find('#draft-parameters').open=true;
+        find('#draft-advanced').open=true;
+        showNote('Можно выбрать до 10 обязательных объектов. Уберите лишние из списка.');
+        form.elements.required.focus();
         return;
       }
+      if (state.extraCities.length>=state.settings.days) {
+        find('#draft-parameters').open=true;
+        showNote('Городов больше, чем дней. Уберите лишние города или увеличьте длительность.');
+        return;
+      }
+      if (parseNew) phase('Подбираем объекты и составляем программу…');
+      const replacements=replacement ? [...state.replacements,replacement] : state.replacements;
       const result=await api('draft',{...state.settings,cityId:state.selectedCity.id,additionalCityIds:state.extraCities.map(city=>city.id),
-        omittedIds:state.omitted.map(place=>place.id)});
-      if (state.revision!==revision) return;
+        omittedIds:state.omitted.map(place=>place.id),replacements},'POST',network);
+      if (!isCurrent(request,revision)) return;
+      const swaps=result.plan.replacements??[];
+      const rejected=swaps.some(item=>item.status==='rejected') || swaps.length!==replacements.length;
+      if (replacement && rejected) {
+        feedback.querySelector('.composer-swap-status').textContent=t('Замену не удалось поставить на то же время. Программа сохранена.');
+        return;
+      }
+      state.replacements=swaps.filter(item=>item.status==='applied').map(({day,fromId,toId})=>({day,fromId,toId}));
       state.result=result;
-      state.mapDay='all';
-      state.point=null;
-      state.pointDay=null;
+      state.mapDay=replacement?state.mapDay:'all';
+      state.point=replacement?.toId??null;
+      state.pointDay=replacement?.day??null;
       state.dirty=false;
-      if (mounted) find('#draft-status').textContent='';
-      resultMarkup(true);
+      showNote(rejected?'Часть прежних замен больше не подходит к новым параметрам. Проверьте расписание.':'');
+      resultMarkup(!replacement);
+      if (replacement) find('#draft-timeline button[aria-pressed=true]')?.focus();
     } catch(error) {
-      if (mounted) find('#draft-status').textContent=t(error.message);
+      if (isCurrent(request,revision)) {
+        if (feedback) feedback.querySelector('.composer-swap-status').textContent=t(error.message);
+        else showNote(error.message);
+      }
     } finally {
-      state.buildPending=false;
-      const button = mounted && find('#draft-input [type=submit]');
-      if (button) {button.disabled=false;button.textContent=t('Собрать черновик');}
+      finish(request);
     }
   }
   const submit = event=>{
     const form=event.target;
-    if (form.id==='brief-input') {event.preventDefault();void analyse(form);}
     if (form.id==='draft-input') {event.preventDefault();void build(form);}
   };
   const input = event=>{
     const control=event.target;
-    if (control.form?.id==='brief-input') {state.brief=control.value;state.revision+=1;}
     if (control.form?.id!=='draft-input') return;
+    if (pending) {
+      pending.controller.abort();
+      finish(pending);
+      showNote('Входные данные изменились. Запустите расчёт снова.');
+    }
+    if (control.name==='brief') {
+      state.brief=control.value;
+      state.unsupportedDays=null;
+      state.overrideFields=[];
+      setDirty();
+      syncActions();
+      retainDraft();
+      return;
+    }
+    const manual=({china:'market',interest:'interests',excludedInterest:'excludedInterests'})[control.name] ||
+      control.name || (control.id.startsWith('city-')?'city':'');
+    if (manual && !state.overrideFields.includes(manual)) state.overrideFields.push(manual);
+    if (control.name==='days') state.unsupportedDays=null;
     setDirty();
     if (control.id==='city-query') {
       state.query=control.value;
       state.selectedCity=null;
+      state.cities=[];
+      cityOptions();
       clearTimeout(searchTimer);
       const version=++state.findVersion;
-      if (!state.query.trim()) {state.cities=[];cityOptions();return;}
-      if (state.query.trim().length<2) return;
+      if (state.query.trim().length<2) {showDefaults();return;}
       searchTimer=setTimeout(async()=>{
         try {
           const result=await api('cities?q='+encodeURIComponent(state.query));
@@ -498,16 +658,41 @@ export function mountComposer(container, api) {
       if (state.selectedCity) state.query=find('#city-query').value=name(state.selectedCity);
     }
     state.settings=settingsFrom(find('#draft-input'));
+    showDefaults();
     retainDraft();
   };
   const click = event=>{
+    if (event.target.closest('[data-action=cancel-composer]') && pending) {
+      const feedback=pending.feedback;
+      pending.controller.abort();
+      finish(pending);
+      if (feedback) {
+        feedback.querySelector('.composer-swap-status').textContent=t('Запрос отменён. Введённые параметры сохранены.');
+        feedback.closest('details').querySelector('summary').focus();
+      } else {
+        showNote('Запрос отменён. Введённые параметры сохранены.');
+        find('#draft-input [type=submit]').focus();
+      }
+      return;
+    }
     const button=event.target.closest('[data-composer]');
     if (!button) return;
     const {composer:action,value}=button.dataset;
+    if (action==='refine') {void analyse();return;}
+    if (pending && (['example','remove-city','restore-stop','pin-stop','omit-stop'].includes(action) ||
+        (pending.feedback && ['day','stop'].includes(action)))) {
+      pending.controller.abort();
+      finish(pending);
+    }
     if (action==='example') {
-      const input = find('#brief-input textarea');
-      input.value=state.brief=examples[Number(value)][1][{ru:0,en:1,zh:2}[getLocale()]];
-      state.revision+=1;
+      const input = find('[name=brief]');
+      input.value=examples[Number(value)][1][{ru:0,en:1,zh:2}[getLocale()]];
+      state.brief=input.value;
+      state.unsupportedDays=null;
+      state.overrideFields=[];
+      setDirty();
+      syncActions();
+      retainDraft();
       input.focus();
       return;
     }
@@ -515,6 +700,8 @@ export function mountComposer(container, api) {
       state.extraCities=state.extraCities.filter(city=>city.id!==value);
       cityOptions();
       setDirty();
+      showDefaults();
+      retainDraft();
       (find('#draft-additional-cities button')??find('#city-query')).focus();
       return;
     }
@@ -543,6 +730,12 @@ export function mountComposer(container, api) {
       find('#draft-timeline button[aria-pressed=true]')?.focus({preventScroll:true});
     }
     if (action==='export' && !state.dirty) download(state.result);
+    if (action==='replace-stop') {
+      const previousId=button.dataset.previous;
+      const candidate=state.result.plan.days[state.pointDay]?.stops.find(stop=>stop.id===previousId)?.alternatives?.find(place=>place.id===value);
+      if (!candidate || state.dirty) return;
+      void build(find('#draft-input'),{day:state.pointDay,fromId:previousId,toId:value},button.closest('details').querySelector('.composer-swap-feedback'));
+    }
     if (action==='pin-stop'||action==='omit-stop') {
       const place=state.result.places.find(item=>item.id===value);
       if (!place) return;
@@ -550,9 +743,18 @@ export function mountComposer(container, api) {
       if (action==='pin-stop') {
         const input=form.elements.required;
         const fields=settingsFrom(form);
-        input.value=[...new Set([place.name,...fields.required])].slice(0,5).join(', ');
+        const required=[...new Set([...fields.required,place.name])];
+        if (required.length<=10) input.value=required.join(', ');
+        else {
+          find('#draft-advanced').open=true;
+          find('#draft-parameters').open=true;
+          showNote('Можно выбрать до 10 обязательных объектов. Уберите лишние из списка.');
+          input.focus();
+          return;
+        }
         state.omitted=state.omitted.filter(item=>item.id!==place.id);
         find('#draft-advanced').open=true;
+        find('#draft-parameters').open=true;
       } else if (!state.omitted.some(item=>item.id===place.id) && state.omitted.length<20) state.omitted.push(place);
       state.settings=settingsFrom(form);
       cityOptions();
@@ -567,9 +769,12 @@ export function mountComposer(container, api) {
   container.addEventListener('input',input);
   container.addEventListener('click',click);
   cityOptions();
+  showDefaults();
+  syncActions();
   resultMarkup();
   return {destroy(){
     mounted=false;
+    if (pending) {pending.controller.abort();finish(pending);}
     clearTimeout(searchTimer);
     map?.destroy();
     container.removeEventListener('submit',submit);

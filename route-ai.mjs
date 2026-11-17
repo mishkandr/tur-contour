@@ -43,7 +43,7 @@ function explainResult(content, anchors, maxChoices) {
   return [...unique.values()];
 }
 
-export async function suggestRoute({ settings, alternatives, issue, brief }, { model, baseUrl, fetchImpl = fetch }) {
+export async function suggestRoute({ settings, alternatives, issue, brief }, { model, baseUrl, signal, fetchImpl = fetch }) {
   const anchors = new Map();
   const places = new Map();
   const eligible = alternatives.filter(({ plan }) =>
@@ -68,11 +68,12 @@ export async function suggestRoute({ settings, alternatives, issue, brief }, { m
     },
   };
 
+  const timeout=AbortSignal.timeout(65000);
   try {
     const response = await fetchImpl(new URL('/api/chat', baseUrl), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(65000),
+      signal: signal ? AbortSignal.any([signal,timeout]) : timeout,
       body: JSON.stringify({
         model, stream: false, think: false, format, keep_alive:'15m',
         options: { temperature: 0, num_predict: 55, num_ctx: 4096 },

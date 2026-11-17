@@ -1,12 +1,15 @@
 import { createServer } from 'node:http';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import {
-  region, metricInfo, normalizeStatistics, statSummary, number, routeSettings, defaultRoute, objectsFrom,
-  planRoute, impacts, recommendations, fieldNames, assess, officialStatistics,
+  region, metricInfo, normalizeStatistics, statSummary, number, routeSettings, defaultRoute, trackedRoutes, objectsFrom,
+  planRoute, routeAlternatives, portfolioImpact, impacts, recommendations, fieldNames, assess,
 } from './engine.mjs';
+import { suggestRoute } from './route-ai.mjs';
+import { readVerifiedAudit } from './verified-audit.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const load = name => readFile(join(directory,'data',name),'utf8').then(JSON.parse);
@@ -17,6 +20,7 @@ const mapData = await load('map.json');
 const stateDir = process.env.TUR_STATE_DIR || join(directory,'.runtime');
 const statePath = join(stateDir,'state.json');
 const port = Number(process.env.PORT || 4173);
+const verifiedAuditPath = process.env.TUR_AUDIT_FEED_FILE;
 const statsEdition = process.env.TUR_ROSSTAT_EDITION || '09-2026';
 const ollamaModel = process.env.TUR_OLLAMA_MODEL || 'qwen3.5:4b';
 const ollamaUrl = 'http://127.0.0.1:11434';
@@ -84,8 +88,24 @@ async function loadWiki(timestamp) {
 
 function differences(before,after,fields,meta) {
   return fields.filter(key=>JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null)).map(key=>({
-    ...meta, key, field:fieldNames[key], before:before?.[key] ?? null, after:after?.[key] ?? null,
+    ...meta, key, field:fieldNames[key] ?? key, before:before?.[key] ?? null, after:after?.[key] ?? null,
   }));
+}
+
+const auditConditions = ['capacity','language','hours','off','seasons','minutes','access'];
+
+function updateVerifiedAudit(next, audit, now) {
+  const former = next.verifiedAudit?.objects ?? {};
+  next.verifiedAudit = audit;
+  return catalog.flatMap(place => {
+    const before = former[place.id];
+    const after = audit.objects[place.id];
+    const meta = { at:now, id:place.id, name:place.name, source:audit.source, url:after?.sourceUrl ?? before?.sourceUrl ?? place.url };
+    if (Boolean(before) !== Boolean(after)) {
+      return [{...meta,key:'verification',field:'Подтверждённые условия',before:before ? 'Есть' : 'Нет',after:after ? 'Есть' : 'Нет'}];
+    }
+    return differences(before,after,[...auditConditions,'booking','validUntil'],meta);
+  });
 }
 
 async function refresh() {
@@ -93,6 +113,7 @@ async function refresh() {
     const now = new Date().toISOString();
     const next = structuredClone(state);
     const jobs = { nights:loadStatistics('nights'), people:loadStatistics('people'), wiki:loadWiki(now) };
+    if (verifiedAuditPath) jobs.verifiedAudit = readVerifiedAudit(verifiedAuditPath,catalog,now);
     const result = await Promise.allSettled(Object.values(jobs));
     const freshChanges = [];
     Object.keys(jobs).forEach((key,index) => {
@@ -102,7 +123,9 @@ async function refresh() {
         return;
       }
       next.sources[key] = { status:'live', checkedAt:now, message:'Данные получены' };
-      if (key === 'wiki') {
+      if (key === 'verifiedAudit') {
+        freshChanges.push(...updateVerifiedAudit(next,job.value,now));
+      } else if (key === 'wiki') {
         for (const place of catalog.filter(x=>x.qid)) {
           freshChanges.push(...differences(state.wiki[place.qid],job.value[place.qid],['coordinates','wikiName'],
             { at:now, name:place.name, id:place.id, source:'Wikidata', url:'https://www.wikidata.org/wiki/'+place.qid }));
@@ -139,7 +162,7 @@ async function changeAudit(version) {
     const next = { ...state, audit, auditCheckedAt:now };
     const freshChanges = catalog.flatMap(place => differences(
       state.audit.objects[place.id],audit.objects[place.id],
-      ['capacity','language','hours','off','seasons','minutes','access'],
+      auditConditions,
       { at:now, name:place.name, id:place.id, source:audit.source, url:'/api/audit-version/'+audit.version, demo:true },
     ));
     next.changes = freshChanges.concat(state.changes).slice(0,100);
@@ -154,10 +177,84 @@ function dashboard(snapshot) {
   return {
     region, places, affected, changes:snapshot.changes, sources:snapshot.sources,
     refreshedAt:snapshot.refreshedAt, auditVersion:snapshot.audit.version, auditCheckedAt:snapshot.auditCheckedAt,
+    auditFeed: {
+      enabled:Boolean(verifiedAuditPath), state:snapshot.sources.verifiedAudit?.status ?? 'pending',
+      snapshotAt:snapshot.verifiedAudit?.checkedAt ?? null,
+      version:snapshot.verifiedAudit?.version ?? null, objectCount:Object.keys(snapshot.verifiedAudit?.objects ?? {}).length,
+    },
+    decisions:snapshot.decisions ?? [],
+    portfolio:portfolioImpact(catalog,snapshot,baseline,initial.wiki,true),
+    portfolioVerified:portfolioImpact(catalog,snapshot,baseline,initial.wiki,false),
     nights:statSummary(snapshot.stats.nights,[]), people:statSummary(snapshot.stats.people,[]),
     recommendations:recommendations(places,snapshot,affected),
     readyCount:places.filter(place=>assess(place,defaultRoute,place.city==='Суздаль' ? 1 : 0).status==='ready').length,
   };
+}
+
+function availableOptions(snapshot, settings) {
+  const places = objectsFrom(catalog,snapshot);
+  const placeById = new Map(places.map(place => [place.id, place]));
+  return routeAlternatives(places,settings).map(option => {
+    const evidence = option.plan.days.flatMap(day => day.stops.filter(stop => stop.id).map(stop => {
+      const place = placeById.get(stop.id);
+      return settings.demo ? place.audit : place.verifiedAudit;
+    }));
+    const signature = createHash('sha256').update(JSON.stringify({plan:option.plan,evidence})).digest('hex');
+    return { ...option, signature };
+  });
+}
+
+function checkMonitorLimit(routes) {
+  if (routes.length >= 30) throw Object.assign(new Error('Достигнут лимит наблюдаемых маршрутов'),{status:409});
+}
+
+async function approve(input) {
+  const settings = routeSettings(input.settings ?? {});
+  return serial(async () => {
+    const variant = availableOptions(state,settings).find(option => option.id === input.variantId);
+    if (!variant?.plan.completeness || variant.signature !== input.planSignature) {
+      throw Object.assign(new Error('Условия программы изменились. Подберите варианты заново.'),{status:409});
+    }
+    const saved = state.savedRoutes ?? [];
+    const matchesProgram = item => item.id === input.programId && JSON.stringify(item.settings) === JSON.stringify(settings);
+    const replaced = saved.find(matchesProgram);
+    const control = trackedRoutes.find(matchesProgram);
+    const equivalent = saved.find(item => JSON.stringify(item.baseline) === JSON.stringify(variant.plan));
+    const previous = replaced ?? (control ? null : equivalent);
+    const decisions = state.decisions ?? [];
+    const existing = decisions.find(item => item.signature === variant.signature && item.programId === previous?.id);
+    if (existing && JSON.stringify(previous.baseline) === JSON.stringify(variant.plan)) return {decision:existing,decisions,data:dashboard(state)};
+    if (!previous) checkMonitorLimit(saved);
+    const createdAt = new Date().toISOString();
+    const title = variant.plan.days.map(day => day.city).join(' → ');
+    const subtitle = settings.market === 'zh' ? 'Группа из Китая' : 'Группа по России';
+    const record = {...previous,id:previous?.id ?? control?.id ?? randomUUID(),title,
+      subtitle:previous?.subtitle ?? control?.subtitle ?? subtitle,settings,baseline:variant.plan,createdAt};
+    const decision = {
+      id:randomUUID(), programId:record.id, createdAt, title, subtitle, settings,
+      variantId:variant.id, signature:variant.signature, plan:variant.plan,
+    };
+    const savedRoutes = previous ? saved.map(item => item.id === record.id ? record : item) : [...saved,record];
+    const next = {...state,decisions:[decision,...decisions].slice(0,100),savedRoutes};
+    await persist(next);
+    return {decision,decisions:next.decisions,data:dashboard(next)};
+  });
+}
+
+async function adviseOnRoutes(input) {
+  const settings = routeSettings(input.settings ?? {});
+  const snapshot = state;
+  const alternatives = availableOptions(snapshot,settings);
+  const brief = typeof input.brief === 'string' ? input.brief.trim() : '';
+  if (brief.length > 400) throw Object.assign(new Error('Опишите задачу в пределах 400 символов'),{status:400});
+  if (process.env.TUR_NO_LLM === '1') {
+    return {status:'unavailable',model:ollamaModel,suggestions:[],message:'ИИ отключён. Сравните проверенные варианты самостоятельно.'};
+  }
+  const program = typeof input.programId === 'string' &&
+    impacts(catalog,snapshot,baseline,initial.wiki).find(item => item.id === input.programId);
+  const issue = program && JSON.stringify(program.settings) === JSON.stringify(settings)
+    ? program.issues.map(item => item.name + '. ' + item.reasons.join(' ')).join(' ') : '';
+  return suggestRoute({settings,alternatives,issue,brief},{model:ollamaModel,baseUrl:ollamaUrl});
 }
 
 function fallbackQuery(question) {
@@ -271,7 +368,7 @@ const assets = {
   '/assets/inter-latin.woff2':['assets/inter-latin.woff2','font/woff2'],
 };
 
-const server = createServer(async (request,response) => {
+export async function handleRequest(request,response) {
   const path = new URL(request.url,'http://localhost').pathname;
   try {
     if (request.method==='GET' && path==='/engine.mjs') {
@@ -297,6 +394,12 @@ const server = createServer(async (request,response) => {
     if (request.method==='POST' && path==='/api/route') {
       return respond(response,200,planRoute(objectsFrom(catalog,state),routeSettings(await readBody(request))));
     }
+    if (request.method==='POST' && path==='/api/alternatives') {
+      const settings = routeSettings(await readBody(request));
+      return respond(response,200,{options:availableOptions(state,settings)});
+    }
+    if (request.method==='POST' && path==='/api/route-ai') return respond(response,200,await adviseOnRoutes(await readBody(request)));
+    if (request.method==='POST' && path==='/api/approve') return respond(response,200,await approve(await readBody(request)));
     if (request.method==='POST' && path==='/api/scenario') {
       const settings = routeSettings(await readBody(request));
       const places = objectsFrom(catalog,state);
@@ -311,11 +414,11 @@ const server = createServer(async (request,response) => {
         const saved = state.savedRoutes ?? [];
         const key = JSON.stringify(settings);
         if (saved.some(item=>JSON.stringify(item.settings)===key)) return state;
-        if (saved.length>=30) throw Object.assign(new Error('Достигнут лимит наблюдаемых маршрутов'),{status:409});
+        checkMonitorLimit(saved);
         const baselineRoute = planRoute(objectsFrom(catalog,state),settings);
         if (!baselineRoute.completeness) throw Object.assign(new Error('Сначала заполните обязательные позиции маршрута'),{status:409});
         const item = {
-          id:crypto.randomUUID(), title:baselineRoute.days.map(day=>day.city).join(' → '),
+          id:randomUUID(), title:baselineRoute.days.map(day=>day.city).join(' → '),
           subtitle:settings.market==='zh' ? 'Группа из Китая' : 'Группа по России',
           settings, baseline:baselineRoute, createdAt:new Date().toISOString(),
         };
@@ -336,14 +439,17 @@ const server = createServer(async (request,response) => {
     console.error(path,error.message);
     return respond(response,error.status || 500,{error:error.status ? error.message : 'Действие не выполнено. Попробуйте снова.'});
   }
-});
+}
 
-server.listen(port,'127.0.0.1',()=>{
-  const url = 'http://127.0.0.1:'+server.address().port;
-  console.log('ТурКонтур · '+url);
-  if (process.argv.includes('--open') && process.platform==='darwin') spawn('open',[url],{stdio:'ignore'}).unref();
-  if (process.env.TUR_NO_AUTO !== '1') {
-    if (!state.refreshedAt || Date.now()-Date.parse(state.refreshedAt)>6*3600000) refresh().catch(console.error);
-    setInterval(()=>refresh().catch(console.error),6*3600000).unref();
-  }
-});
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  const server = createServer(handleRequest);
+  server.listen(port,'127.0.0.1',()=>{
+    const url = 'http://127.0.0.1:'+server.address().port;
+    console.log('ТурКонтур · '+url);
+    if (process.argv.includes('--open') && process.platform==='darwin') spawn('open',[url],{stdio:'ignore'}).unref();
+    if (process.env.TUR_NO_AUTO !== '1') {
+      if (!state.refreshedAt || Date.now()-Date.parse(state.refreshedAt)>6*3600000) refresh().catch(console.error);
+      setInterval(()=>refresh().catch(console.error),6*3600000).unref();
+    }
+  });
+}

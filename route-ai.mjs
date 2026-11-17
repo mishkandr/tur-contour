@@ -70,9 +70,9 @@ export async function suggestRoute({ settings, alternatives, issue, brief }, { m
     const response = await fetchImpl(new URL('/api/chat', baseUrl), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(35000),
+      signal: AbortSignal.timeout(65000),
       body: JSON.stringify({
-        model, stream: false, think: false, format,
+        model, stream: false, think: false, format, keep_alive:'15m',
         options: { temperature: 0, num_predict: 100, num_ctx: 4096 },
         messages: [{
           role: 'system',

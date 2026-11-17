@@ -61,7 +61,7 @@ export const fieldNames = {
   seasons:'Сезонность', minutes:'Продолжительность визита', access:'Безбарьерный доступ',
   coordinates:'Координаты', wikiName:'Название в Wikidata', total:'Годовое значение',
 };
-const time = minutes => Math.trunc(minutes / 60).toString().padStart(2,'0') + ':' + (minutes % 60).toString().padStart(2,'0');
+export const clockTime = minutes => Math.trunc(minutes / 60).toString().padStart(2,'0') + ':' + (minutes % 60).toString().padStart(2,'0');
 const clockMinutes = value => {
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
@@ -92,6 +92,7 @@ export function objectsFrom(catalog, state) {
       conflict:Boolean(wiki?.wikiName && canonical(place.name)!==canonical(wiki.wikiName)),
       wikiLink:place.qid ? 'https://www.wikidata.org/wiki/' + place.qid : null,
       audit:state.audit?.objects?.[place.id] ?? null,
+      publishedConditions:state.publishedConditions?.[place.id] ?? null,
       verifiedAudit:state.verifiedAudit?.objects?.[place.id] ?? null };
   });
 }
@@ -100,10 +101,30 @@ export function conditionsFor(place, settings) {
   return settings.demo ? place.audit : place.verifiedAudit;
 }
 
+export function publishedHours(place, date, day = 0) {
+  const schedule = place.publishedConditions?.schedule;
+  if (!schedule) return null;
+  const visit = dateFor(date,day);
+  const dayKey = isoDate(visit);
+  if (schedule.validFrom && dayKey < schedule.validFrom || schedule.validUntil && dayKey > schedule.validUntil) {
+    return {...schedule,date:dayKey,windows:null};
+  }
+  const windows = schedule.overrides?.[dayKey] ?? schedule.weekly[visit.getUTCDay()];
+  return {...schedule,date:dayKey,windows};
+}
+
 export function assess(place, settings, day = 0) {
   if (place.conflict) return { status:'unknown',reasons:['Название в Wikidata отличается от названия в каталоге. Сверьте идентичность объекта.'] };
   const audit = conditionsFor(place, settings);
-  if (!audit) return { status:'unknown', reasons:['Нужны подтверждённые часы, условия записи и лимит группы.'] };
+  const official = !settings.demo && publishedHours(place,settings.date,day);
+  if (official?.windows?.length === 0) return {status:'blocked',reasons:['По опубликованному графику этот формат посещения недоступен на выбранную дату.']};
+  const limit = !settings.demo && place.publishedConditions?.limits?.find(item=>item.max < settings.size);
+  if (limit) return {status:'blocked',reasons:['Опубликованный лимит для этого посещения — '+limit.max+' чел.']};
+  if (!audit) {
+    const reasons = !settings.demo && place.publishedConditions ? [...place.publishedConditions.clarify] : [];
+    if (official && !official.windows) reasons.unshift('Опубликованный график не покрывает выбранную дату. Уточните часы.');
+    return {status:'unknown', reasons:reasons.length ? reasons : ['Нужны подтверждённые часы, условия записи и лимит группы.']};
+  }
   const date = dateFor(settings.date, day);
   const visitDate = isoDate(date);
   if (!settings.demo && (!audit.validUntil || visitDate > audit.validUntil || visitDate < (audit.verifiedAt?.slice(0,10) ?? ''))) {
@@ -115,6 +136,9 @@ export function assess(place, settings, day = 0) {
   if (audit.off.includes(date.getUTCDay())) reasons.push('Выходной '+schedule+'.');
   if (!audit.seasons.includes('all') && !audit.seasons.includes(seasonFor(date.getUTCMonth()))) reasons.push('Объект вне сезона '+schedule+'.');
   if (settings.access && audit.access === false) reasons.push('Безбарьерный доступ недоступен.');
+  if (official?.windows && !openingWindows(place,audit,settings,day).some(([open,close,entry])=>open<=entry && close-open>=audit.minutes)) {
+    reasons.push('Длительность визита не помещается в подтверждённые часы и опубликованный график.');
+  }
   if (reasons.length) return { status:'blocked', reasons };
   if (settings.market === 'zh' && audit.language !== 'interpreter') reasons.push('Работа с китайскоязычным переводчиком требует подтверждения.');
   if (settings.access && audit.access !== true) reasons.push('Безбарьерный доступ требует подтверждения.');
@@ -130,11 +154,17 @@ function themeFit(place, theme) {
 }
 
 function travelStop(name, cn, start, duration) {
-  return { type:'travel', name, cn, start:time(start), end:time(start+duration) };
+  return { type:'travel', name, cn, start:clockTime(start), end:clockTime(start+duration) };
 }
 
-function openingWindow(audit) {
-  return [Math.round(audit.hours[0] * 60), Math.min(18 * 60, Math.round(audit.hours[1] * 60))];
+function openingWindows(place, audit, settings, day) {
+  const verifiedOpen = Math.round(audit.hours[0] * 60);
+  const closing = Math.round(audit.hours[1] * 60);
+  const verifiedClose = settings.demo ? Math.min(18 * 60,closing) : closing;
+  const official = !settings.demo && publishedHours(place,settings.date,day);
+  if (!official?.windows) return [[verifiedOpen,verifiedClose,verifiedClose]];
+  return official.windows.map(([open,close]) => [Math.max(verifiedOpen,open),Math.min(verifiedClose,close),
+    Math.min(verifiedClose,close-(official.lastEntryMinutes ?? 0))]);
 }
 
 const visitDuration = (audit, split) => split ? audit.minutes * 2 + 15 : audit.minutes;
@@ -145,7 +175,7 @@ function candidateFor(place, settings, day, splitId) {
     audit?.capacity < settings.size && audit.capacity * 2 >= settings.size);
   const group = split ? {...settings, size:Math.ceil(settings.size/2)} : settings;
   if (assess(place,group,day).status !== 'ready') return null;
-  return { place, audit, split, fit:themeFit(place,settings.theme) };
+  return { place, audit, split, windows:openingWindows(place,audit,settings,day), fit:themeFit(place,settings.theme) };
 }
 
 function buildDay(places, settings, day, splitId) {
@@ -176,14 +206,16 @@ function buildDay(places, settings, day, splitId) {
         cursor += 45;
       }
       if (role.lunch) cursor = Math.max(cursor,720);
-      const valid = role.candidates.flatMap(({place, audit, split, fit}) => {
+      const valid = role.candidates.flatMap(({place, audit, split, windows, fit}) => {
         if (stops.some(stop=>stop.id === place.id)) return [];
-        const [opens, closes] = openingWindow(audit);
+        const duration = visitDuration(audit,split);
+        const window = windows.find(([opens,closes,entry])=>Math.max(cursor,opens)<=entry && Math.max(cursor,opens)+duration<=closes);
+        if (!window) return [];
+        const [opens] = window;
         const start = Math.max(cursor,opens);
-        const end = start + visitDuration(audit,split);
-        if (end > closes) return [];
+        const end = start + duration;
         const stop = { type:place.kind, id:place.id, name:place.name, cn:place.cn, url:place.url,
-          theme:place.theme, start:time(start), end:time(end), capacity:audit.capacity, split,
+          theme:place.theme, start:clockTime(start), end:clockTime(end), capacity:audit.capacity, split,
           booking:audit.booking, verifiedAt:audit.verifiedAt, sourceUrl:audit.sourceUrl };
         return [{cursor:end+20, stops:[...stops,stop], missing:path.missing,
           hasSplit:path.hasSplit || split, fit:path.fit+fit}];
@@ -281,10 +313,10 @@ export function reviewRoute(places, plan) {
     if (stop.booking && stop.booking!==audit.booking) {
       return [{...issue,status:'unknown',reasons:['Условия записи изменились. Проверьте согласование визита.']}];
     }
-    const [opens,closes] = openingWindow(audit);
     const start = clockMinutes(stop.start);
     const end = clockMinutes(stop.end);
-    if (start < opens || end > closes || end - start < visitDuration(audit,stop.split)) {
+    const withinHours = openingWindows(place,audit,settings,index).some(([opens,closes,entry])=>start>=opens && end<=closes && start<=entry);
+    if (!withinHours || end - start < visitDuration(audit,stop.split)) {
       return [{...issue,status:'blocked',reasons:['Текущие часы или длительность визита не подходят для запланированного времени.']}];
     }
     return [];

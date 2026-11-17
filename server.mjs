@@ -10,6 +10,7 @@ import {
 } from './engine.mjs';
 import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
+import { mergePublishedConditions } from './published-conditions.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const load = name => readFile(join(directory,'data',name),'utf8').then(JSON.parse);
@@ -17,6 +18,9 @@ const [catalog, baseline, initial] = await Promise.all([
   load('catalog.json'), load('demo-audit.json'), load('snapshot.json'),
 ]);
 const mapData = await load('map.json');
+const publishedConditions = mergePublishedConditions(catalog,await Promise.all([
+  load('published-vladimir.json'), load('published-suzdal.json'), load('published-hospitality.json'),
+]));
 const stateDir = process.env.TUR_STATE_DIR || join(directory,'.runtime');
 const statePath = join(stateDir,'state.json');
 const port = Number(process.env.PORT || 4173);
@@ -32,6 +36,7 @@ try {
   if (error.code !== 'ENOENT') throw error;
   state = { ...initial, audit:baseline, changes:[], sources:{}, refreshedAt:null };
 }
+state.publishedConditions = publishedConditions;
 let queue = Promise.resolve();
 function serial(action) {
   const result = queue.then(action);
@@ -42,7 +47,8 @@ function serial(action) {
 async function persist(next) {
   await mkdir(stateDir,{recursive:true});
   const temp = statePath + '.tmp';
-  await writeFile(temp,JSON.stringify(next,null,2)+'\n');
+  const {publishedConditions: officialConditions,...snapshot} = next;
+  await writeFile(temp,JSON.stringify(snapshot,null,2)+'\n');
   await rename(temp,statePath);
   state = next;
 }
@@ -177,6 +183,10 @@ function dashboard(snapshot) {
   return {
     region, places, affected, changes:snapshot.changes, sources:snapshot.sources,
     refreshedAt:snapshot.refreshedAt, auditVersion:snapshot.audit.version, auditCheckedAt:snapshot.auditCheckedAt,
+    publishedConditions: {
+      objectCount:Object.keys(publishedConditions).length,
+      checkedAt:Object.values(publishedConditions).map(item=>item.checkedAt).sort().at(-1),
+    },
     auditFeed: {
       enabled:Boolean(verifiedAuditPath), state:snapshot.sources.verifiedAudit?.status ?? 'pending',
       snapshotAt:snapshot.verifiedAudit?.checkedAt ?? null,
@@ -197,7 +207,7 @@ function availableOptions(snapshot, settings) {
   return routeAlternatives(places,settings).map(option => {
     const evidence = option.plan.days.flatMap(day => day.stops.filter(stop => stop.id).map(stop => {
       const place = placeById.get(stop.id);
-      return settings.demo ? place.audit : place.verifiedAudit;
+      return settings.demo ? place.audit : [place.verifiedAudit,place.publishedConditions];
     }));
     const signature = createHash('sha256').update(JSON.stringify({plan:option.plan,evidence})).digest('hex');
     return { ...option, signature };

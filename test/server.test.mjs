@@ -38,6 +38,9 @@ test('the request flow updates evidence, checks routes and persists analyst deci
   assert.equal(initial.portfolio.currentCount,2);
   assert.equal(initial.auditFeed.state,'pending');
   assert.equal(initial.places.length,20);
+  assert.equal(initial.publishedConditions.objectCount,17);
+  assert.equal(initial.places.find(place=>place.id==='suzdal-kremlin').publishedConditions.schedule.validUntil,'2026-12-29');
+  assert.equal(initial.places.find(place=>place.id==='suzdal-kremlin').verifiedAudit,null);
 
   const original = (await request('/api/alternatives',defaultRoute)).payload.options[0];
   assert.ok(original.plan.days[1].stops.some(stop => stop.id === 'suzdal-kremlin'));

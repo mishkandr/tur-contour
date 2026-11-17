@@ -1,5 +1,5 @@
 import { mountAtlas } from '/atlas.js';
-import { assess, defaultRoute, kindNames, months, number, planRoute, routeSettings } from '/engine.mjs';
+import { assess, clockTime, defaultRoute, kindNames, months, number, planRoute, publishedHours, routeSettings } from '/engine.mjs';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
@@ -18,7 +18,7 @@ let review = newReview();
 let agent;
 let busy = false;
 let metric = 'nights';
-let filters = {search:'',kind:'all',status:'all'};
+let filters = {search:'',kind:'all',status:'all',date:''};
 let toastTimer;
 const safe = value => String(value ?? '').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[character]);
 const chip = (text,type='') => '<span class="chip '+type+'">'+safe(text)+'</span>';
@@ -33,6 +33,21 @@ const head = (title,subtitle='',action='') => '<header class="page-head"><div><h
   (subtitle ? '<p class="muted">'+safe(subtitle)+'</p>' : '')+'</div>'+action+'</header>';
 const button = (label,action,quiet=false) => '<button type="button" class="'+(quiet?'button-quiet':'button')+'" data-action="'+action+'">'+safe(label)+'</button>';
 const val = v => v===null ? 'нет данных' : typeof v==='number' ? number(v) : Array.isArray(v) ? v.join(', ') : String(v);
+const placeDay = place => place.city==='Суздаль' ? 1 : place.city==='Кидекша' ? 2 : 0;
+const catalogSettings = () => ({...options,date:filters.date || options.date,demo:false});
+
+function visitDate(start, day) {
+  const value = new Date(start+'T12:00:00Z');
+  value.setUTCDate(value.getUTCDate()+day);
+  return date(value);
+}
+
+function openingLabel(official) {
+  if (!official) return 'График не найден';
+  if (!official.windows) return 'График не покрывает дату';
+  if (!official.windows.length) return 'Закрыто по графику';
+  return official.windows.map(([open,close])=>clockTime(open)+'–'+clockTime(close)).join(', ');
+}
 
 async function api(path,body,method=body===undefined ? 'GET' : 'POST') {
   const res = await fetch('/api/'+path,{method,headers:body===undefined ? {} : {'Content-Type':'application/json'},body:body===undefined ? undefined : JSON.stringify(body)});
@@ -71,10 +86,10 @@ function statisticChart(series) {
     series.years.map(y=>'<td>'+val(y.monthly[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
 }
 
-function matchingPlaces() {
+function matchingPlaces(settings) {
   const query = filters.search.toLowerCase().trim();
   return data.places.filter(place=>{
-    const result = assess(place,options,place.city==='Суздаль'?1:place.city==='Кидекша'?2:0);
+    const result = assess(place,settings,placeDay(place));
     return (filters.kind==='all'||place.kind===filters.kind) && (filters.status==='all'||result.status===filters.status) &&
       (!query || (place.name+' '+place.city).toLowerCase().includes(query));
   });
@@ -85,45 +100,81 @@ function selectOption(value,label,selected) {
 }
 
 function catalogRows() {
-  const matching = matchingPlaces();
-  if (!matching.length) return '<tr><td colspan="5"><p class="empty">Подходящих объектов нет.</p></td></tr>';
+  const settings = catalogSettings();
+  const matching = matchingPlaces(settings);
+  if (!matching.length) return '<tr><td colspan="6"><p class="empty">Подходящих объектов нет.</p></td></tr>';
   return matching.map(place=>{
-    const result = assess(place,options,place.city==='Суздаль'?1:place.city==='Кидекша'?2:0);
-    return '<tr><td><button class="link-button" data-place="'+safe(place.id)+'">'+safe(place.name)+'</button></td><td>'+safe(place.city)+'</td>'+
+    const offset = placeDay(place);
+    const result = assess(place,settings,offset);
+    const evidence = place.publishedConditions;
+    const hours = publishedHours(place,settings.date,offset);
+    const source = evidence?.schedule?.url ?? evidence?.booking?.url ?? evidence?.notes?.[0]?.url;
+    return '<tr><td><button class="link-button" data-place="'+safe(place.id)+'">'+safe(place.name)+'</button></td><td>'+safe(place.city)+
+      '<div class="caption">'+visitDate(settings.date,offset)+'</div></td>'+
+      '<td>'+safe(openingLabel(hours))+(hours?.label ? '<div class="caption">'+safe(hours.label)+'</div>' : '')+'</td>'+
       '<td>'+kindNames[place.kind]+'</td><td>'+chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</td>'+
-      '<td>'+outbound(place.url,place.url.includes('wikidata')?'Wikidata':'Страница объекта')+'</td></tr>';
+      '<td>'+outbound(source ?? place.url,source ? 'Условия визита' : place.url.includes('wikidata')?'Wikidata':'Страница объекта')+'</td></tr>';
   }).join('');
 }
 
 function catalog() {
-  return head('Каталог объектов','Группа '+options.size+' чел. · '+date(options.date)+' · '+(options.demo?'Учебные условия':'Условия проверяются по первоисточникам'))+
-    '<section class="panel"><div class="filters"><label class="field flex-grow">Поиск<input type="search" id="search" placeholder="Название или город" value="'+safe(filters.search)+
+  return head('Каталог объектов','Опубликованные условия для группы из '+options.size+' чел. · Владимир, Суздаль и Кидекша в последовательные дни')+
+    '<section class="panel"><div class="filters"><label class="field">Дата начала<input id="catalog-date" type="date" required value="'+safe(catalogSettings().date)+'"></label>'+
+    '<label class="field flex-grow">Поиск<input type="search" id="search" placeholder="Название или город" value="'+safe(filters.search)+
     '"></label><label class="field">Категория<select id="kind">'+Object.entries({all:'Все категории',...kindNames}).map(([v,t])=>selectOption(v,t,filters.kind)).join('')+
     '</select></label><label class="field">Готовность<select id="status">'+Object.entries({all:'Любой статус',...statusText}).map(([v,t])=>selectOption(v,t,filters.status)).join('')+
-    '</select></label></div><div class="table-wrap"><table><thead><tr><th>Объект</th><th>Локация</th><th>Категория</th><th>Готовность</th><th>Источник</th></tr></thead>'+
+    '</select></label></div><div class="table-wrap catalog-table"><table><thead><tr><th>Объект</th><th>Место и дата</th><th>Опубликованный график</th><th>Категория</th><th>Готовность</th><th>Источник</th></tr></thead>'+
     '<tbody id="catalog-rows">'+catalogRows()+'</tbody></table></div></section>';
 }
 
-function placeDetails(id,decisionId) {
+function officialEvidence(place,settings,offset) {
+  const evidence = place.publishedConditions;
+  const title = '<h3>Опубликованные условия</h3>';
+  const officialDate = visitDate(settings.date,offset);
+  const result = assess(place,{...settings,demo:false},offset);
+  const summary = '<div class="official-evidence-head"><div>'+title+'<p class="caption">'+officialDate+
+    ' · группа '+settings.size+' чел.</p></div>'+chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</div>';
+  if (!evidence) return '<section class="official-evidence">'+summary+
+    '<p class="detail">В собранных источниках нет условий визита. Уточните часы, запись и допустимый размер группы у объекта.</p></section>';
+  const hours = publishedHours(place,settings.date,offset);
+  const lastEntry = hours?.windows?.length && hours.lastEntryMinutes ?
+    '<p class="caption">Последний вход '+hours.windows.map(([,close])=>clockTime(close-hours.lastEntryMinutes)).join(', ')+'</p>' : '';
+  const period = hours?.validFrom || hours?.validUntil ? '<p class="caption">Период действия'+
+    (hours.validFrom ? ' с '+date(hours.validFrom) : '')+(hours.validUntil ? ' по '+date(hours.validUntil) : '')+'</p>' : '';
+  const facts = items=>items.map(item=>'<li><p>'+safe(item.text)+'</p>'+outbound(item.url,'Источник')+'</li>').join('');
+  const questions = [...new Set([...(evidence.clarify ?? []),...(result.status==='unknown' ? result.reasons : [])])];
+  return '<section class="official-evidence">'+summary+
+    (result.status==='blocked' ? '<p class="detail">'+safe(result.reasons.join(' '))+'</p>' : '')+
+    (questions.length ? '<div class="callout"><strong>Уточнить у объекта</strong><ul class="official-questions">'+
+      questions.map(question=>'<li>'+safe(question)+'</li>').join('')+'</ul></div>' : '')+
+    '<dl class="official-facts"><dt>График'+(hours?.label?' · '+safe(hours.label):'')+'</dt><dd><strong>'+safe(openingLabel(hours))+'</strong>'+
+    (hours ? lastEntry+period+(hours.note?'<p class="detail">'+safe(hours.note)+'</p>':'')+
+      outbound(hours.url,'Опубликованный график') : '')+'</dd>'+
+    (evidence.booking ? '<dt>Правила записи</dt><dd><p>'+safe(evidence.booking.text)+'</p>'+outbound(evidence.booking.url,'Источник')+'</dd>' : '')+
+    (evidence.limits?.length ? '<dt>Лимиты отдельных посещений</dt><dd><ul class="official-links">'+facts(evidence.limits)+'</ul></dd>' : '')+
+    (evidence.notes?.length ? '<dt>Другие сведения</dt><dd><ul class="official-links">'+facts(evidence.notes)+'</ul></dd>' : '')+
+    '</dl><p class="caption">Сверено с опубликованными источниками '+date(evidence.checkedAt)+' · Наличие мест на дату визита проверяется отдельно.</p></section>';
+}
+
+function placeDetails(id,decisionId,requestedDay,requestedSettings) {
   const place = data.places.find(x=>x.id===id);
   if (!place) return;
   const decision = data.decisions?.find(item=>item.id===decisionId);
-  const settings = decision?.settings ?? options;
+  const settings = decision?.settings ?? requestedSettings ?? (page()==='catalog' ? catalogSettings() : options);
   const audit = settings.demo ? place.audit : place.verifiedAudit;
   const plan = decision?.plan ?? (page()==='route' ? selectedVariant()?.plan ?? review.preview : null);
   const day = plan?.days.findIndex(segment=>segment.stops.some(stop=>stop.id===id));
   const stop = day>=0 ? plan.days[day].stops.find(item=>item.id===id) : null;
-  const offset = day>=0 ? day : place.city==='Суздаль'?1:place.city==='Кидекша'?2:0;
+  const offset = Number.isInteger(requestedDay) ? requestedDay : day>=0 ? day : placeDay(place);
   const requirements = stop?.split ? {...settings,size:Math.ceil(settings.size/2)} : settings;
   const result = assess(place,requirements,offset);
   dialog.innerHTML = '<div class="section-head"><h2 id="place-title">'+safe(place.name)+'</h2>'+button('Закрыть','close',true)+'</div>'+
-    '<p class="caption">'+safe(place.city)+' · '+kindNames[place.kind]+'</p><dl class="dialog-fields">'+
-    '<dt>Готовность для группы</dt><dd>'+chip(statusText[result.status],result.status==='ready'?'':'warn')+'</dd>'+
+    '<p class="caption">'+safe(place.city)+' · '+kindNames[place.kind]+'</p>'+officialEvidence(place,settings,offset)+'<dl class="dialog-fields">'+
     '<dt>Источник сведений об объекте</dt><dd>'+outbound(place.url,place.url.includes('wikidata')?'Wikidata':'Страница объекта')+'</dd>'+
     '<dt>Дата проверки</dt><dd>'+date(place.checkedAt)+'</dd>'+
     (place.coordinates ? '<dt>Координаты</dt><dd>'+outbound(place.wikiLink,place.coordinates.map(x=>x.toFixed(5)).join(', '))+
       '<div class="caption">Wikidata · '+timestamp(place.wikiCheckedAt)+'</div></dd>' : '')+
-    (audit ? '<dt>Условия визита</dt><dd>'+(settings.demo ? outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит, версия '+data.auditVersion) :
+    (audit ? '<dt>'+(settings.demo?'Учебный режим':'Экспертное подтверждение')+'</dt><dd>'+(settings.demo ? outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит, версия '+data.auditVersion)+' · '+chip(statusText[result.status],result.status==='ready'?'':'warn') :
       outbound(audit.sourceUrl,'Источник подтверждённых условий'))+'</dd>'+
       (audit.verifiedAt ? '<dt>Проверено</dt><dd>'+date(audit.verifiedAt)+'</dd>' : '')+
       (audit.validUntil ? '<dt>Действует до</dt><dd>'+date(audit.validUntil)+'</dd>' : '')+
@@ -131,7 +182,7 @@ function placeDetails(id,decisionId) {
       '<dt>Лимит группы</dt><dd>'+safe(audit.capacity)+' чел.</dd><dt>Часы работы</dt><dd>'+safe(audit.hours?.[0])+':00–'+safe(audit.hours?.[1])+':00</dd>'+
       '<dt>Продолжительность</dt><dd>'+safe(audit.minutes)+' мин.</dd><dt>Под перевод</dt><dd>'+
       (audit.language==='interpreter'?(settings.demo?'Предусмотрено в демо':'Подтверждено источником'):'Требует подтверждения')+'</dd>' : '')+
-    '</dl>'+result.reasons.map(t=>'<p class="detail">'+safe(t)+'</p>').join('');
+    '</dl>'+(settings.demo && audit ? result.reasons.map(t=>'<p class="detail">'+safe(t)+'</p>').join('') : '');
   if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">Проверка для двух подгрупп. Согласуйте оба сеанса с музеем.</p>');
   dialog.showModal();
 }
@@ -224,9 +275,8 @@ function approvedVariant(variant) {
   });
 }
 
-function routeDecision() {
+function routeDecision(plan) {
   const variant = selectedVariant();
-  const plan = variant?.plan ?? review.preview ?? planRoute(data.places,options);
   const approved = approvedVariant(variant);
   const approvalVisible = !review.loading && variant?.signature && variant.plan.completeness;
   const localized = plan.settings.market==='zh';
@@ -247,6 +297,31 @@ function routeDecision() {
         '<button type="button" class="button" data-action="approve-route"'+(review.dirty?' disabled':'')+'>Согласовать вариант</button>')+'</div>' : '')+'</section>';
 }
 
+function officialRouteReview(plan) {
+  const {settings} = plan;
+  const itinerary = plan.days.map((day,index)=>{
+    const candidates = data.places.flatMap(place=>{
+      const lunch = index===2 && place.city==='Суздаль' && place.kind==='food';
+      const relevant = place.city===day.city && (place.kind==='visit' || index!==2 && place.kind==='food' ||
+        index<settings.days-1 && place.kind==='stay');
+      if (!lunch && !relevant) return [];
+      const result = assess(place,settings,index);
+      return [{place,result,hours:publishedHours(place,settings.date,index)}];
+    });
+    const unresolved = candidates.filter(item=>item.result.status!=='ready').length;
+    const rows = candidates.map(({place,result,hours})=>
+      '<li><div><button type="button" class="link-button" data-place="'+safe(place.id)+'" data-place-day="'+index+'">'+safe(place.name)+'</button>'+
+      '<p class="caption">'+safe(kindNames[place.kind])+' · '+safe(openingLabel(hours))+'</p>'+
+      (result.reasons.length ? '<p class="detail">'+safe(result.reasons[0])+'</p>' : '')+'</div>'+
+      chip(statusText[result.status],result.status==='blocked'?'error':result.status==='unknown'?'warn':'')+'</li>').join('');
+    return '<details'+(index===0?' open':'')+'><summary><span>День '+(index+1)+' · '+safe(day.city)+'<small>'+date(day.date)+'</small></span>'+
+      '<span class="caption">Требуют внимания '+unresolved+' из '+candidates.length+'</span></summary>'+
+      (rows ? '<ul class="rows official-route-rows">'+rows+'</ul>' : '<p class="detail">В каталоге пока нет объектов для этого дня.</p>')+'</details>';
+  });
+  return '<section class="panel official-route" aria-labelledby="official-route-title"><div class="section-head"><h2 id="official-route-title">Проверка условий на даты поездки</h2></div>'+
+    '<p class="detail">Откройте объект, чтобы сверить опубликованный график, правила записи и вопросы для поставщика.</p>'+itinerary.join('')+'</section>';
+}
+
 function decisionJournal() {
   const recordItems = (data.decisions ?? []).toSorted((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return '<section class="panel route-journal"><div class="section-head"><h2>Журнал решений</h2></div>'+
@@ -259,7 +334,9 @@ function decisionJournal() {
 }
 
 function routeWorkbench() {
-  return routeVariants()+'<div class="route-review">'+routeAssistant()+routeDecision()+'</div>'+decisionJournal();
+  const plan = selectedVariant()?.plan ?? review.preview ?? planRoute(data.places,options);
+  return routeVariants()+'<div class="route-review">'+routeAssistant()+routeDecision(plan)+'</div>'+
+    (plan.settings.demo ? '' : officialRouteReview(plan))+decisionJournal();
 }
 
 function routeView() {
@@ -380,6 +457,7 @@ function sources() {
       (entry?.status==='error'?' · '+safe(entry.message):'')+'</p></div>'+status+'</div></li>';
   });
   const feed = data.auditFeed;
+  const published = data.publishedConditions;
   const feedLabel = {live:'Подключена', error:'Ошибка обновления', pending:'Ожидает проверки'};
   return head('Источники и изменения','Автоматическая проверка при запуске и раз в 6 часов работы приложения.',button('Обновить источники','refresh',true))+
     '<div class="grid"><section class="panel"><div class="section-head"><h2>Журнал изменений</h2></div>'+
@@ -387,13 +465,18 @@ function sources() {
       safe(change.field)+' · '+safe(val(change.before))+' → '+safe(val(change.after))+'</p><p class="caption">'+outbound(change.url,change.source)+
       ' · '+timestamp(change.at)+'</p></div>'+(change.demo ? chip('Учебное изменение','warn') : chip('Из внешнего источника'))+'</div></li>').join('')+
       '</ul>' : '<p class="empty">Изменений не зафиксировано.</p>')+'</section>'+
-    '<section class="panel"><div class="section-head"><h2>Подключения</h2></div><ul class="rows">'+sourceRows.join('')+
+    '<div class="stack"><section class="panel"><div class="section-head"><h2>Автоматические подключения</h2></div><ul class="rows">'+sourceRows.join('')+
     (feed ? '<li><div class="row"><div><h3>Выгрузка условий визита</h3><p class="caption">'+
       (feed.enabled && feed.snapshotAt ? 'Снимок от '+timestamp(feed.snapshotAt)+' · объектов: '+number(feed.objectCount ?? 0) :
         (feed.enabled?'Ожидаем доступный снимок с подтверждёнными условиями.':'Нет подключённой выгрузки с подтверждёнными условиями.'))+
       '</p></div>'+chip(feed.enabled ? feedLabel[feed.state] : 'Не подключена',feed.state==='live'?'':feed.state==='error'?'warn':'plain')+'</div></li>' : '')+
+    '</ul></section>'+
+    '<section class="panel"><div class="section-head"><h2>Справочные материалы</h2></div><ul class="rows">'+
+    (published?.objectCount ? '<li><h3>Опубликованные условия посещения</h3><p class="detail">Сверены сведения по '+number(published.objectCount)+
+      ' объектам · '+date(published.checkedAt)+'. Снимок собран по страницам музеев, поставщиков и регионального турпортала.</p>'+
+      '<p class="caption">Ссылки, область действия лимитов и вопросы к поставщику доступны в <a href="#catalog">каталоге объектов</a>.</p></li>' : '')+
     '<li><h3>'+outbound('/api/audit-version/'+data.auditVersion,'Учебный аудит · версия '+data.auditVersion)+'</h3><p class="caption">Сценарные лимиты, режим работы и условия для групп.</p></li>'+
-    '<li><h3>Материалы МАГ</h3><p class="caption">Методология и сверка. Каталог обогащается опубликованными данными объектов и Wikidata.</p></li></ul></section></div>';
+    '<li><h3>Материалы МАГ</h3><p class="caption">Методология и сверка. Каталог обогащается опубликованными данными объектов и Wikidata.</p></li></ul></section></div></div>';
 }
 
 function render(scroll=false) {
@@ -407,11 +490,14 @@ function render(scroll=false) {
   document.body.classList.toggle('atlas-page',current==='impact');
   if (current==='impact') {
     if (atlas) atlas.update(data);
-    else atlas=mountAtlas(screen,data,geodata,{onOpenRoute(settings,program,context) {
-      options=settings;
-      review=newReview(program,context);
-      location.hash='route';
-    }});
+    else atlas=mountAtlas(screen,data,geodata,{
+      onOpenRoute(settings,program,context) {
+        options=settings;
+        review=newReview(program,context);
+        location.hash='route';
+      },
+      onOpenPlace(id,settings,offset) { placeDetails(id,null,offset,settings); },
+    });
   } else {
     if (atlas) { atlas.destroy(); atlas=null; }
     screen.innerHTML = {catalog,route:routeView,stats,sources}[current]();
@@ -468,7 +554,7 @@ screen.addEventListener('submit',event=>{
 screen.addEventListener('click',event=>{
   const target = event.target.closest('[data-action],[data-place],[data-sample]');
   if (!target) return;
-  if (target.dataset.place) placeDetails(target.dataset.place,target.dataset.decision);
+  if (target.dataset.place) placeDetails(target.dataset.place,target.dataset.decision,Number(target.dataset.placeDay));
   if (target.dataset.action==='select-variant') {
     if (busy) return;
     review.selectedId = target.dataset.variant;
@@ -521,6 +607,11 @@ screen.addEventListener('input',event=>{
 });
 screen.addEventListener('change',event=>{
   const input = event.target;
+  if (input.id==='catalog-date') {
+    filters.date = input.value ? routeSettings({date:input.value}).date : '';
+    input.value = catalogSettings().date;
+    $('#catalog-rows').innerHTML = catalogRows();
+  }
   if (input.id==='kind'||input.id==='status') {
     filters[input.id] = input.value;
     $('#catalog-rows').innerHTML = catalogRows();

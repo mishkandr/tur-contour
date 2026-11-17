@@ -1,4 +1,4 @@
-import { assess, kindNames, number, planRoute } from '/engine.mjs';
+import { assess, clockTime, kindNames, number, planRoute, publishedHours } from '/engine.mjs';
 import { createRouteMap } from '/map.js';
 
 const dateLabel = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long', timeZone:'Europe/Moscow' });
@@ -9,6 +9,7 @@ const actions = [
   ['route','Точки маршрута'],
   ['all','Все объекты'],
   ['risk','Ограничения'],
+  ['official','Официальные графики'],
 ];
 const statusTitles = { ready:'Подходит в демо', blocked:'Есть ограничение', unknown:'Нужна проверка' };
 
@@ -25,7 +26,7 @@ function calendarPlan(plan, selectedDay) {
   return selectedDay === 'all' ? plan : { ...plan, days:plan.days.filter((_, i)=>String(i)===selectedDay) };
 }
 
-export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
+export function mountAtlas(container, initialData, geodata, { onOpenRoute, onOpenPlace }) {
   const view = {
     group:initialData.affected[0]?.id, day:'all', layer:'route', base:'streets', selected:null, variant:'replacement',
     scenario:'split', scenarioScope:'demo',
@@ -93,14 +94,23 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
     return selected.settings.demo && data.auditVersion === '2' && selected.affected && selected.removed.some(stop=>stop.id==='suzdal-kremlin');
   }
 
+  function inspectionSettings(selected) {
+    return view.layer==='official' ? {...selected.settings,demo:false} : selected.settings;
+  }
+
   function details(place, planRecord) {
     const dayOffset = Math.max(0,current.days.findIndex(day=>day.city===place.city));
-    const audit = planRecord.settings.demo ? place.audit : place.verifiedAudit;
-    const routeStop = current.days.flatMap(day=>day.stops).find(stop=>stop.id===place.id);
-    const state = assess(place, routeStop?.split ? {...planRecord.settings,size:Math.ceil(planRecord.settings.size/2)} : planRecord.settings, dayOffset);
-    const changed = planRecord.removed.some(stop=>stop.id===place.id);
+    const official = view.layer==='official';
+    const settings = inspectionSettings(planRecord);
+    const audit = settings.demo ? place.audit : place.verifiedAudit;
+    const routeStop = !official && current.days.flatMap(day=>day.stops).find(stop=>stop.id===place.id);
+    const state = assess(place, routeStop?.split ? {...settings,size:Math.ceil(settings.size/2)} : settings, dayOffset);
+    const changed = !official && planRecord.removed.some(stop=>stop.id===place.id);
     const changedLimit = changed && audit && planRecord.settings.size>audit.capacity;
-    const source = esc(!planRecord.settings.demo && audit ? audit.sourceUrl : place.url);
+    const hours = official ? publishedHours(place,settings.date,dayOffset) : null;
+    const scheduleText = hours?.windows === null ? 'Дату нужно сверить' : hours?.windows?.length === 0 ? 'Закрыто по графику' :
+      hours?.windows?.map(([start,end])=>clockTime(start)+'–'+clockTime(end)).join(', ');
+    const source = esc(hours?.url ?? (!settings.demo && audit ? audit.sourceUrl : place.url));
     const point = geodata.places?.[place.id];
     return `
       <div class="atlas-detail">
@@ -111,14 +121,15 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
         <h3>${esc(place.name)}</h3>
         ${planRecord.settings.market==='zh' ? '<p lang="zh-Hans" class="atlas-chinese">'+esc(place.cn)+'</p>' : ''}
         <span class="atlas-status atlas-status--${state.status}"><i></i>${routeStop?.split ? 'В программе двумя сеансами' :
-          state.status==='ready' && !planRecord.settings.demo ? 'Условия подтверждены' : statusTitles[state.status]}</span>
-        ${audit ? `<div class="atlas-facts"><div><span>${planRecord.settings.demo ? 'Лимит в демо' : 'Подтверждённый лимит'}</span><strong>${audit.capacity} чел.</strong></div>
-          <div><span>Группа</span><strong>${planRecord.settings.size} чел.</strong></div></div>` : ''}
+          state.status==='ready' && !settings.demo ? 'Условия подтверждены' : statusTitles[state.status]}</span>
+        ${official ? `<p class="atlas-slot">${esc(hours?.label ?? 'Часы на дату визита')} · ${esc(scheduleText ?? 'Нужно уточнить')}</p>` : ''}
+        ${audit ? `<div class="atlas-facts"><div><span>${settings.demo ? 'Лимит в демо' : 'Подтверждённый лимит'}</span><strong>${audit.capacity} чел.</strong></div>
+          <div><span>Группа</span><strong>${settings.size} чел.</strong></div></div>` : ''}
         ${routeStop ? '<p class="atlas-slot">'+esc(routeStop.start)+'–'+esc(routeStop.end)+(routeStop.split?' · два сеанса':' · в программе')+'</p>' : ''}
         ${changedLimit&&!routeStop?.split && showSplit(planRecord) ? '<p class="atlas-reason">Лимит изменился. Выберите замену или проверьте, помещаются ли два сеанса в расписание.</p>' :
           state.reasons.map(reason=>'<p class="atlas-reason">'+esc(reason)+'</p>').join('')}
         <div class="atlas-detail-links"><a href="${source}" target="_blank" rel="noopener noreferrer">Первоисточник ↗</a>
-          <button type="button" class="link-button" data-place="${esc(place.id)}">Паспорт объекта</button>
+          <button type="button" class="link-button" data-atlas="passport" data-value="${esc(place.id)}">Паспорт объекта</button>
           ${point?.source ? '<a href="'+esc(point.source)+'" target="_blank" rel="noopener noreferrer">Координаты ↗</a>' : ''}
         </div>
       </div>`;
@@ -136,14 +147,16 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
   function inspector(selected) {
     const point = data.places.find(place=>place.id===view.selected);
     const affected = selected.affected;
-    const splitAvailable = showSplit(selected);
+    const official = view.layer==='official';
+    const splitAvailable = !official && showSplit(selected);
     const hasSplit = current.days.flatMap(day=>day.stops).some(stop=>stop.split);
     const plan = calendarPlan(current,view.day);
     const alert = data.changes.find(change=>change.demo && change.id==='suzdal-kremlin' && change.key==='capacity');
     return `
-      <header class="atlas-inspector-head"><p class="atlas-overline">Маршрут под наблюдением</p>
+      <header class="atlas-inspector-head"><p class="atlas-overline">${official ? 'Сверка условий' : 'Маршрут под наблюдением'}</p>
         <h2>${esc(selected.title)}</h2>
-        <p class="atlas-date">${dayDate(selected.settings.date)} · ${selected.settings.days} дня · ${selected.settings.demo ? 'Учебный сценарий' : 'По подтверждённым условиям'}</p>
+        <p class="atlas-date">${dayDate(selected.settings.date)} · ${selected.settings.days} дня · ${official ? 'Официальные источники' :
+          selected.settings.demo ? 'Учебный сценарий' : 'По подтверждённым условиям'}</p>
         <div class="atlas-options atlas-groups" aria-label="Выбрать группу">${data.affected.map(item=>
           option(item.subtitle+' · '+item.settings.size,'group',item.id,item.id===selected.id)).join('')}</div>
       </header>
@@ -157,16 +170,17 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
         <p class="atlas-variant-note">${view.variant==='split'
           ? hasSplit ? 'Кремль остаётся в программе. Два сеанса нужно согласовать с музеем.' : 'Два сеанса не помещаются в расписание по учебным условиям.'
           : selected.added.length ? 'В программу добавлен '+esc(selected.added[0].name)+'.' : 'Нужна подтверждённая замена.'}</p>
-      </div>` : affected ? `<div class="atlas-impact"><div class="atlas-impact-title"><span class="atlas-impact-icon" aria-hidden="true">!</span>
+      </div>` : affected && !official ? `<div class="atlas-impact"><div class="atlas-impact-title"><span class="atlas-impact-icon" aria-hidden="true">!</span>
         <strong>Программа требует пересмотра</strong></div><p>${esc(selected.issues[0]?.reasons?.[0] ?? 'Откройте программу и сравните доступные варианты.')}</p></div>` : ''}
-      ${point ? details(point,selected) : !affected ? `
+      ${point ? details(point,selected) : official ? '<p class="atlas-reason atlas-published-note">Выберите объект на карте, чтобы сверить расписание и условия группы на дату визита.</p>' : !affected ? `
         <figure class="atlas-photo"><img src="/assets/suzdal.jpg" alt="Суздальский кремль со стороны реки Каменки, зимой" width="960" height="480">
           <figcaption><a href="${pictureSource}" target="_blank" rel="noopener noreferrer">А. Савин, Википедия ↗</a></figcaption></figure>` : ''}
       <div class="atlas-stops">
-        <div class="atlas-stops-head"><h3>Точки программы</h3><span>${stopCount(plan)} в плане</span></div>
+        <div class="atlas-stops-head"><h3>${official ? 'Точки для сверки' : 'Точки программы'}</h3>${official ? '' : '<span>'+stopCount(plan)+' в плане</span>'}</div>
         ${stops(plan, view.day==='all'?0:Number(view.day)) || '<p class="atlas-reason">Пока нет точек на выбранный день.</p>'}
       </div>
-      <div class="atlas-inspector-foot"><button type="button" class="button-quiet" data-atlas="open">Открыть программу <span aria-hidden="true">→</span></button></div>`;
+      <div class="atlas-inspector-foot">${official ? '<button type="button" class="button-quiet" data-atlas="open-official">Проверить условия программы <span aria-hidden="true">→</span></button>' :
+        '<button type="button" class="button-quiet" data-atlas="open">Открыть программу <span aria-hidden="true">→</span></button>'}</div>`;
   }
 
   function summary() {
@@ -216,25 +230,27 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
     const affectedIds = new Set(selected.removed.map(item=>item.id));
     const alternativeIds = new Set(selected.added.map(item=>item.id));
     const cities = new Set(displayed.days.map(day=>day.city));
-    const comparing = showSplit(selected);
+    const official = view.layer==='official';
+    const comparing = !official && showSplit(selected);
     const comparison = comparing ? calendarPlan(
       view.variant==='split' && selected.currentPlan ? selected.currentPlan :
         planRoute(data.places,selected.settings,view.variant==='split' ? null : 'suzdal-kremlin'),view.day) : null;
     const comparisonIds = new Set(comparison?.days.flatMap(day=>day.stops.map(stop=>stop.id)) ?? []);
     const places = data.places.map(place=>{
       const closestDay = current.days.findIndex(day=>day.city===place.city);
-      const assessment = assess(place,selected.settings,Math.max(closestDay,0));
+      const assessment = assess(place,official ? {...selected.settings,demo:false} : selected.settings,Math.max(closestDay,0));
       return { ...place, coordinates:place.coordinates ?? geodata.places?.[place.id]?.coordinates,
-        status:assessment.status, changed:affectedIds.has(place.id) && cities.has(place.city),
-        alternative:alternativeIds.has(place.id) && dayIds.has(place.id) };
-    }).filter(place=>view.layer==='all'||dayIds.has(place.id)||comparisonIds.has(place.id)||place.changed||
+        status:assessment.status, changed:!official && affectedIds.has(place.id) && cities.has(place.city),
+        alternative:!official && alternativeIds.has(place.id) && dayIds.has(place.id) };
+    }).filter(place=>official ? cities.has(place.city) : view.layer==='all'||dayIds.has(place.id)||comparisonIds.has(place.id)||place.changed||
       (view.layer==='risk'&&place.status!=='ready'&&cities.has(place.city)));
     find('#atlas-demo-label').textContent = data.auditVersion==='1' ? 'Снизить лимит в демо' : 'Вернуть исходный лимит';
     find('#atlas-days').innerHTML = option('Весь маршрут','day','all',view.day==='all') +
       current.days.map((_,i)=>option('День '+(i+1),'day',String(i),view.day===String(i))).join('');
     find('#atlas-base').innerHTML = option('Схема','base','scheme',view.base==='scheme') +
       option('Улицы','base','streets',view.base==='streets');
-    find('#atlas-layers').innerHTML = actions.map(([id,label])=>option(label,'layer',id,view.layer===id)).join('');
+    find('#atlas-layers').innerHTML = actions.filter(([id])=>id!=='official'||data.publishedConditions?.objectCount)
+      .map(([id,label])=>option(label,'layer',id,view.layer===id)).join('');
     find('#atlas-legend').hidden = !comparing;
     find('#atlas-inspector').innerHTML = inspector(selected);
     find('#atlas-summary').innerHTML = summary();
@@ -245,7 +261,7 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
     if (expanded && panel.querySelector('details')) panel.querySelector('details').open = true;
     find('#atlas-recommendations').innerHTML = '<div class="section-head"><h2>Следующие действия</h2><a href="#sources">Данные и методика ↗</a></div>'+
       '<ul class="rows">'+data.recommendations.slice(0,3).map(rec=>'<li><h3>'+esc(rec.title)+'</h3><p class="detail">'+esc(rec.text)+'</p></li>').join('')+'</ul>';
-    map?.update({ places, route:displayed, alternative:comparison, selectedId:view.selected,
+    map?.update({ places, route:official ? null : displayed, alternative:comparison, selectedId:view.selected,
       changedIds:places.filter(place=>place.changed).map(place=>place.id),
       showPlaces:true, base:view.base, geodata, frame:frame&&view.day!=='all' ? 'route' : frame });
     if (!map) find('#tour-map').textContent = 'Карта недоступна. Программа и карточки объектов доступны справа.';
@@ -265,7 +281,10 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
     const button = event.target.closest('[data-atlas]');
     if (!button) return;
     const {atlas:action,value} = button.dataset;
-    if (action==='fit') { map?.fit({routeOnly:true}); return; }
+    if (action==='fit') {
+      map?.fit(view.layer==='official' ? {allPlaces:true} : {routeOnly:true});
+      return;
+    }
     if (action==='expand') { void expand(); return; }
     if (action==='portfolio') {
       const panel = find('#atlas-portfolio');
@@ -280,6 +299,18 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
       onOpenRoute(selected.settings,current,{id:selected.id,issue});
       return;
     }
+    if (action==='open-official') {
+      onOpenRoute({...record().settings,demo:false},null,null);
+      return;
+    }
+    if (action==='passport') {
+      const place = data.places.find(item=>item.id===value);
+      if (place) {
+        const day = Math.max(0,current.days.findIndex(item=>item.city===place.city));
+        onOpenPlace(value,inspectionSettings(record()),day);
+      }
+      return;
+    }
     if (action==='group' && value===view.group) return;
     if (action==='clear') view.selected=null;
     if (action==='stop') view.selected=value;
@@ -290,9 +321,9 @@ export function mountAtlas(container, initialData, geodata, { onOpenRoute }) {
       view.variant='replacement';
     }
     if (['day','layer','base','variant','scenario','scenarioScope'].includes(action)) view[action]=value;
-    if (action==='day') view.selected=null;
+    if (['day','layer'].includes(action)) view.selected=null;
     paint(['group','day','layer'].includes(action));
-    if (action==='layer' && value==='all') map?.fit({allPlaces:true});
+    if (action==='layer' && ['all','official'].includes(value)) map?.fit({allPlaces:true});
     if (action==='stop') map?.select(view.selected,{focus:true});
     const focused = Array.from(container.querySelectorAll('[data-atlas]')).find(x=>
       x.dataset.atlas===action && x.dataset.value===value);

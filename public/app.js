@@ -37,6 +37,12 @@ addLocaleMessages([
   ['Срок новой заявки на комплексную экскурсию истёк {date}. Если заявка уже подана, проверьте её статус.',
     'The deadline for a new guided tour application was {date}. Check the status if you have already applied.','综合导览服务的新申请已于 {date} 截止。如已提交，请核查状态。'],
   ['Оферта музея','Museum booking terms','博物馆申请条款'],
+  ['Показан предыдущий расчёт по применённым параметрам. Пересчитайте программу, чтобы сверить расписание и погоду.',
+    'Showing the previous result with the applied requirements. Recalculate to review the new schedule and weather.',
+    '当前显示上次已应用条件的结果。请重新计算，以核查新的日程和天气。'],
+  ['Исправьте дату или размер группы. Каталог пока показывает условия на {date} для группы из {size} чел.',
+    'Correct the date or group size. For now the catalogue shows conditions for {size} people on {date}.',
+    '请更正日期或团队人数。目录目前显示 {date} 接待 {size} 人的条件。'],
   ['Карта объектов','Map of places','地点地图'],
   ['Дата визита','Visit date','到访日期'],
   ['Все города','All cities','所有城市'],
@@ -269,13 +275,14 @@ function catalog() {
   const settings = catalogSettings();
   const cities = [...new Set(data.places.map(place=>place.city))];
   return head(t('Каталог объектов'),t('Данные Владимирской области'))+
-    '<section class="panel"><div class="filters"><label class="field">Дата визита<input id="catalog-date" type="date" required value="'+safe(settings.date)+'"></label>'+
-    '<label class="field compact-field">Размер группы<input id="catalog-size" type="number" min="1" max="100" value="'+settings.size+'"></label>'+
+    '<section class="panel"><div class="filters"><label class="field">Дата визита<input id="catalog-date" type="date" min="2000-01-01" max="2099-12-31" required aria-describedby="catalog-conditions-status" value="'+safe(settings.date)+'"></label>'+
+    '<label class="field compact-field">Размер группы<input id="catalog-size" type="number" min="1" max="100" required aria-describedby="catalog-conditions-status" value="'+settings.size+'"></label>'+
     '<label class="field flex-grow">Поиск<input type="search" id="search" placeholder="Название или город" value="'+safe(filters.search)+
     '"></label><label class="field">Город<select id="city">'+selectOption('all',t('Все города'),filters.city)+cities.map(city=>selectOption(city,t(city),filters.city)).join('')+
     '</select></label><label class="field">Категория<select id="kind">'+Object.entries({all:'Все категории',...kindNames}).map(([v,label])=>selectOption(v,t(label),filters.kind)).join('')+
     '</select></label><label class="field">Готовность<select id="status">'+Object.entries({all:'Любой статус',...statusText}).map(([v,label])=>selectOption(v,t(label),filters.status)).join('')+
-    '</select></label></div><div class="table-wrap catalog-table"><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Объект</th><th scope="col">Город</th><th scope="col">Опубликованный график</th><th scope="col">Категория</th><th scope="col">Готовность</th><th scope="col">Источник</th></tr></thead>'+
+    '</select></label></div><p id="catalog-conditions-status" class="caption" role="status"></p>'+
+    '<div class="table-wrap catalog-table"><table role="table"><thead role="rowgroup"><tr role="row"><th scope="col">Объект</th><th scope="col">Город</th><th scope="col">Опубликованный график</th><th scope="col">Категория</th><th scope="col">Готовность</th><th scope="col">Источник</th></tr></thead>'+
     '<tbody id="catalog-rows" role="rowgroup">'+catalogRows()+'</tbody></table></div></section>';
 }
 
@@ -291,7 +298,7 @@ function bookingCutoffMarkup(deadline) {
   const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
   const label = deadline.date<today ? 'Срок новой заявки на комплексную экскурсию истёк {date}. Если заявка уже подана, проверьте её статус.' :
     'Заявка на комплексную экскурсию подаётся до {date} (за {days} дней).';
-  return '<p class="detail">'+safe(t(label,{date:date(deadline.date),days:formatNumber(deadline.days)}))+' '+
+  return '<p class="detail">'+safe(t(label,{date:date(deadline.date).replace(/ г\.$/u,''),days:formatNumber(deadline.days)}))+' '+
     outbound(deadline.url,t('Оферта музея'))+'</p>';
 }
 
@@ -629,7 +636,8 @@ function routeWorkbench(plan) {
   const evidence = routeEvidence(plan);
   const showVariants = Boolean(!timetable.publishedPreview || review.loading || review.error || review.variants?.length);
   const showAssistant = !timetable.publishedPreview || review.variants?.length>=2;
-  return pilotReadiness(plan,evidence,timetable)+(showVariants?routeVariants():'')+
+  return '<p class="callout pilot-previous-result">'+safe(t('Показан предыдущий расчёт по применённым параметрам. Пересчитайте программу, чтобы сверить расписание и погоду.'))+'</p>'+
+    pilotReadiness(plan,evidence,timetable)+(showVariants?routeVariants():'')+
     '<div class="route-review'+(showAssistant?'':' route-review--single')+'">'+routeDecision(plan,timetable)+
     (showAssistant?routeAssistant():'')+'</div>'+
     (plan.settings.demo ? '' : officialRouteReview(evidence))+decisionJournal();
@@ -679,7 +687,7 @@ function routeView(plan) {
       '<button type="button" class="link-button" data-action="live-conditions">'+safe(t('Проверить по опубликованным условиям'))+'</button></div>' : '')+
     '<button type="submit" class="button">Рассчитать варианты</button>'+
     '<p class="caption route-dirty" id="pilot-route-dirty" role="status"'+(review.dirty?'':' hidden')+'>Пересчитайте варианты с новыми параметрами.</p></form>'+
-    '<div class="route-workbench" id="route-workbench">'+routeWorkbench(plan)+'</div></div>';
+    '<div class="route-workbench" id="route-workbench" data-dirty="'+review.dirty+'">'+routeWorkbench(plan)+'</div></div>';
 }
 
 function updatePilotMapLink(plan) {
@@ -1201,9 +1209,26 @@ screen.addEventListener('input',event=>{
     $('#catalog-rows').innerHTML = catalogRows();
     localizeDom($('#catalog-rows'));
   }
+  if (['catalog-date','catalog-size'].includes(event.target.id)) {
+    const dateField=$('#catalog-date');
+    const sizeField=$('#catalog-size');
+    const status=$('#catalog-conditions-status');
+    if (!dateField.validity.valid || !sizeField.validity.valid) {
+      const applied=catalogSettings();
+      status.textContent=t('Исправьте дату или размер группы. Каталог пока показывает условия на {date} для группы из {size} чел.',
+        {date:date(applied.date),size:formatNumber(applied.size)});
+    } else {
+      filters.date=dateField.value;
+      filters.size=Number(sizeField.value);
+      status.textContent='';
+      $('#catalog-rows').innerHTML=catalogRows();
+      localizeDom($('#catalog-rows'));
+    }
+  }
   if (event.target.form?.id==='route-form') {
     const form = event.target.form;
     review.dirty = !form.checkValidity() || !sameSettings(readOptions(form),options);
+    $('#route-workbench').dataset.dirty=String(review.dirty);
     if (review.dirty && cancelRouteAnalysis(true)) repaintWorkbench();
     $('.route-dirty').hidden = !review.dirty;
     updatePilotMapLink();
@@ -1218,20 +1243,9 @@ screen.addEventListener('input',event=>{
 });
 screen.addEventListener('change',event=>{
   const input = event.target;
-  if (input.id==='catalog-date') {
-    filters.date = input.value ? routeSettings({date:input.value}).date : '';
-    input.value = catalogSettings().date;
-    $('#catalog-rows').innerHTML = catalogRows();
-    localizeDom($('#catalog-rows'));
-  }
   if (['kind','status','city'].includes(input.id)) {
     filters[input.id] = input.value;
     $('#catalog-rows').innerHTML = catalogRows();
-    localizeDom($('#catalog-rows'));
-  }
-  if (input.id==='catalog-size') {
-    filters.size=input.validity.valid && input.value?Number(input.value):null;
-    $('#catalog-rows').innerHTML=catalogRows();
     localizeDom($('#catalog-rows'));
   }
   if (input.id==='metric') {

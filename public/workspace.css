@@ -166,6 +166,9 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-output[data-dirty=true] .day-weather,
 .composer-output[data-dirty=true] .composer-alternatives{display:none}
 .route-review.route-review--single{grid-template-columns:minmax(0,1fr);grid-template-areas:"program"}
+.route-workbench:not([data-dirty=true]) .pilot-previous-result,
+.route-workbench[data-dirty=true] .day-weather{display:none}
+#catalog-conditions-status:empty{margin:0}
 .composer-day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
 .composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
 .composer-logistics li{margin:0}

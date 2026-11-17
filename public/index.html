@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Мониторинг изменений туристических объектов и маршрутов Владимирской области.">
+<title>ТурКонтур — мониторинг маршрутов</title>
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">К содержанию</a>
+<header class="top">
+  <div class="top-inner">
+    <a href="#impact" class="brand" aria-label="ТурКонтур, мониторинг"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>ТурКонтур</a>
+    <nav aria-label="Разделы">
+      <a href="#impact">Мониторинг</a>
+      <a href="#catalog">Каталог</a>
+      <a href="#route">Маршрут</a>
+      <a href="#stats">Статистика</a>
+    </nav>
+    <span class="region"><i></i> Владимирская область</span>
+  </div>
+</header>
+<main id="content" tabindex="-1">
+  <p id="toast" class="toast" role="status" hidden></p>
+  <div id="screen" aria-busy="true"><p>Загружаем мониторинг…</p></div>
+</main>
+<footer><span>ТурКонтур · Пилот Школы 21</span><a href="#sources">Данные и методика</a></footer>
+<dialog id="place-dialog" aria-labelledby="place-title"></dialog>
+</body>
+</html>

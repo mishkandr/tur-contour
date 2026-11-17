@@ -1,0 +1,23 @@
+{
+  "source": "Учебный аудит групповых визитов",
+  "version": "1",
+  "objects": {
+    "dmitrovsky":{"capacity":22,"language":"interpreter","minutes":55,"hours":[10,17],"off":[2],"seasons":["all"],"access":null},
+    "palaty":{"capacity":30,"language":"interpreter","minutes":90,"hours":[10,18],"off":[1],"seasons":["all"],"access":true},
+    "history":{"capacity":24,"language":"interpreter","minutes":60,"hours":[10,17],"off":[2],"seasons":["all"],"access":null},
+    "assumption":{"capacity":18,"language":null,"minutes":45,"hours":[11,16],"off":[],"seasons":["all"],"access":null},
+    "golden-gate":{"capacity":30,"language":"interpreter","minutes":25,"hours":[9,18],"off":[],"seasons":["spring","summer","autumn"],"access":true},
+    "stoletov":{"capacity":12,"language":null,"minutes":45,"hours":[10,17],"off":[1],"seasons":["all"],"access":false},
+    "vladimir-glass":{"capacity":20,"language":"interpreter","minutes":60,"hours":[10,17],"off":[2],"seasons":["all"],"access":true},
+    "suzdal-kremlin":{"capacity":25,"language":"interpreter","minutes":90,"hours":[10,18],"off":[],"seasons":["all"],"access":true},
+    "euthymius":{"capacity":30,"language":"interpreter","minutes":90,"hours":[10,18],"off":[1],"seasons":["all"],"access":true},
+    "wood":{"capacity":25,"language":"interpreter","minutes":70,"hours":[10,17],"off":[1],"seasons":["spring","summer","autumn"],"access":null},
+    "nativity":{"capacity":16,"language":null,"minutes":45,"hours":[10,17],"off":[],"seasons":["all"],"access":null},
+    "kideksha":{"capacity":24,"language":"interpreter","minutes":45,"hours":[10,17],"off":[2],"seasons":["all"],"access":true},
+    "amaks":{"capacity":50,"language":"interpreter","minutes":30,"hours":[14,24],"off":[],"seasons":["all"],"access":true},
+    "nposad":{"capacity":30,"language":"interpreter","minutes":30,"hours":[14,24],"off":[],"seasons":["all"],"access":true},
+    "amaks-food":{"capacity":40,"language":"interpreter","minutes":60,"hours":[12,22],"off":[],"seasons":["all"],"access":true},
+    "ogurec":{"capacity":30,"language":"interpreter","minutes":60,"hours":[12,20],"off":[],"seasons":["all"],"access":true},
+    "kupets":{"capacity":26,"language":null,"minutes":60,"hours":[12,20],"off":[],"seasons":["all"],"access":true}
+  }
+}

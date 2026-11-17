@@ -327,7 +327,7 @@ function statisticsRequest(question,query) {
   const words = {one:1,two:2,three:3,four:4,five:5,один:1,два:2,три:3,четыре:4,пять:5,一:1,两:2,二:2,三:3,四:4,五:5};
   const relative = query.match(/(?:последн[а-я]*|last|past)\s+([\p{L}\p{N}]+)\s*(?:год|лет|year)/u) ?? query.match(/(?:过去|近)\s*([1-5一两二三四五])\s*年/u);
   const last = relative ? Math.max(1,Math.min(Number(relative[1]) || words[relative[1]] || 3,5)) : 3;
-  const metric = /ночев|overnight|过夜|住宿夜/.test(query) ? 'nights' : /размещен.*лиц|гост[еия]|человек|выбр.*размещен|guests|people|住宿接待人数|入住人数/u.test(query) ? 'people' : 'nights';
+  const metric = /ночев|overnight|过夜|住宿夜/.test(query) ? 'nights' : /размещен.*лиц|размещени[ея] турист|гост[еия]|человек|выбр.*размещен|guests|people|住宿接待人数|入住人数/u.test(query) ? 'people' : 'nights';
   return {intent:'statistics',metric,years:duration>=1 && duration<=15 ? Array.from({length:duration},(_,i)=>Number(range[1])+i) : years,last,mode:'Базовый разбор'};
 }
 
@@ -401,8 +401,8 @@ async function statisticsAnswer(data,question,query,settings,scope,askStats,loca
     comparable.sort((a,b)=>highest ? b.value-a.value : a.value-b.value);
     values.push(...comparable.slice(0,3).map(({index,value})=>({title:monthName(index),text:output.format(value)+' '+unit})));
   }
-  const measure = month>=0 ? t(request.metric) : annual ? t('yearly') : t(highest ? 'highest' : 'lowest');
-  const title = result?.region ? placeName(result.region,locale)+' · '+measure : measure;
+  const measure = month>=0 ? null : annual ? t('yearly') : t(highest ? 'highest' : 'lowest');
+  const title = [result?.region && placeName(result.region,locale),t(request.metric),measure].filter(Boolean).join(' · ');
   const coverage = comparison.map(year=>year.year).join(', ');
   const notes = [t(regional ? 'regionalStatisticsScope' : 'statisticsScope')];
   if (!values.length) notes.push(t(regional && !available ? 'regionalStatisticsUnavailable' : 'noStats'));

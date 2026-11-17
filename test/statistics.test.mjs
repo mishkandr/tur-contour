@@ -43,12 +43,23 @@ test('the case question discovers a monthly release and explains which years are
     await rm(folder,{recursive:true,force:true});
   });
   const {handleRequest} = await import('../server.mjs');
-  const ask = question=>new Promise((resolve,reject)=>{
-    const input = Object.assign(Readable.from([JSON.stringify({question})]),{method:'POST',url:'/api/ask'});
+  const postQuestion = (url,question)=>new Promise((resolve,reject)=>{
+    const input = Object.assign(Readable.from([JSON.stringify({question})]),{method:'POST',url});
     handleRequest(input,{writeHead(code){assert.equal(code,200);},end(body){resolve(JSON.parse(body));}}).catch(reject);
   });
+  const ask = question=>postQuestion('/api/ask',question);
 
-  const result = await ask('Проанализируй сезонность туризма во Владимирской области за последние три года и выдели периоды с наименьшими показателями размещения туристов');
+  const question = 'Проанализируй сезонность туризма во Владимирской области за последние три года и выдели периоды с наименьшими показателями размещения туристов';
+  const knowledge = await postQuestion('/api/knowledge',question);
+  assert.equal(knowledge.status,'answered');
+  assert.match(knowledge.title,/Численность размещённых лиц/u);
+  assert.match(knowledge.text,/2023, 2024, 2025/);
+  assert.equal(knowledge.sources[0].url,'https://roschart.ru/dataset/'+currentID);
+  assert.deepEqual(knowledge.items.map(({title,text})=>[title,text.replace(/\s+/gu,' ')]),[
+    ['январь','1 020 чел.'],['февраль','1 070 чел.'],['март','1 120 чел.'],
+  ]);
+
+  const result = await ask(question);
   assert.equal(result.plan.metric,'people');
   assert.equal(result.sourceStatus,'live');
   assert.equal(result.summary.edition,'SR_mes_sub_'+edition);
@@ -65,4 +76,7 @@ test('the case question discovers a monthly release and explains which years are
   const offline = await ask('Минимум ночёвок по Владимирской области за три года');
   assert.equal(offline.sourceStatus,'error');
   assert.ok(offline.summary.lows.length);
+  const explicitNights = await postQuestion('/api/knowledge','Выдели минимум ночёвок при размещении туристов во Владимирской области.');
+  assert.match(explicitNights.title,/Число ночёвок/u);
+  assert.ok(explicitNights.items.length && explicitNights.items.every(({text})=>text.endsWith('ночёвок')));
 });

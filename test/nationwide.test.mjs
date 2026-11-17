@@ -231,6 +231,20 @@ test('scoped replacements keep all required visits, exact slots and other days i
   await assert.rejects(draftItinerary({...input,replacements:[{...operation,toId:operation.fromId}]},options),{status:400});
 });
 
+test('an outdoor stop offers an indoor same-time candidate for checking before a trip',async()=>{
+  const city=(await listCities('Тюмень')).cities[0];
+  const [lat,lon]=city.coordinates;
+  const place=(id,name,tags)=>({type:'node',id,lat,lon:lon+id*0.00001,tags:{name,...tags}});
+  const parks=Array.from({length:12},(_,index)=>place(index+1,`Сквер ${index+1}`,{leisure:'park'}));
+  const elements=[...parks,place(40,'Выставочный зал',{tourism:'gallery',indoor:'yes'}),
+    place(41,'Ресторан',{amenity:'restaurant'}),place(42,'Гостиница',{tourism:'hotel'})];
+  const result=await draftItinerary({...request,cityId:city.id,theme:'nature'},{fetchImpl:async()=>Response.json({elements})});
+  const outdoor=result.plan.days.flatMap(day=>day.stops).filter(stop=>stop.exposure==='outdoors');
+  assert.ok(outdoor.length);
+  assert.ok(outdoor.some(stop=>stop.alternatives.some(candidate=>candidate.id==='osm-node-40' &&
+    candidate.exposure==='indoors' && candidate.status==='unknown')));
+});
+
 test('a relaxed Kazan plan uses the morning while keeping mandatory visits and group lunch',async()=>{
   const {plan}=await draftItinerary({...request,cityId:'551487',date:'2026-11-21',days:3,size:12,market:'ru',
     pace:'relaxed',interests:['heritage','museum'],required:['Казанский кремль']},{fetchImpl:offline});

@@ -157,6 +157,12 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-map-scene{height:clamp(255px,31vw,395px);position:relative;isolation:isolate;background:#e7ebdf}
 #draft-map{position:absolute;inset:0;background:#e7ebdf}
 .composer-day{margin-top:15px}
+.day-weather{display:grid;gap:3px;margin:6px 0 9px;line-height:1.5}
+.day-weather p{margin:0}
+.day-weather strong{color:var(--ink)}
+.day-weather-risk{border-inline-start:2px solid var(--accent);padding-inline-start:9px;margin:3px 0}
+.day-weather-alternative{min-height:40px;text-align:start;white-space:normal}
+.day-weather-source{font-size:.76rem}
 .composer-day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
 .composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
 .composer-logistics li{margin:0}

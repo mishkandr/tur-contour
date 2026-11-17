@@ -252,6 +252,13 @@ function classify(tags) {
   return interests.length || tags.tourism==='attraction' ? {kind:'visit',tags:interests} : null;
 }
 
+function exposureOf(name,category,tags={}) {
+  if (tags.indoor==='yes') return 'indoors';
+  const label = normalize(name);
+  if (tags.indoor==='no' || category==='park' || /открытым небом|деревянного зодчества/u.test(label)) return 'outdoors';
+  if (category==='museum' && !/музей заповедник|музей усадьба/u.test(label)) return 'indoors';
+}
+
 function pointOf(element) {
   const [lat,lon] = [element.lat ?? element.center?.lat,element.lon ?? element.center?.lon];
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat)<=85 && Math.abs(lon)<=180 ? [lat,lon] : null;
@@ -271,8 +278,11 @@ function fromOsm(elements,city) {
     if (!coordinates || distance(coordinates,city.coordinates)>12 || !name || !category ||
         nearby.some(point=>distance(point,coordinates)<0.1)) continue;
     seen.set(key,[...nearby,coordinates]);
+    const exposure = category.kind==='visit' ? exposureOf(name,
+      category.tags.includes('nature') ? 'park' : category.tags.includes('museum') ? 'museum' : null,tags) : null;
     objects.push({ id:'osm-'+element.type+'-'+element.id,name,en:clean(tags['name:en']) || null,
       cn:clean(tags['name:zh-Hans'] ?? tags['name:zh']) || null,city:city.name,coordinates,...category,status:'unknown',geoStatus:'mapped',
+      ...(exposure ? {exposure} : {}),
       url:'https://www.openstreetmap.org/'+element.type+'/'+element.id,officialUrl:webAddress(tags.website ?? tags['contact:website']),
       hoursHint:clean(tags.opening_hours,200) || null,wheelchairHint:clean(tags.wheelchair,15) || null });
   }
@@ -300,7 +310,9 @@ async function archivedPlaces(city,reason) {
     const [lat,lon] = place.coordinates ?? [];
     if (!tags || !Number.isFinite(lat) || !Number.isFinite(lon) || distance([lat,lon],city.coordinates)>12) return [];
     const kind = ['stay','food'].includes(place.category) ? place.category : 'visit';
+    const exposure = exposureOf(place.name,place.category);
     return [{...place,city:city.name,kind,tags:kind==='visit' ? fallbackTags(place.name,tags) : tags,
+      ...(exposure ? {exposure} : {}),
       status:'unknown',geoStatus:'mapped'}];
   });
   return { places,source:{...(dataset.source ?? osm),status:'snapshot',checkedAt:local.checkedAt,reason} };
@@ -363,7 +375,9 @@ async function fetchWikiPois(city,fetchImpl) {
       if (!point || !category || !name || !Number.isSafeInteger(page.pageid) || page.pageid<1 ||
         distance(point,city.coordinates)>10 || normalize(name)===normalize(city.name)) return [];
       const kind = ['stay','food'].includes(category) ? category : 'visit';
+      const exposure = exposureOf(name,category);
       return [{id:'ruwiki-'+page.pageid,name,city:city.name,coordinates:point,kind,tags:fallbackTags(name,categories[category]),status:'unknown',geoStatus:'mapped',
+        ...(exposure ? {exposure} : {}),
         url:'https://ru.wikipedia.org/?curid='+page.pageid}];
     });
     return places.length ? {places,source:{...wiki,status:'live',checkedAt:new Date().toISOString()}} : null;
@@ -383,7 +397,9 @@ async function requestPois(city,fetchImpl) {
       const place=places[index];
       const aliases=[...new Set([...(place.aliases ?? []),archived.name,archived.en,archived.cn].filter(Boolean))];
       const sources=[...new Set([...(place.sources ?? [place.url]),archived.url])];
+      const exposure = place.exposure ?? archived.exposure;
       places[index]={...place,en:place.en ?? archived.en,cn:place.cn ?? archived.cn,aliases,sources,
+        ...(exposure ? {exposure} : {}),
         tags:[...new Set([...place.tags,...archived.tags])]};
       usedArchive=true;
     } else if (archived.kind==='visit' || !kinds.has(archived.kind)) {
@@ -538,14 +554,20 @@ function alternativeStops(stops,index,context,scheduledIds) {
   const {settings,allowed,requested}=context;
   const selected=stops[index];
   if (requested.has(selected.place.id) || selected.place.kind==='stay') return [];
-  return allowed.flatMap(place=>{
+  const ranked=allowed.flatMap(place=>{
     if (place.kind!==selected.place.kind || scheduledIds.has(place.id) || requested.has(place.id)) return [];
     const legs=replacementLegs(place,stops,index,context);
     if (!legs) return [];
     const score=fitScore(place,settings)-(legs.inbound.minutes+(legs.outbound?.minutes ?? 0))/7;
     return [{place,score}];
-  }).sort((a,b)=>b.score-a.score || a.place.id.localeCompare(b.place.id)).slice(0,2)
-    .map(({place})=>({id:place.id,name:place.name,en:place.en,cn:place.cn,url:place.url,status:'unknown'}));
+  }).sort((a,b)=>b.score-a.score || a.place.id.localeCompare(b.place.id));
+  const shortlist=ranked.slice(0,2);
+  if (selected.place.exposure==='outdoors' && !shortlist.some(item=>item.place.exposure==='indoors')) {
+    const covered=ranked.find(item=>item.place.exposure==='indoors');
+    if (covered) shortlist.splice(1,1,covered);
+  }
+  return shortlist.map(({place})=>({id:place.id,name:place.name,en:place.en,cn:place.cn,url:place.url,status:'unknown',
+    ...(place.exposure ? {exposure:place.exposure} : {})}));
 }
 
 function applyReplacement(days,change,coverage) {
@@ -651,6 +673,7 @@ function schedule(contexts,settings) {
       id:place.id,type:place.kind,name:place.name,en:place.en,cn:place.cn,coordinates:place.coordinates,url:place.url,
       start:time(start),end:time(end),estimatedTransfer:leg.minutes,status:'unknown',geoStatus:place.geoStatus,
       ...(action ? {action} : {}),
+      ...(place.exposure ? {exposure:place.exposure} : {}),
       required:requested.has(place.id),leg:{minutes:leg.minutes,distanceKm:leg.distanceKm,fromId:leg.fromId,mode:leg.mode,estimate:leg.estimate},
       alternatives:alternativeStops(chosen,index,context,scheduledIds),
     }))};

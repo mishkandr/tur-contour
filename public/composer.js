@@ -1,6 +1,7 @@
 import { createRouteMap } from '/map.js';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/locale.js';
 import { aiWaitingMarkup, updateAiWait } from '/knowledge.js';
+import { loadPlanWeather, weatherExport, weatherSlot } from '/weather.js';
 
 addLocaleMessages([
   ['Конструктор маршрутов','Itinerary builder','行程编制'],
@@ -273,6 +274,17 @@ function dayLogistics(day) {
   ];
 }
 
+function forecastDays(result, dirty=false) {
+  return result.plan.days.map(day=>{
+    const city = result.locations?.find(location=>location.id===day.cityId) ?? result.location;
+    const outdoors = day.stops.filter(stop=>stop.exposure==='outdoors');
+    const stop = !dirty && outdoors.find(item=>item.alternatives?.some(candidate=>candidate.exposure==='indoors'));
+    return {date:day.date,coordinates:city?.coordinates,
+      outdoors:outdoors.length>0 || result.plan.settings.interests?.some(theme=>['hike','nature'].includes(theme)),
+      alternative:stop?{stop,name:name(stop)}:null};
+  });
+}
+
 function draftMarkup(result) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
@@ -301,11 +313,12 @@ function draftMarkup(result) {
 
 function download(result) {
   const {location,plan,settings,warnings} = result;
+  const weather = weatherExport(forecastDays(result));
   const lines = [t('Черновик')+' · '+(result.locations??[location]).map(name).join(' → '), formatDate(settings.date)+' · '+formatNumber(settings.size),
     ...evidenceSources(result).map(item=>item.name+' · '+item.url), location.sourceUrl,'',
     ...plan.days.flatMap((day,index)=>[t('День {day}',{day:index+1})+' · '+formatDate(day.date)+' · '+(day.cityId ?
       name(result.locations?.find(item=>item.id===day.cityId)??location):name(location)),
-      ...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...dayLogistics(day),...day.missing.map(gapLabel),'']),
+      ...weather[index],...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...dayLogistics(day),...day.missing.map(gapLabel),'']),
     t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>item.label+' · '+eligibility(item)),
     ...(plan.interestCoverage??[]).map(({theme,count})=>t(themes[theme]??theme)+' · '+
       (count?t('{count} точек',{count:formatNumber(count)}):t('Подходящие точки не найдены')))];
@@ -416,7 +429,7 @@ export function mountComposer(container, api) {
     const visible=places.filter(place=>included.has(place.id));
     find('#draft-timeline').innerHTML = days.map(({day,index})=>'<section class="composer-day"><h3>'+tr('День {day}',{day:index+1})+
       ' · '+safe(formatDate(day.date))+(state.result.locations?.length>1?' · '+safe(name(state.result.locations.find(city=>city.id===day.cityId)??{name:day.city})): '')+
-      '</h3>'+(day.transfer ? '<p class="caption">'+tr('{from} → {to} · {distance} км по прямой',{
+      '</h3>'+weatherSlot(index)+(day.transfer ? '<p class="caption">'+tr('{from} → {to} · {distance} км по прямой',{
         from:name(state.result.locations?.find(city=>city.id===day.transfer.fromId)??{name:day.transfer.from}),
         to:name(state.result.locations?.find(city=>city.id===day.transfer.toId)??{name:day.transfer.to}),distance:formatNumber(day.transfer.distanceKm)})+'</p>' : '')+
       '<ul class="composer-logistics caption">'+dayLogistics(day).map(item=>'<li>'+safe(item)+'</li>').join('')+'</ul>'+
@@ -434,6 +447,7 @@ export function mountComposer(container, api) {
       '<div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p></div></details>':'')+'</div>':'')+
       '</li>').join('')+
       '</ul>'+day.missing.map(gap=>'<p class="caption">'+safe(gapLabel(gap))+'</p>').join('')+'</section>').join('');
+    loadPlanWeather(find('#draft-timeline'),forecastDays(state.result,state.dirty),api);
     map?.update({places:visible,route:{...plan,days:days.map(({day})=>day)},selectedId:state.point,
       dayIndex:state.mapDay==='all'?0:Number(state.mapDay),geodata,frame:frame?'route':false,base:'streets',locale:getLocale(),showPlaces:true});
     retainDraft();
@@ -680,7 +694,7 @@ export function mountComposer(container, api) {
     const {composer:action,value}=button.dataset;
     if (action==='refine') {void analyse();return;}
     if (pending && (['example','remove-city','restore-stop','pin-stop','omit-stop'].includes(action) ||
-        (pending.feedback && ['day','stop'].includes(action)))) {
+        (pending.feedback && ['day','stop','weather-alternatives'].includes(action)))) {
       pending.controller.abort();
       finish(pending);
     }
@@ -722,12 +736,21 @@ export function mountComposer(container, api) {
       find('#draft-days [aria-pressed=true]')?.focus({preventScroll:true});
     }
     if (action==='fit') map?.fit({routeOnly:true});
-    if (action==='stop') {
+    if (action==='stop' || action==='weather-alternatives') {
+      if (action==='weather-alternatives' && state.dirty) {
+        showNote('Параметры изменились. Соберите черновик заново.');
+        find('#draft-input [type=submit]').focus();
+        return;
+      }
       state.point=value;
       state.pointDay=Number(button.dataset.day);
       paintDays();
       map?.select(value,{focus:true});
-      find('#draft-timeline button[aria-pressed=true]')?.focus({preventScroll:true});
+      const alternatives = action==='weather-alternatives' ? find('.composer-alternatives') : null;
+      if (alternatives) {
+        alternatives.open=true;
+        alternatives.querySelector('summary')?.focus();
+      } else find('#draft-timeline button[aria-pressed=true]')?.focus({preventScroll:true});
     }
     if (action==='export' && !state.dirty) download(state.result);
     if (action==='replace-stop') {

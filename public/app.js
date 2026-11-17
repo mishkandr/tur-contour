@@ -5,6 +5,7 @@ import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, loca
 import { renderOverview } from '/overview.js';
 import { itineraryTabs, mountComposer } from '/composer.js';
 import { aiWaitingMarkup, mountKnowledge, updateAiWait } from '/knowledge.js';
+import { loadPlanWeather, weatherSlot } from '/weather.js';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
@@ -347,6 +348,7 @@ function routeStopName(stop) {
 function renderDay(day,index,settings,decisionId) {
   const reference = decisionId ? ' data-decision="'+safe(decisionId)+'"' : '';
   return '<section class="route-day"><div class="route-day-head"><p class="caption">'+safe(t('День {day}',{day:formatNumber(index+1)}))+' · '+date(day.date)+'</p><h3>'+safe(routeCity(day))+'</h3></div>'+
+    (decisionId?'':weatherSlot(index))+
     '<ul class="rows">'+day.stops.map(stop=>{
       const template = stop.split ? '{kind} · два сеанса по {size} чел.' : settings.demo ? '{kind} · учебный лимит {size} чел.' : '{kind} · лимит {size} чел.';
       const status = stop.type==='travel' ? t('Переезд · расчётное время') : t(template,{
@@ -575,8 +577,7 @@ function decisionJournal() {
       '<p class="detail">Здесь появятся версии программ, согласованные специалистом.</p>')+'</section>';
 }
 
-function routeWorkbench() {
-  const plan = currentRoutePlan();
+function routeWorkbench(plan) {
   const evidence = routeEvidence(plan);
   return pilotReadiness(plan,evidence)+routeVariants()+'<div class="route-review">'+routeDecision(plan)+routeAssistant()+'</div>'+
     (plan.settings.demo ? '' : officialRouteReview(evidence))+decisionJournal();
@@ -586,7 +587,24 @@ function currentRoutePlan() {
   return selectedVariant()?.plan ?? review.preview ?? planRoute(data.places,options);
 }
 
-function routeView() {
+function attachPilotWeather(plan) {
+  const placeById = new Map(data.places.map(place=>[place.id,place]));
+  const outdoor = stop=>['golden-gate','wood'].includes(stop.id) || ['hike','nature'].includes(placeById.get(stop.id)?.theme);
+  const indoor = stop=>placeById.get(stop.id)?.theme==='museum' && !outdoor(stop);
+  const days = plan.days.map((day,index)=>{
+    const currentOutdoor = day.stops.some(outdoor);
+    const variant = currentOutdoor && review.variants?.find(item=>{
+      const other = item.plan.days[index];
+      return other?.date===day.date && other.city===day.city && other.stops.some(indoor) && !other.stops.some(outdoor);
+    });
+    return {date:day.date,coordinates:geodata.cities?.[day.city]?.coordinates,
+      outdoors:currentOutdoor || ['hike','nature'].includes(plan.settings.theme),
+      alternative:variant?{variant:variant.id}:null};
+  });
+  loadPlanWeather($('.route-program'),days,api);
+}
+
+function routeView(plan) {
   const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
   const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
   return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'))+itineraryTabs(true)+
@@ -604,15 +622,17 @@ function routeView() {
       '<button type="button" class="link-button" data-action="live-conditions">'+safe(t('Проверить по опубликованным условиям'))+'</button></div>' : '')+
     '<button type="submit" class="button">Рассчитать варианты</button>'+
     '<p class="caption route-dirty" role="status"'+(review.dirty?'':' hidden')+'>Пересчитайте варианты с новыми параметрами.</p></form>'+
-    '<div class="route-workbench" id="route-workbench">'+routeWorkbench()+'</div></div>';
+    '<div class="route-workbench" id="route-workbench">'+routeWorkbench(plan)+'</div></div>';
 }
 
 function repaintWorkbench() {
   const workspace = $('#route-workbench');
   if (!workspace) return;
   const chineseOpen = workspace.querySelector('.chinese-preview')?.open;
-  workspace.innerHTML = routeWorkbench();
+  const plan = currentRoutePlan();
+  workspace.innerHTML = routeWorkbench(plan);
   localizeDom(workspace);
+  attachPilotWeather(plan);
   const preview = workspace.querySelector('.chinese-preview');
   if (preview && chineseOpen) preview.open = true;
 }
@@ -922,9 +942,13 @@ function render(scroll=false) {
     if (current==='ask') knowledge=mountKnowledge(screen,api,options,params().get('region'));
     else if (current==='route' && params().get('scope')!=='pilot') composer=mountComposer(screen,api);
     else {
-      screen.innerHTML = {overview:()=>renderOverview(data,overview),catalog,route:routeView,stats,sources}[current]();
+      const plan = current==='route' ? currentRoutePlan() : null;
+      screen.innerHTML = {overview:()=>renderOverview(data,overview),catalog,route:()=>routeView(plan),stats,sources}[current]();
       if (current==='stats') void loadStatRegions();
-      if (current==='route' && !review.variants && !review.loading && !review.error) void loadAlternatives();
+      if (plan) {
+        attachPilotWeather(plan);
+        if (!review.variants && !review.loading && !review.error) void loadAlternatives();
+      }
     }
   }
   localizeDom(screen);

@@ -23,6 +23,7 @@ addLocaleMessages([
   ['Места и проекты','Places and projects','地点与项目'],
   ['Найти место по названию','Find a place by name','按名称查找地点'],
   ['По этому названию ничего не найдено.','No places match that name.','未找到名称匹配的地点。'],
+  ['Каталог города временно недоступен.','The city catalogue is temporarily unavailable.','该城市的目录暂时无法加载。'],
   ['В этой выборке нет объектов выбранной категории.','No places in this category were found in the current search.','当前检索未返回此类别的地点。'],
   ['По этому городу пока нет записей из подключённых источников проектов.','The connected project sources have no records for this city yet.','已接入的项目数据源暂无该城市的记录。'],
   ['Показать ещё {count}','Show {count} more','再显示 {count} 个'],
@@ -129,11 +130,16 @@ function placeInfoMarkup(place,cityId) {
     (route||source?'<div class="city-place-actions">'+route+source+'</div>':'')+'</div>';
 }
 
+function catalogUnavailable(data,sources) {
+  return sources.catalog && data.catalogSources.every(source=>source.status==='unavailable');
+}
+
 function reportMarkup(data,places,sources,placeQuery) {
   const {city,region,counts}=data;
   const regionLabel=region && (region.name===city.name?translated(city):translated(region));
   const projectCount=data.projects?.status==='published' ? data.projects.records.length : '–';
-  const totals={all:places.length,...counts,project:projectCount};
+  const unavailable=catalogUnavailable(data,sources);
+  const totals={all:unavailable && !places.length ? '–' : places.length,...(unavailable?{}:counts),project:projectCount};
   const ask=new URLSearchParams({city:city.id,...(region?.id?{region:region.id}:{})});
   const entries=Object.entries(filters).filter(([key])=>key==='all' || (key==='project'?sources.projects:sources.catalog)).map(([key,label])=>'<button type="button" data-overview-filter="'+key+
     '" aria-pressed="'+(key==='all')+'">'+(key==='project'?'<span class="city-project-symbol" aria-hidden="true">◇</span> ':'')+
@@ -145,6 +151,8 @@ function reportMarkup(data,places,sources,placeQuery) {
     '" class="button" id="city-overview-route">'+msg('Собрать маршрут')+'</a>'+
     '<a class="button-quiet" href="#ask?'+escape(ask)+'">'+msg('Вопрос по городу')+'</a></div></header>'+
     (sources.catalog || sources.projects ? '<section class="city-overview-inventory" aria-label="'+msg('Места и проекты')+'">'+
+    (unavailable?'<div class="city-catalog-unavailable"><p class="caption" role="status">'+msg('Каталог города временно недоступен.')+'</p>'+
+    '<button type="button" class="button-quiet" data-overview-retry>'+msg('Повторить')+'</button></div>':'')+
     '<div class="city-inventory-filters" role="group" aria-label="'+msg('Места и проекты')+'">'+entries.join('')+'</div>'+
     (places.length?'<label class="field city-place-search"><span class="sr-only">'+msg('Найти место по названию')+'</span>'+
     '<input id="overview-place-query" type="search" maxlength="120" autocomplete="off" value="'+escape(placeQuery)+
@@ -247,6 +255,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       msg(place.kind==='project'?stages[place.stage]??stages.planned:filters[place.kind])+'</small></button></li>').join('')+'</ul>'+
       (visible.length>hits.length?'<button type="button" class="button-quiet" data-overview-next>'+
         msg('Показать ещё {count}',{count:formatNumber(Math.min(8,visible.length-hits.length))})+'</button>':'') :
+      filter!=='project' && catalogUnavailable(data,sources) ? '' :
       '<p class="caption" role="status">'+msg(placeQuery.trim()?'По этому названию ничего не найдено.' :
         filter==='project' && data.projects?.status!=='published' ?
         'По этому городу пока нет записей из подключённых источников проектов.' :
@@ -321,7 +330,8 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       const cached=getCached(cityCache,cacheKey);
       const response=cached??await api('city-overview?'+query,undefined,'GET',{signal:controller.signal});
       if (!mounted || controller.signal.aborted) return;
-      data=cached??addCached(cityCache,cacheKey,response);
+      data=response;
+      if (!cached && !catalogUnavailable(data,sources)) addCached(cityCache,cacheKey,data);
       const {city,geodata,projects}=data;
       lastChosenCity=id;
       places=[...(sources.catalog?data.places??[]:[]),...(sources.projects?projects?.records??[]:[])
@@ -398,7 +408,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       paintPlaces();
       container.querySelectorAll('[data-overview-place]')[previous]?.focus();
     } else if (Object.hasOwn(button.dataset,'overviewRetry')) {
-      void selectCity(cityId,{focus:true});
+      void selectCity(cityId,{focus:true,category:filter,placeId:selected,nameQuery:placeQuery});
     }
   }
 

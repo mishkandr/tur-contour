@@ -33,6 +33,9 @@
 }
 .city-place-search{border-bottom:1px solid var(--line);margin:0;padding:8px 10px}
 #overview-place-query{width:100%;max-width:420px;min-height:44px;font-size:max(1rem,16px)}
+.city-catalog-unavailable{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;
+  border-bottom:1px solid var(--line);padding:6px 12px}
+.city-catalog-unavailable button{min-height:44px}
 .city-inventory-layout{display:grid;grid-template-columns:minmax(0,1fr)}
 #city-overview-map{
   min-width:0;min-height:270px;height:clamp(270px,48svh,480px);background:#e7ebdf;

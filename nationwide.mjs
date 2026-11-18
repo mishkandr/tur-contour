@@ -15,6 +15,7 @@ const fallbackUrl = 'https://overpass.private.coffee/api/interpreter';
 const wikiLimit = 250;
 const providerSpacingMs = 2000;
 const fallbackRefreshMs = 180_000;
+const unavailableRefreshMs = 30_000;
 const providerLanes = {
   [osm.id]:{active:false,nextRequestAt:0,cooldownUntil:0},
   [europeLane]:{active:false,nextRequestAt:0,cooldownUntil:0},
@@ -603,7 +604,8 @@ async function objectsFor(city,fetchImpl,recordCatalog) {
   const task = lookupPois(city,fetchImpl,recordCatalog).then(result=>{
     if (result.source.reason!=='busy') {
       const primaryRefresh=result.source.status==='live' && result.source.id===osm.id;
-      cache.set(city.id,{until:Date.now()+(primaryRefresh ? catalogRefreshMs : fallbackRefreshMs),result});
+      const refresh=result.source.status==='unavailable' ? unavailableRefreshMs : primaryRefresh ? catalogRefreshMs : fallbackRefreshMs;
+      cache.set(city.id,{until:Date.now()+refresh,result});
       if (cache.size>80) cache.delete(cache.keys().next().value);
     }
     return result;

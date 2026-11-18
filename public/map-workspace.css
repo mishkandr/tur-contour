@@ -123,3 +123,12 @@
     outline-color: Highlight;
   }
 }
+.route-map .leaflet-bottom.leaflet-right {
+  max-width: calc(100% - 106px);
+}
+
+.route-map .leaflet-control.leaflet-control-attribution,
+#tour-map .leaflet-control-attribution a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

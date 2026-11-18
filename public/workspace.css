@@ -165,7 +165,19 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .day-weather-alternative{min-height:40px;text-align:start;white-space:normal}
 .day-weather-source{font-size:.76rem}
 .composer-output[data-dirty=true] .day-weather,
-.composer-output[data-dirty=true] .composer-alternatives{display:none}
+.composer-output[data-dirty=true] .composer-alternatives,
+.composer-output[data-dirty=true] .composer-services{display:none}
+.composer-services{border-top:1px solid var(--line);padding-block:6px 10px}
+.composer-services summary{align-content:center;cursor:pointer;font-weight:680;min-height:44px}
+.composer-service-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:8px 10px;margin-bottom:8px}
+.composer-service-fields :is(input,select){font-size:max(1rem,16px);min-height:44px}
+.composer-service-list{margin:5px 0;padding:0;list-style:none}
+.composer-service-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-block:8px;border-top:1px solid var(--line)}
+.composer-service-list li>div{min-width:0;overflow-wrap:anywhere}
+.composer-services .button-quiet{min-height:44px;white-space:normal;text-align:start}
+.composer-services :is(summary,button,a,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.composer-service-feedback .composer-swap-status:empty{margin:0}
+.composer-service-list p{margin:1px 0 0}
 .route-review.route-review--single{grid-template-columns:minmax(0,1fr);grid-template-areas:"program"}
 .route-workbench:not([data-dirty=true]) .pilot-previous-result,
 .route-workbench[data-dirty=true] .day-weather{display:none}
@@ -173,12 +185,19 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
 .composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
 .composer-logistics li{margin:0}
+.composer-transfer{margin-block:7px 10px;padding:7px 10px;border-inline-start:2px solid var(--line);font-size:.8rem}
+.composer-transfer p{margin:0}
+.composer-transfer p+p{margin-block-start:3px}
+.composer-transfer summary{min-height:30px;display:list-item;align-content:center;cursor:pointer;font-weight:600}
+.composer-transfer ul{margin:0;padding-inline-start:1.2rem}
+.composer-transfer a{display:inline-flex;align-items:center;min-height:28px;overflow-wrap:anywhere}
 .composer-stops{margin:7px 0;padding:0;list-style:none}
 .composer-stops li{border-top:1px solid var(--line);padding:3px 0}
 .composer-stops li>button{background:transparent;border:1px solid transparent;color:var(--ink);min-height:44px;width:100%;display:grid;
-  grid-template-columns:max(8ch,72px) minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;padding:6px 8px;border-radius:6px}
+  grid-template-columns:max(8ch,72px) minmax(0,1fr) fit-content(36%);gap:8px;align-items:center;text-align:left;padding:6px 8px;border-radius:6px}
 .composer-stops li>button[aria-pressed=true],.composer-stops li>button:hover{background:#edf3e9;border-color:#d6e1d3}
 .composer-stops button time,.composer-stops button small{font-size:.75rem;color:var(--muted)}
+.composer-stops button small{overflow-wrap:anywhere}
 .composer-stops button time{font-variant-numeric:tabular-nums}
 .composer-stop-actions{padding:.3rem 8px .3rem max(9ch,84px);display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;font-size:.8rem}
 .composer-stop-actions>*{min-height:36px;display:inline-flex;align-items:center}
@@ -186,6 +205,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-alternatives summary{cursor:pointer;padding-block:8px}
 .composer-alternatives ul{list-style:none;padding:0}
 .composer-alternatives button{min-height:40px;text-align:start}
+.composer-alternatives li>p{margin:0 0 4px}
 .composer-swap-status:empty{display:none}
 .composer-evidence{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
 .composer-evidence ul{padding-inline-start:1.2rem;font-size:.86rem;color:var(--muted)}

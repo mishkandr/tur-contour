@@ -28,6 +28,28 @@ addLocaleMessages([
   ['Обязательная остановка','Required stop','必到地点'],
   ['Варианты замены','Replacement candidates','替换候选'],
   ['Заменить на {place}','Replace with {place}','替换为 {place}'],
+  ['Предположительно в помещении','Likely indoors','可能位于室内'],
+  ['Предположительно на улице','Likely outdoors','可能位于室外'],
+  ['Тип площадки нужно уточнить','Check whether the venue is indoors','请核查地点是否位于室内'],
+  ['Условия для группы нужно подтвердить','Confirm conditions for the group','团队接待条件待确认'],
+  ['Время остановок зависит от подтверждённого прибытия в город.',
+    'Stop times depend on the confirmed arrival in the city.','停留时间取决于团队抵达城市的确认时间。'],
+  ['Оценка для автомобиля · {minutes} мин. Выезд {departure} · прибытие {arrival} по местному времени.',
+    'Driving estimate · {minutes} min. Depart {departure} · arrive {arrival} in local time.','自驾预计 {minutes} 分钟。当地时间 {departure} 出发，{arrival} 抵达。'],
+  ['Расчёт по прямой при {speed} км/ч с запасом {buffer} мин. Сверьте фактический переезд.',
+    'Based on straight-line distance at {speed} km/h plus a {buffer} min buffer. Confirm the actual trip.',
+    '按直线距离、{speed} 公里/小时及 {buffer} 分钟缓冲计算。请确认实际行车安排。'],
+  ['После расчётного прибытия остаётся меньше времени на посещения.',
+    'Less time remains for visits after the estimated arrival.','按预计抵达时间，可用于参观的时间较少。'],
+  ['Расчётный переезд заканчивается после этой даты. Для посещений нужен дополнительный день или другой транспорт.',
+    'The estimated transfer ends after this date. Allow another day or use a different form of transport for visits.',
+    '预计抵达时间晚于该日期。如要安排参观，请增加一天或更换交通方式。'],
+  ['Объекты вне расписания','Unscheduled venue options','行程之外的备选地点'],
+  ['Безбарьерный доступ указан на карте','Step-free access indicated on the map','地图标记可无障碍通行'],
+  ['По карте доступ частичный','Limited step-free access on the map','地图标记无障碍通行受限'],
+  ['Уточнить безбарьерный доступ','Check step-free access','请核查无障碍通行条件'],
+  ['Источник сведений об объекте','Source of venue data','地点信息来源'],
+  ['Официальный сайт объекта','Official venue website','地点官方网站'],
   ['Замену не удалось поставить на то же время. Программа сохранена.','The replacement no longer fits the same time slot. Your itinerary is unchanged.','替换地点不再适合该时段，原行程已保留。'],
   ['Часть прежних замен больше не подходит к новым параметрам. Проверьте расписание.','Some previous replacements no longer fit the new requirements. Review the schedule.','部分先前的替换不再符合新参数，请核查日程。'],
   ['Проверяем замену для этого времени…','Checking the replacement for this time slot…','正在核验替换地点是否适合此时段…'],
@@ -92,6 +114,33 @@ addLocaleMessages([
   ['Природа','Nature','自然'],
   ['Пеший маршрут','Hiking and walking','徒步'],
   ['Ремёсла','Crafts','工艺'],
+  ['Гастрономическая поездка','Food tour','美食之旅'],
+  ['Татарская кухня · Казань','Tatar cuisine · Kazan','鞑靼美食 · 喀山'],
+  ['Найти отель или ресторан','Find a hotel or restaurant','查找酒店或餐厅'],
+  ['Название отеля или ресторана','Hotel or restaurant name','酒店或餐厅名称'],
+  ['Что ищем','Venue type','地点类型'],
+  ['Все варианты','All venues','所有地点'],
+  ['Отели','Hotels','酒店'],
+  ['Рестораны','Restaurants','餐厅'],
+  ['Город поиска','Search city','搜索城市'],
+  ['Все города маршрута','All itinerary cities','行程中的所有城市'],
+  ['Места и условия для группы подтвердите у отеля или ресторана.',
+    'Confirm availability and group conditions with the hotel or restaurant.','请向酒店或餐厅确认可用名额和团队接待条件。'],
+  ['По этому запросу подходящие отели и рестораны не найдены.',
+    'No hotels or restaurants match this search.','未找到符合搜索条件的酒店或餐厅。'],
+  ['Сбросить фильтры','Clear filters','清除筛选条件'],
+  ['В каталоге пока нет отелей и ресторанов для этого маршрута.',
+    'The catalog has no hotels or restaurants for this itinerary yet.','此行程的目录中暂没有酒店或餐厅。'],
+  ['Показать ещё','Show more','显示更多'],
+  ['В расписании · {when}','In the itinerary · {when}','已列入日程 · {when}'],
+  ['Нет времени в расписании','No available slot in the itinerary','行程中没有可用时段'],
+  ['Маршрут пересчитан. Проверьте время выбранного места.','Itinerary updated. Check the venue’s scheduled time.','行程已更新。请核对所选地点的安排时间。'],
+  ['Маршрут пересчитан. Для выбранного места нет подходящего времени.','Itinerary updated. No suitable slot was found for the selected venue.','行程已更新。所选地点没有合适的时段。'],
+  ['Снято требование включить это место.','This venue is no longer required.','已取消该地点的必选要求。'],
+  ['Обязательный выбор','Required selection','必选地点'],
+  ['Включить в маршрут','Include in itinerary','加入行程'],
+  ['Убрать из обязательных','Remove requirement','取消必选'],
+  ['Пересчитываем маршрут с выбранным местом…','Recalculating with the selected venue…','正在按所选地点重新计算…'],
   ['Паломничество','Pilgrimage','朝圣'],
   ['Черновик','Draft','草案'],
   ['Карта черновика','Draft map','行程草案地图'],
@@ -101,6 +150,8 @@ addLocaleMessages([
   ['Исключить типы посещений','Exclude visit types','排除参观类型'],
   ['Учтённые темы','Requested interests covered','已覆盖的主题'],
   ['{count} точек','{count} places','{count} 个地点'],
+  ['{count} точка','{count} place','{count} 个地点'],
+  ['{count} точки','{count} places','{count} 个地点'],
   ['Подходящие точки не найдены','No matching places found','未找到符合条件的地点'],
   ['Исключено по требованиям','Excluded by requirements','按要求排除'],
   ['По данным карты безбарьерного доступа нет','Map data marks this place as inaccessible','地图数据标记此地点无法无障碍通行'],
@@ -113,7 +164,6 @@ addLocaleMessages([
   ['Указана прямая дистанция между городами. Время выезда и прибытия согласуйте отдельно.',
     'The intercity distance is straight-line. Confirm departure and arrival times separately.','城际距离为直线距离，请另行确认出发和抵达时间。'],
   ['Проверка условий','Check conditions','核查条件'],
-  ['Открыть первоисточник','Open original source','查看原始来源'],
   ['Ориентировочное время','Estimated time','预估时间'],
   ['Скачать черновик','Download draft','下载草案'],
   ['Сделать обязательным','Mark as required','设为必到地点'],
@@ -152,8 +202,10 @@ addLocaleMessages([
 ]);
 
 const themes = {heritage:'История и архитектура',museum:'Музеи',family:'Семейная поездка',romantic:'Романтическая поездка',
-  nature:'Природа',hike:'Пеший маршрут',craft:'Ремёсла',pilgrimage:'Паломничество'};
+  nature:'Природа',hike:'Пеший маршрут',craft:'Ремёсла',pilgrimage:'Паломничество',gastro:'Гастрономическая поездка'};
 const kind = {visit:'Посещение',food:'Питание',stay:'Размещение'};
+const delayedArrival='Расчётный переезд заканчивается после этой даты. Для посещений нужен дополнительный день или другой транспорт.';
+const shorterVisits='После расчётного прибытия остаётся меньше времени на посещения.';
 const safe = value=>String(value ?? '').replace(/[&<>"']/gu,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const tr = (value,vars)=>safe(t(value,vars));
 const name = item=>getLocale()==='zh' ? item.cn || item.name : getLocale()==='en' ? item.en || item.name : item.name;
@@ -178,12 +230,16 @@ const examples = [
     ['Москва и Казань на три дня для 12 человек, музеи, на автомобиле.',
       'Moscow and Kazan for three days, 12 people, museums and travel by car.',
       '莫斯科和喀山三天，12人，博物馆，自驾。']],
+  ['Татарская кухня · Казань',
+    ['Казань на два дня для 8 человек. Гастротур с татарской кухней. Обязательно Музей чак-чака.',
+      'Two days in Kazan for 8 people. Food tour featuring Tatar cuisine. Must visit the Chak-Chak Museum.',
+      '喀山两天，8人，鞑靼美食之旅。必须参观恰克恰克博物馆。']],
 ];
 const state = {
   brief:'',lastAppliedBrief:'',query:'',cities:[],selectedCity:null,extraCities:[],settings:initialRequirements(currentDate()),
   result:null,mapDay:'all',point:null,dirty:false,
   revision:0,note:'',noteValues:null,findVersion:0,pointDay:null,unsupportedDays:null,invalidDate:null,invalidSize:null,
-  omitted:[],replacements:[],overrideFields:[],
+  omitted:[],replacements:[],overrideFields:[],requiredServices:[],
 };
 const cacheKey='tur-contour.current-draft.v1';
 try {
@@ -196,9 +252,9 @@ try {
 function retainDraft() {
   if (!state.result) return;
   const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,
-    unsupportedDays,invalidDate,invalidSize,replacements,overrideFields} = state;
+    unsupportedDays,invalidDate,invalidSize,replacements,overrideFields,requiredServices} = state;
   try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,
-    mapDay,point,pointDay,dirty,omitted,unsupportedDays,invalidDate,invalidSize,replacements,overrideFields}));}
+    mapDay,point,pointDay,dirty,omitted,unsupportedDays,invalidDate,invalidSize,replacements,overrideFields,requiredServices}));}
   catch { /* The open draft remains available in memory. */ }
 }
 
@@ -260,10 +316,22 @@ function eligibility(item) {
     item.matched ? 'Объект не попал в расписание' : 'Объект не найден в данных');
 }
 
+function requirementName(item) {
+  if (!item.requestedId) return item.label;
+  const selected=state.requiredServices.find(place=>place.id===item.requestedId);
+  return selected ? name(selected) : item.matched?.name ?? item.label;
+}
+
 function gapLabel(message) {
   if (message.startsWith('Согласовать переезд ')) return t('Междугородний переезд нужно подтвердить.');
   const cutoff = /^Часть посещений не помещается до (\d{2}:\d{2})\./u.exec(message);
   return cutoff ? t('Часть посещений не помещается до {time}. Уточните время или уменьшите число остановок.',{time:cutoff[1]}) : t(message);
+}
+
+function dayGaps(day) {
+  return day.missing.filter(message=>!(day.transfer && message.startsWith('Согласовать переезд ')) &&
+    !(day.logistics?.arrivalAfterDay && message===delayedArrival) &&
+    !(day.transfer?.timing?.visitsLimited && message===shorterVisits)).map(gapLabel);
 }
 
 function evidenceSources(result) {
@@ -271,11 +339,16 @@ function evidenceSources(result) {
     source.supplemental ? [source,{...source.supplemental,city:source.city}] : [source]);
 }
 
+function placeCount(count) {
+  const category=new Intl.PluralRules(getLocale()).select(count);
+  return t(category==='one'?'{count} точка':category==='few'?'{count} точки':'{count} точек',{count:formatNumber(count)});
+}
+
 function coverageMarkup(coverage) {
   if (!coverage?.length) return '';
   return '<div class="composer-coverage"><h3>'+tr('Учтённые темы')+'</h3><ul>'+coverage.map(({theme,count})=>
     '<li><strong>'+tr(themes[theme]??theme)+'</strong><span class="chip '+(count?'':'warn')+'">'+
-    (count?tr('{count} точек',{count:formatNumber(count)}):tr('Подходящие точки не найдены'))+'</span></li>').join('')+'</ul></div>';
+    safe(count?placeCount(count):t('Подходящие точки не найдены'))+'</span></li>').join('')+'</ul></div>';
 }
 
 function dayLogistics(day) {
@@ -286,6 +359,39 @@ function dayLogistics(day) {
     ...(overnight.status==='suggested' ? [t(overnight.action==='return'?'Та же гостиница · подтвердить вторую ночь':'Ночёвка · подтвердить для группы')] : []),
     ...(estimatedTransferMinutes ? [t('Переезды по городу · около {minutes} мин',{minutes:formatNumber(estimatedTransferMinutes)})] : []),
   ];
+}
+
+function transferNotes(day,result) {
+  const transfer=day.transfer;
+  const delayed = day.logistics?.arrivalAfterDay ? [t(delayedArrival)] : [];
+  if (!transfer) return delayed;
+  const timing=transfer.timing;
+  const distance=t('{from} → {to} · {distance} км по прямой',{
+    from:name(result.locations?.find(city=>city.id===transfer.fromId)??{name:transfer.from}),
+    to:name(result.locations?.find(city=>city.id===transfer.toId)??{name:transfer.to}),distance:formatNumber(transfer.distanceKm)});
+  const estimated=timing?.status==='estimated' && timing.departureTime && timing.arrivalTime;
+  const local=(date,time)=>date && date!==day.date?formatDate(date)+' '+time:time;
+  const notes=estimated ? [
+    t('Оценка для автомобиля · {minutes} мин. Выезд {departure} · прибытие {arrival} по местному времени.',{
+      minutes:formatNumber(timing.reserveMinutes),departure:local(timing.departureDate,timing.departureTime),
+      arrival:local(timing.arrivalDate,timing.arrivalTime)}),
+    t('Расчёт по прямой при {speed} км/ч с запасом {buffer} мин. Сверьте фактический переезд.',{
+      speed:formatNumber(timing.assumedSpeedKmh),buffer:formatNumber(timing.bufferMinutes)}),
+  ] : [t('Время остановок зависит от подтверждённого прибытия в город.')];
+  if (timing?.visitsLimited && !delayed.length) notes.push(t(shorterVisits));
+  return [distance,...notes,...delayed];
+}
+
+function transferMarkup(day,result) {
+  const notes=transferNotes(day,result);
+  if (!notes.length) return '';
+  if (!day.transfer) return '<div class="composer-transfer"><p>'+safe(notes[0])+'</p></div>';
+  const [distance,...detail]=notes;
+  const candidates=day.transfer.candidates ?? [];
+  return '<div class="composer-transfer"><p><strong>'+safe(distance)+'</strong></p>'+detail.map(note=>'<p>'+safe(note)+'</p>').join('')+
+    (candidates.length?'<details><summary>'+tr('Объекты вне расписания')+'</summary><ul>'+candidates.map(candidate=>
+      '<li><a href="'+safe(candidate.url)+'" target="_blank" rel="noopener noreferrer" data-source-text>'+safe(name(candidate))+'</a></li>').join('')+
+      '</ul></details>':'')+'</div>';
 }
 
 function forecastDays(result, dirty=false) {
@@ -299,7 +405,44 @@ function forecastDays(result, dirty=false) {
   });
 }
 
-function draftMarkup(result) {
+function accessEvidence(requireAccess,place) {
+  if (!requireAccess) return '';
+  return t(place?.wheelchairHint==='yes'?'Безбарьерный доступ указан на карте':
+    place?.wheelchairHint==='limited'?'По карте доступ частичный':'Уточнить безбарьерный доступ');
+}
+
+function replacementMarkup(stop,places,settings) {
+  if (state.dirty || !stop.alternatives?.length) return '';
+  const choices=stop.exposure==='outdoors' ? stop.alternatives.toSorted((a,b)=>Number(b.exposure==='indoors')-Number(a.exposure==='indoors')) :
+    stop.alternatives;
+  return '<details class="composer-alternatives"><summary>'+tr('Варианты замены')+'</summary><ul>'+choices.map((alternative,index)=>{
+    const evidenceId='replacement-facts-'+index;
+    const exposure=stop.type==='visit' ? t(alternative.exposure==='indoors'?'Предположительно в помещении':
+      alternative.exposure==='outdoors'?'Предположительно на улице':'Тип площадки нужно уточнить') : '';
+    const notes=[exposure,accessEvidence(settings.access,places.get(alternative.id)),t('Условия для группы нужно подтвердить')];
+    return '<li><button type="button" class="link-button" aria-describedby="'+evidenceId+'" data-composer="replace-stop" data-previous="'+
+      safe(stop.id)+'" data-value="'+safe(alternative.id)+'">'+tr('Заменить на {place}',{place:name(alternative)})+
+      '</button><p class="caption" id="'+evidenceId+'">'+safe(notes.filter(Boolean).join(' · '))+'</p></li>';
+  }).join('')+'</ul><div class="composer-swap-feedback">'+
+    '<div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p></div></details>';
+}
+
+function serviceSearchMarkup(result,view) {
+  const locations=result.locations ?? [result.location];
+  return '<details id="draft-services" class="composer-services"'+(view.open?' open':'')+'><summary>'+tr('Найти отель или ресторан')+'</summary>'+
+    '<div class="composer-service-fields"><label class="field">'+tr('Название отеля или ресторана')+
+    '<input type="search" id="draft-service-query" value="'+safe(view.query)+'" maxlength="100"></label>'+
+    '<label class="field">'+tr('Что ищем')+'<select id="draft-service-kind">'+
+    options({all:'Все варианты',stay:'Отели',food:'Рестораны'},view.kind)+'</select></label>'+
+    (locations.length>1?'<label class="field">'+tr('Город поиска')+'<select id="draft-service-city">'+
+      '<option value="">'+tr('Все города маршрута')+'</option>'+locations.map(city=>
+        '<option value="'+safe(city.name)+'"'+(view.city===city.name?' selected':'')+' data-source-text>'+safe(name(city))+'</option>').join('')+
+      '</select></label>':'')+'</div><p class="caption">'+tr('Места и условия для группы подтвердите у отеля или ресторана.')+'</p>'+
+    '<div class="composer-service-feedback"><div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p></div>'+
+    '<div id="draft-service-list"></div></details>';
+}
+
+function draftMarkup(result,serviceView) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
   const sources = evidenceSources(result).map(item=>{
@@ -310,13 +453,15 @@ function draftMarkup(result) {
   }).join('');
   return '<section class="panel composer-output" data-dirty="'+state.dirty+'" aria-labelledby="draft-title"><header class="composer-title"><div><p class="ops-kicker">'+
     tr('Программа для проверки')+'</p><h2 id="draft-title" tabindex="-1" data-source-text>'+safe(venues.map(name).join(' → '))+'</h2><p class="caption">'+
-    safe(regionName(location))+' · '+tr('Дата начала · {date} · {days} дня · {size} чел.',{date:formatDate(settings.date),days:settings.days,size:settings.size})+
+    safe(regionName(location))+' · '+tr('Дата начала · {date} · {days} дня · {size} чел.',{
+      date:formatDate(settings.date),days:formatNumber(settings.days),size:formatNumber(settings.size)})+
+    (settings.access?' · '+tr('Безбарьерный доступ'):'')+
     '</p></div></header><p class="callout composer-stale" role="status"'+(state.dirty?'':' hidden')+'>'+
     tr('Показан предыдущий расчёт. Пересчитайте маршрут, чтобы сверить расписание и погоду по новым параметрам.')+'</p>'+
     '<section class="composer-evidence"><h3>'+tr('Перед выездом')+'</h3><ul>'+
-    plan.required.map(item=>'<li><span data-source-text>'+safe(item.label)+'</span> · '+safe(eligibility(item))+'</li>').join('')+
+    plan.required.map(item=>'<li><span data-source-text>'+safe(requirementName(item))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
     result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul></section>'+
-    coverageMarkup(plan.interestCoverage)+
+    coverageMarkup(plan.interestCoverage)+serviceSearchMarkup(result,serviceView)+
     '<div class="composer-day-head"><h3>'+tr('Программа по дням')+'</h3><div class="atlas-options" id="draft-days" role="group" aria-label="'+tr('Дни маршрута')+'"></div></div>'+
     '<div id="draft-timeline"></div><div class="composer-map-frame"><div class="atlas-map-top"><h3>'+tr('Карта и источники')+'</h3>'+
     '<button class="button-quiet" data-composer="fit" type="button">'+tr('Целиком')+'</button></div><div class="composer-map-scene">'+
@@ -328,15 +473,25 @@ function draftMarkup(result) {
 
 function download(result) {
   const {location,plan,settings,warnings} = result;
+  const places = new Map(result.places.map(place=>[place.id,place]));
   const weather = weatherExport(forecastDays(result));
-  const lines = [t('Черновик')+' · '+(result.locations??[location]).map(name).join(' → '), formatDate(settings.date)+' · '+formatNumber(settings.size),
+  const summary = t('Дата начала · {date} · {days} дня · {size} чел.',{
+    date:formatDate(settings.date),days:formatNumber(settings.days),size:formatNumber(settings.size)});
+  const lines = [t('Черновик')+' · '+(result.locations??[location]).map(name).join(' → '),summary,
+    ...(settings.access?[t('Безбарьерный доступ')]:[]),
     ...evidenceSources(result).map(item=>item.name+' · '+item.url), location.sourceUrl,'',
     ...plan.days.flatMap((day,index)=>[t('День {day}',{day:index+1})+' · '+formatDate(day.date)+' · '+(day.cityId ?
       name(result.locations?.find(item=>item.id===day.cityId)??location):name(location)),
-      ...weather[index],...day.stops.map(stop=>stop.start+'–'+stop.end+' '+name(stop)+' · '+stop.url),...dayLogistics(day),...day.missing.map(gapLabel),'']),
-    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>item.label+' · '+eligibility(item)),
+      ...transferNotes(day,result),
+      ...weather[index],...day.stops.map(stop=>{
+        const place=places.get(stop.id);
+        return [stop.start+'–'+stop.end+' '+name(stop),accessEvidence(settings.access,place),stop.url,
+          place?.officialUrl ? t('Официальный сайт объекта')+' '+place.officialUrl : ''].filter(Boolean).join(' · ');
+      }),...dayLogistics(day),...dayGaps(day),
+      ...(day.transfer?.candidates?.length?[t('Объекты вне расписания'),...day.transfer.candidates.map(candidate=>name(candidate)+' · '+candidate.url)]:[]),'']),
+    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>requirementName(item)+' · '+eligibility(item)),
     ...(plan.interestCoverage??[]).map(({theme,count})=>t(themes[theme]??theme)+' · '+
-      (count?t('{count} точек',{count:formatNumber(count)}):t('Подходящие точки не найдены')))];
+      (count?placeCount(count):t('Подходящие точки не найдены')))];
   const file = URL.createObjectURL(new Blob(['\uFEFF',lines.join('\n')],{type:'text/plain;charset=utf-8'}));
   const a = document.createElement('a');
   a.href = file;
@@ -351,6 +506,7 @@ export function mountComposer(container, api) {
   let searchTimer;
   let pending;
   let mounted=true;
+  const serviceView={open:false,query:'',kind:'all',city:'',limit:8};
   container.innerHTML = '<header class="page-head"><h1>'+tr('Конструктор маршрутов')+'</h1></header>'+
     itineraryTabs(false)+'<div class="composer-layout">'+formMarkup()+'<div class="composer-result" id="composer-result"></div></div>';
   function cityOptions(noMatches=false) {
@@ -417,11 +573,51 @@ export function mountComposer(container, api) {
     submit.textContent=t(state.result?'Пересчитать маршрут':'Собрать маршрут');
     find('#draft-parameters > summary').textContent=t(state.result?'Изменить параметры':'Ввести параметры вручную');
     find('[data-composer=refine]').disabled=Boolean(pending) || state.brief.trim().length<3;
+    for (const button of container.querySelectorAll('[data-composer=service-include],[data-composer=service-release]')) {
+      button.disabled=Boolean(pending);
+    }
   }
   function phase(label) {
     const node=pending.progress;
     node.innerHTML=aiWaitingMarkup(label,pending.startedAt,'cancel-composer');
     node.hidden=false;
+  }
+  function paintServices() {
+    const list=find('#draft-service-list');
+    if (!list || !state.result) return;
+    const folded=value=>String(value ?? '').normalize('NFKC').toLocaleLowerCase().replaceAll('ё','е');
+    const query=folded(serviceView.query.trim());
+    const scheduled=state.result.plan.days.flatMap(day=>day.stops.map(stop=>[stop.id,{date:day.date,time:stop.start}]));
+    const current=new Map(scheduled.reverse());
+    const pinned=new Set(state.requiredServices.map(place=>place.id));
+    const available=state.result.places;
+    const missing=state.requiredServices.filter(place=>!available.some(item=>item.id===place.id));
+    const places=[...available,...missing].filter(place=>['food','stay'].includes(place.kind) &&
+      (serviceView.kind==='all' || serviceView.kind===place.kind) && (!serviceView.city || serviceView.city===place.city) &&
+      [place.name,place.en,place.cn,...(place.aliases??[])].some(label=>folded(label).includes(query)));
+    places.sort((a,b)=>Number(pinned.has(b.id))-Number(pinned.has(a.id)) ||
+      Number(current.has(b.id))-Number(current.has(a.id)) || name(a).localeCompare(name(b),getLocale()));
+    const visible=places.slice(0,serviceView.limit);
+    const filtered=Boolean(query || serviceView.kind!=='all' || serviceView.city);
+    list.innerHTML=visible.length ? '<ul class="composer-service-list">'+visible.map((place,index)=>{
+      const mandatory=pinned.has(place.id);
+      const city=state.result.locations?.find(location=>location.name===place.city);
+      const when=current.get(place.id);
+      const info=[t(kind[place.kind]),city?name(city):place.city,mandatory?t('Обязательный выбор'):'',
+        when?t('В расписании · {when}',{when:formatDate(when.date)+' · '+when.time}):mandatory?t('Нет времени в расписании'):'',
+        accessEvidence(state.result.settings.access,place)].filter(Boolean);
+      const infoId='draft-venue-info-'+index;
+      const link=place.officialUrl??place.url;
+      return '<li><div>'+(link?'<a target="_blank" rel="noopener noreferrer" href="'+safe(link)+'" data-source-text>'+safe(name(place))+
+        '</a>':'<strong data-source-text>'+safe(name(place))+'</strong>')+'<p class="caption" id="'+infoId+'">'+safe(info.join(' · '))+
+        '</p></div><button type="button" class="button-quiet" aria-describedby="'+infoId+'" data-composer="'+
+        (mandatory?'service-release':'service-include')+'" data-value="'+safe(place.id)+'"'+(pending?' disabled':'')+'>'+
+        tr(mandatory?'Убрать из обязательных':'Включить в маршрут')+'</button></li>';
+    }).join('')+'</ul>'+(places.length>visible.length?'<button type="button" class="button-quiet" data-composer="service-more">'+
+      tr('Показать ещё')+'</button>':'') :
+      '<p class="caption">'+tr(filtered?'По этому запросу подходящие отели и рестораны не найдены.':
+        'В каталоге пока нет отелей и ресторанов для этого маршрута.')+'</p>'+
+      (filtered?'<button type="button" class="button-quiet" data-composer="service-clear">'+tr('Сбросить фильтры')+'</button>':'');
   }
   function start(label, feedback) {
     const progress=feedback?.querySelector('.composer-swap-progress')??find('#composer-progress');
@@ -447,6 +643,7 @@ export function mountComposer(container, api) {
   const isCurrent = (request,revision)=>mounted && pending===request && state.revision===revision;
   function paintDays(frame=false) {
     const {plan,places,geodata} = state.result;
+    const byId=new Map(places.map(place=>[place.id,place]));
     const days=plan.days.map((day,index)=>({day,index})).filter(({index})=>state.mapDay==='all'||String(index)===state.mapDay);
     const region=find('#draft-days');
     region.innerHTML = [['all',t('Все дни')],...plan.days.map((_day,i)=>[String(i),t('День {day}',{day:i+1})])]
@@ -455,26 +652,26 @@ export function mountComposer(container, api) {
     const visible=places.filter(place=>included.has(place.id));
     find('#draft-timeline').innerHTML = days.map(({day,index})=>'<section class="composer-day"><h3>'+tr('День {day}',{day:index+1})+
       ' · '+safe(formatDate(day.date))+(state.result.locations?.length>1?' · '+safe(name(state.result.locations.find(city=>city.id===day.cityId)??{name:day.city})): '')+
-      '</h3>'+weatherSlot(index)+(day.transfer ? '<p class="caption">'+tr('{from} → {to} · {distance} км по прямой',{
-        from:name(state.result.locations?.find(city=>city.id===day.transfer.fromId)??{name:day.transfer.from}),
-        to:name(state.result.locations?.find(city=>city.id===day.transfer.toId)??{name:day.transfer.to}),distance:formatNumber(day.transfer.distanceKm)})+'</p>' : '')+
+      '</h3>'+transferMarkup(day,state.result)+weatherSlot(index)+
       '<ul class="composer-logistics caption">'+dayLogistics(day).map(item=>'<li>'+safe(item)+'</li>').join('')+'</ul>'+
-      '<ul class="composer-stops">'+day.stops.map(stop=>'<li><button type="button" data-composer="stop" data-value="'+
-      safe(stop.id)+'" data-day="'+index+'" aria-pressed="'+(state.point===stop.id && state.pointDay===index)+'"><time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><span data-source-text>'+safe(name(stop))+
-      '</span><small>'+tr(stop.required?'Обязательная остановка':kind[stop.type])+'</small></button>'+
-      (state.point===stop.id && state.pointDay===index?'<div class="composer-stop-actions"><a href="'+safe(stop.url)+'" target="_blank" rel="noopener noreferrer">'+tr('Открыть первоисточник')+
-      '</a>'+(stop.leg?.minutes?'<span class="caption">'+tr('Переезд к точке · около {minutes} мин, {distance} км по прямой',{
-        minutes:formatNumber(stop.leg.minutes),distance:formatNumber(stop.leg.distanceKm)})+'</span>':'')+
-      (stop.required?'':'<button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>')+
-      '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button>'+
-      (!state.dirty && stop.alternatives?.length?'<details class="composer-alternatives"><summary>'+tr('Варианты замены')+'</summary><ul>'+stop.alternatives.map(alternative=>
-        '<li><button type="button" class="link-button" data-composer="replace-stop" data-previous="'+safe(stop.id)+'" data-value="'+safe(alternative.id)+'">'+
-      tr('Заменить на {place}',{place:name(alternative)})+'</button></li>').join('')+'</ul><div class="composer-swap-feedback">'+
-      '<div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p></div></details>':'')+'</div>':'')+
-      '</li>').join('')+
-      '</ul>'+day.missing.map(gap=>'<p class="caption">'+safe(gapLabel(gap))+'</p>').join('')+'</section>').join('');
+      '<ul class="composer-stops">'+day.stops.map(stop=>{
+        const selected=state.point===stop.id && state.pointDay===index;
+        const place=byId.get(stop.id);
+        const notes=[t(stop.required?'Обязательная остановка':kind[stop.type]),accessEvidence(plan.settings.access,place)].filter(Boolean).join(' · ');
+        return '<li><button type="button" data-composer="stop" data-value="'+safe(stop.id)+'" data-day="'+index+'" aria-pressed="'+selected+'">'+
+          '<time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><span data-source-text>'+safe(name(stop))+'</span><small>'+safe(notes)+'</small></button>'+
+          (selected?'<div class="composer-stop-actions"><a href="'+safe(stop.url)+'" target="_blank" rel="noopener noreferrer">'+tr('Источник сведений об объекте')+'</a>'+
+            (place?.officialUrl?'<a href="'+safe(place.officialUrl)+'" target="_blank" rel="noopener noreferrer">'+tr('Официальный сайт объекта')+'</a>':'')+
+            (stop.leg?.minutes?'<span class="caption">'+tr('Переезд к точке · около {minutes} мин, {distance} км по прямой',{
+              minutes:formatNumber(stop.leg.minutes),distance:formatNumber(stop.leg.distanceKm)})+'</span>':'')+
+            (stop.required?'':'<button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>')+
+            '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button>'+
+            replacementMarkup(stop,byId,plan.settings)+'</div>':'')+'</li>';
+      }).join('')+
+      '</ul>'+dayGaps(day).map(gap=>'<p class="caption">'+safe(gap)+'</p>').join('')+'</section>').join('');
     loadPlanWeather(find('#draft-timeline'),forecastDays(state.result,state.dirty),api);
-    map?.update({places:visible,route:{...plan,days:days.map(({day})=>day)},selectedId:state.point,
+    const mapDays=days.map(({day})=>state.mapDay!=='all' && day.stops.length ? {...day,transfer:undefined} : day);
+    map?.update({places:visible,route:{...plan,days:mapDays},selectedId:state.point,
       dayIndex:state.mapDay==='all'?0:Number(state.mapDay),geodata,frame:frame?'route':false,base:'streets',locale:getLocale(),showPlaces:true});
     retainDraft();
   }
@@ -482,7 +679,11 @@ export function mountComposer(container, api) {
     if (!mounted) return;
     map?.destroy();
     if (!state.result) return;
-    find('#composer-result').innerHTML=draftMarkup(state.result);
+    const previousServices=find('#draft-services');
+    if (previousServices) serviceView.open=previousServices.open;
+    if (serviceView.city && !state.result.locations?.some(place=>place.name===serviceView.city)) serviceView.city='';
+    find('#composer-result').innerHTML=draftMarkup(state.result,serviceView);
+    paintServices();
     map=createRouteMap(find('#draft-map'),{locale:getLocale(),onSelect(id,_place,context){
       if (pending?.feedback) {pending.controller.abort();finish(pending);}
       state.point=id;
@@ -547,6 +748,7 @@ export function mountComposer(container, api) {
       if (previousIds!==cities.map(city=>city.id).join(',')) {
         state.omitted=[];
         state.replacements=[];
+        state.requiredServices=[];
       }
       clearTimeout(searchTimer);
       state.findVersion++;
@@ -581,11 +783,11 @@ export function mountComposer(container, api) {
       finish(request);
     }
   }
-  async function build(form,replacement,feedback) {
+  async function build(form,replacement,feedback,selectedServices,serviceChange) {
     if (pending) return;
     const brief=state.brief.trim();
     const parseNew = brief.length>=3 && brief!==state.lastAppliedBrief;
-    const request=start(replacement?'Проверяем замену для этого времени…':
+    const request=start(selectedServices?'Пересчитываем маршрут с выбранным местом…':replacement?'Проверяем замену для этого времени…':
       parseNew?'Смотрим даты, группу и города в запросе…':'Подбираем объекты и составляем программу…',feedback);
     const revision=++state.revision;
     const network={signal:request.controller.signal};
@@ -637,8 +839,9 @@ export function mountComposer(container, api) {
       }
       if (parseNew) phase('Подбираем объекты и составляем программу…');
       const replacements=replacement ? [...state.replacements,replacement] : state.replacements;
+      const services=selectedServices ?? state.requiredServices;
       const result=await api('draft',{...state.settings,cityId:state.selectedCity.id,additionalCityIds:state.extraCities.map(city=>city.id),
-        omittedIds:state.omitted.map(place=>place.id),replacements},'POST',network);
+        omittedIds:state.omitted.map(place=>place.id),replacements,requiredPlaceIds:services.map(place=>place.id)},'POST',network);
       if (!isCurrent(request,revision)) return;
       const swaps=result.plan.replacements??[];
       const rejected=swaps.some(item=>item.status==='rejected') || swaps.length!==replacements.length;
@@ -647,14 +850,21 @@ export function mountComposer(container, api) {
         return;
       }
       state.replacements=swaps.filter(item=>item.status==='applied').map(({day,fromId,toId})=>({day,fromId,toId}));
+      state.requiredServices=services;
       state.result=result;
       state.mapDay=replacement?state.mapDay:'all';
       state.point=replacement?.toId??null;
       state.pointDay=replacement?.day??null;
       state.dirty=false;
       showNote(rejected?'Часть прежних замен больше не подходит к новым параметрам. Проверьте расписание.':'');
-      resultMarkup(!replacement);
+      resultMarkup(!replacement && !selectedServices);
       if (replacement) find('#draft-timeline button[aria-pressed=true]')?.focus();
+      if (serviceChange) {
+        const selection=result.plan.required.find(item=>item.requestedId===serviceChange);
+        const status=selection ? (selection.scheduled ? 'Маршрут пересчитан. Проверьте время выбранного места.' :
+          'Маршрут пересчитан. Для выбранного места нет подходящего времени.') : 'Снято требование включить это место.';
+        find('.composer-service-feedback .composer-swap-status').textContent=t(status);
+      }
     } catch(error) {
       if (isCurrent(request,revision)) {
         if (feedback) feedback.querySelector('.composer-swap-status').textContent=t(error.message);
@@ -662,6 +872,11 @@ export function mountComposer(container, api) {
       }
     } finally {
       finish(request);
+      if (serviceChange && mounted && state.revision===revision) {
+        const target=[...container.querySelectorAll('#draft-service-list button[data-value]')]
+          .find(button=>button.dataset.value===serviceChange);
+        (target??find('#draft-services summary'))?.focus();
+      }
     }
   }
   const submit = event=>{
@@ -670,6 +885,14 @@ export function mountComposer(container, api) {
   };
   const input = event=>{
     const control=event.target;
+    if (control.id==='draft-service-query' || control.id==='draft-service-kind' || control.id==='draft-service-city') {
+      serviceView.query=find('#draft-service-query').value;
+      serviceView.kind=find('#draft-service-kind').value;
+      serviceView.city=find('#draft-service-city')?.value??'';
+      serviceView.limit=8;
+      paintServices();
+      return;
+    }
     if (control.form?.id!=='draft-input') return;
     if (pending) {
       pending.controller.abort();
@@ -778,6 +1001,35 @@ export function mountComposer(container, api) {
       return;
     }
     if (!state.result) return;
+    if (action==='service-more') {
+      const previous=serviceView.limit;
+      serviceView.limit+=8;
+      paintServices();
+      container.querySelectorAll('.composer-service-list li button')[previous]?.focus();
+      return;
+    }
+    if (action==='service-clear') {
+      find('#draft-service-query').value=serviceView.query='';
+      find('#draft-service-kind').value=serviceView.kind='all';
+      const cityField=find('#draft-service-city');
+      if (cityField) cityField.value=serviceView.city='';
+      serviceView.limit=8;
+      paintServices();
+      find('#draft-service-query').focus();
+      return;
+    }
+    if (action==='service-include' || action==='service-release') {
+      if (pending || state.dirty) return;
+      const place=(action==='service-include'?state.result.places:state.requiredServices)
+        .find(item=>item.id===value && ['stay','food'].includes(item.kind));
+      if (!place) return;
+      const services=state.requiredServices.filter(item=>item.id!==value);
+      if (action==='service-include') services.push({id:place.id,name:place.name,en:place.en,cn:place.cn,kind:place.kind,city:place.city});
+      const feedback=find('.composer-service-feedback');
+      if (services.length>10) feedback.querySelector('.composer-swap-status').textContent=t('Можно выбрать до 10 обязательных объектов. Уберите лишние из списка.');
+      else void build(find('#draft-input'),null,feedback,services,value);
+      return;
+    }
     if (action==='day') {
       state.mapDay=value;
       state.point=null;

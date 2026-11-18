@@ -7,6 +7,112 @@
     "provider": "Опубликованные координаты"
   },
   "cities": {
+    "498817": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "Q132783",
+          "name": "Государственный Эрмитаж",
+          "en": "State Hermitage Museum",
+          "cn": "艾尔米塔什博物馆",
+          "aliases": ["Эрмитаж", "Зимний дворец", "Hermitage Museum", "Winter Palace", "冬宫"],
+          "coordinates": [59.940556, 30.313611],
+          "category": "museum",
+          "weeklyWindows": [[660, 1080], null, [660, 1200], [660, 1080], [660, 1080], [660, 1200], [660, 1200]],
+          "closedDates": ["01-01", "05-09"],
+          "url": "https://www.hermitagemuseum.org/visitus",
+          "geoUrl": "https://www.wikidata.org/wiki/Q132783"
+        },
+        {
+          "id": "Q1930409",
+          "name": "Михайловский дворец · Русский музей",
+          "en": "Mikhailovsky Palace · Russian Museum",
+          "cn": "米哈伊洛夫斯基宫 · 俄罗斯博物馆",
+          "aliases": ["Михайловский дворец", "Русский музей", "Mikhailovsky Palace", "Russian Museum"],
+          "coordinates": [59.93861, 30.33222],
+          "category": "museum",
+          "weeklyWindows": [[600, 1200], [600, 1200], null, [600, 1200], [600, 1200], [600, 1200], [600, 1200]],
+          "url": "https://en.rusmuseum.ru/museums/mikhailovsky-palace/",
+          "geoUrl": "https://www.wikidata.org/wiki/Q1930409"
+        },
+        {
+          "id": "Q38646",
+          "name": "Территория Петропавловской крепости",
+          "en": "Peter and Paul Fortress grounds",
+          "cn": "彼得保罗要塞",
+          "aliases": ["Петропавловская крепость", "Peter and Paul Fortress"],
+          "coordinates": [59.95, 30.316667],
+          "category": "heritage",
+          "dailyWindow": [590, 1170],
+          "url": "https://spbmuseum.ru/themuseum/visitors/regis.php?lang_ui=ru",
+          "geoUrl": "https://www.wikidata.org/wiki/Q38646"
+        },
+        {
+          "id": "spb-saint-petersburg-hotel",
+          "name": "Отель «Санкт-Петербург»",
+          "en": "Saint Petersburg Hotel",
+          "cn": "圣彼得堡酒店",
+          "coordinates": [59.956806, 30.341644],
+          "category": "stay",
+          "url": "https://hotel-spb.ru/en/contacts"
+        },
+        {
+          "id": "spb-bering-restaurant",
+          "name": "Панорамный ресторан «Беринг»",
+          "en": "Bering Panoramic Restaurant",
+          "cn": "白令全景餐厅",
+          "coordinates": [59.956806, 30.341644],
+          "category": "food",
+          "gastro": true,
+          "dailyWindow": [780, 1380],
+          "url": "https://bering-spb.ru/",
+          "geoUrl": "https://hotel-spb.ru/en/contacts"
+        },
+        {
+          "id": "spb-azimut-city-hotel",
+          "name": "AZIMUT Сити Отель Санкт-Петербург",
+          "en": "AZIMUT City Hotel Saint Petersburg",
+          "cn": "圣彼得堡 AZIMUT 城市酒店",
+          "coordinates": [59.91498255, 30.29649902],
+          "category": "stay",
+          "url": "https://azimuthotels.com/ru/saint-petersburg/azimut-hotel-saint-petersburg"
+        },
+        {
+          "id": "spb-f11-restaurant",
+          "name": "Ресторан F11",
+          "en": "F11 Restaurant",
+          "cn": "F11 餐厅",
+          "coordinates": [59.91498255, 30.29649902],
+          "category": "food",
+          "gastro": true,
+          "dailyWindow": [720, 1380],
+          "url": "https://azimuthotels.com/ru/facilities/f-11-sky-bar-spb",
+          "geoUrl": "https://azimuthotels.com/ru/saint-petersburg/azimut-hotel-saint-petersburg"
+        },
+        {
+          "id": "spb-helvetia-hotel",
+          "name": "Отель «Гельвеция»",
+          "en": "Helvetia Hotel",
+          "cn": "赫尔维蒂亚酒店",
+          "coordinates": [59.92965, 30.35378],
+          "category": "stay",
+          "url": "https://helvetiahotel.ru/",
+          "geoUrl": "https://otel-gelvetsiya.rt.center/index.php"
+        },
+        {
+          "id": "spb-cafe-claret",
+          "name": "Ресторан Café Claret",
+          "en": "Café Claret Restaurant",
+          "cn": "克拉雷特餐厅",
+          "coordinates": [59.92965, 30.35378],
+          "category": "food",
+          "gastro": true,
+          "dailyWindow": [720, 1440],
+          "url": "https://claretcafe.ru/",
+          "geoUrl": "https://otel-gelvetsiya.rt.center/index.php"
+        }
+      ]
+    },
     "524901": {
       "checkedAt": "2026-11-17",
       "places": [
@@ -351,6 +457,52 @@
           "geoUrl": "https://www.wikidata.org/wiki/Q130899024"
         },
         {
+          "id": "kazan-chak-chak-museum",
+          "name": "Музей чак-чака",
+          "en": "Chak-Chak Museum",
+          "cn": "恰克恰克博物馆",
+          "coordinates": [55.782035, 49.112529],
+          "category": "museum",
+          "gastro": true,
+          "dailyWindow": [600, 1200],
+          "url": "https://chak-chak.museum/",
+          "geoUrl": "https://www.wikidata.org/wiki/Q21641941"
+        },
+        {
+          "id": "kazan-bik-temle",
+          "name": "Дом-музей татарской кулинарии «Бик тәмле. Бик матур»",
+          "en": "Bik Tamle. Bik Matur House Museum of Tatar Cuisine",
+          "cn": "比克塔姆列鞑靼烹饪博物馆",
+          "coordinates": [55.781358, 49.115271],
+          "category": "museum",
+          "gastro": true,
+          "dailyWindow": [540, 1260],
+          "url": "https://go.kzn.ru/places/dom-muzei-bik-tamle-bik-matur-1",
+          "geoUrl": "https://go.kzn.ru/places/dom-muzei-bik-tamle-bik-matur-1"
+        },
+        {
+          "id": "kazan-tugan-restaurant",
+          "name": "Ресторан «Туган Авылым»",
+          "en": "Tugan Avylym Restaurant",
+          "cn": "图甘阿维勒姆餐厅",
+          "coordinates": [55.780158, 49.135528],
+          "category": "food",
+          "gastro": true,
+          "url": "https://tugan-avilim.ru/kitchen",
+          "geoUrl": "https://go.kzn.ru/places/tugan-avylym"
+        },
+        {
+          "id": "kazan-tatar-estate",
+          "name": "Ресторан «Татарская усадьба»",
+          "en": "Tatar Estate Restaurant",
+          "cn": "鞑靼庄园餐厅",
+          "coordinates": [55.781048, 49.117095],
+          "category": "food",
+          "gastro": true,
+          "url": "https://tatusadba.ru/",
+          "geoUrl": "https://tatusadba.ru/"
+        },
+        {
           "id": "kazan-capella",
           "name": "Ресторан «Капелла»",
           "en": "Capella Restaurant",
@@ -460,6 +612,221 @@
           ],
           "category": "food",
           "url": "https://azimuthotels.com/ru/vladivostok/azimut-hotel-vladivostok"
+        }
+      ]
+    },
+    "2119441": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "Q4409417",
+          "name": "Сахалинский областной краеведческий музей",
+          "en": "Sakhalin Regional Museum",
+          "cn": "萨哈林州乡土博物馆",
+          "coordinates": [46.95902777777778, 142.74441666666667],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4409417"
+        },
+        {
+          "id": "Q4409416",
+          "name": "Сахалинский областной государственный художественный музей",
+          "en": "Sakhalin Regional State Museum of Art",
+          "cn": "萨哈林州美术馆",
+          "coordinates": [46.96083333, 142.7294444],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4409416"
+        },
+        {
+          "id": "Q4306359",
+          "name": "Музей книги А. П. Чехова «Остров Сахалин»",
+          "en": "Chekhov's Sakhalin Island Book Museum",
+          "cn": "契诃夫《萨哈林岛》图书博物馆",
+          "aliases": ["Музей книги Чехова (Сахалин)"],
+          "coordinates": [46.9625, 142.7358333],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q4306359"
+        },
+        {
+          "id": "Q28666355",
+          "name": "Сахалинский театр кукол",
+          "en": "Sakhalin Puppet Theatre",
+          "cn": "萨哈林木偶剧院",
+          "coordinates": [46.96, 142.7415],
+          "category": "family",
+          "url": "https://www.wikidata.org/wiki/Q28666355"
+        },
+        {
+          "id": "Q4409415",
+          "name": "Сахалинский зооботанический парк",
+          "en": "Sakhalin Zoological and Botanical Park",
+          "cn": "萨哈林动植物园",
+          "coordinates": [46.968487, 142.754654],
+          "category": "family",
+          "url": "https://www.wikidata.org/wiki/Q4409415"
+        },
+        {
+          "id": "Q15726581",
+          "name": "Воскресенский собор (Южно-Сахалинск)",
+          "en": "Cathedral of the Resurrection",
+          "cn": "基督复活大教堂",
+          "coordinates": [46.9607, 142.748],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q15726581"
+        },
+        {
+          "id": "Q111630206",
+          "name": "Рождественский собор (Южно-Сахалинск)",
+          "en": "Cathedral of the Nativity of Christ",
+          "cn": "基督诞生大教堂",
+          "coordinates": [46.950457, 142.759735],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q111630206"
+        },
+        {
+          "id": "Q4409419",
+          "name": "Сахалинский международный театральный центр имени А. П. Чехова",
+          "en": "Chekhov Sakhalin International Theater Center",
+          "cn": "萨哈林契诃夫国际戏剧中心",
+          "coordinates": [46.958762, 142.7393529],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q4409419"
+        },
+        {
+          "id": "yuzhno-sakhalinsk-mega-palace",
+          "name": "Отель «Мега Палас»",
+          "en": "Mega Palace Hotel",
+          "cn": "Mega Palace 酒店",
+          "coordinates": [46.967469, 142.752521],
+          "category": "stay",
+          "url": "https://megapalacehotel.com/"
+        },
+        {
+          "id": "yuzhno-sakhalinsk-belka",
+          "name": "Белка-отель",
+          "en": "Belka Hotel",
+          "cn": "Belka 酒店",
+          "coordinates": [46.960905, 142.741594],
+          "category": "stay",
+          "url": "https://www.belka-hotel.ru/",
+          "geoUrl": "https://yandex.com/maps/org/belka/1221085521/"
+        },
+        {
+          "id": "yuzhno-sakhalinsk-nihon-mitai",
+          "name": "Ресторан «Нихон Митай»",
+          "en": "Nihon Mitai Restaurant",
+          "cn": "Nihon Mitai 日式餐厅",
+          "coordinates": [46.950783, 142.746188],
+          "category": "food",
+          "gastro": true,
+          "dailyWindow": [660, 1380],
+          "url": "https://nihonmitai.ru/",
+          "geoUrl": "https://yandex.com/maps/org/nihon_mitai/1078584401/"
+        },
+        {
+          "id": "yuzhno-sakhalinsk-taj-mahal",
+          "name": "Индийский ресторан «Тадж-Махал»",
+          "en": "Taj Mahal Indian Restaurant",
+          "cn": "Taj Mahal 印度餐厅",
+          "coordinates": [46.956983706353, 142.73618317288],
+          "category": "food",
+          "url": "https://www.tm-food.com/"
+        }
+      ]
+    },
+    "1488754": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "Q47004154",
+          "name": "Музей «Городская Дума»",
+          "en": "City Duma Local Museum",
+          "cn": "市杜马博物馆",
+          "coordinates": [57.163081, 65.519409],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q47004154"
+        },
+        {
+          "id": "Q65224578",
+          "name": "Исторический сквер (Тюмень)",
+          "en": "Historical Square",
+          "cn": "历史广场",
+          "coordinates": [57.162836, 65.520542],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q65224578"
+        },
+        {
+          "id": "Q4430902",
+          "name": "Спасская церковь (Тюмень)",
+          "en": "Church of the Saviour",
+          "cn": "救世主教堂",
+          "coordinates": [57.155833333333, 65.531666666667],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q4430902"
+        },
+        {
+          "id": "Q4421719",
+          "name": "Сквер сибирских кошек",
+          "en": "Siberian Cats Square",
+          "cn": "西伯利亚猫广场",
+          "coordinates": [57.15393, 65.53674],
+          "category": "park",
+          "url": "https://www.wikidata.org/wiki/Q4421719"
+        },
+        {
+          "id": "Q18755271",
+          "name": "Музей «Дом Машарова»",
+          "en": "Masharov House Museum",
+          "cn": "马沙罗夫故居博物馆",
+          "coordinates": [57.157994, 65.526458],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q18755271"
+        },
+        {
+          "id": "Q46995565",
+          "name": "Музейный комплекс имени И. Я. Словцова",
+          "en": "Slovtsov Museum Complex",
+          "cn": "斯洛夫佐夫博物馆群",
+          "coordinates": [57.15383555353965, 65.54977122884739],
+          "category": "museum",
+          "url": "https://www.wikidata.org/wiki/Q46995565"
+        },
+        {
+          "id": "Q19521596",
+          "name": "Мост влюблённых (Тюмень)",
+          "en": "Lovers' Bridge",
+          "cn": "秋明情侣桥",
+          "coordinates": [57.164317, 65.522206],
+          "category": "heritage",
+          "url": "https://www.wikidata.org/wiki/Q19521596"
+        },
+        {
+          "id": "Q4467511",
+          "name": "Тюменский театр кукол",
+          "en": "Tyumen Puppet Theatre",
+          "cn": "秋明木偶剧院",
+          "coordinates": [57.1575, 65.5306],
+          "category": "family",
+          "url": "https://www.wikidata.org/wiki/Q4467511"
+        },
+        {
+          "id": "tyumen-doubletree",
+          "name": "DoubleTree by Hilton Tyumen",
+          "en": "DoubleTree by Hilton Tyumen",
+          "cn": "秋明希尔顿逸林酒店",
+          "coordinates": [57.153741, 65.547479],
+          "category": "stay",
+          "url": "https://dttyumen.ru/contacts/"
+        },
+        {
+          "id": "tyumen-chum",
+          "name": "Ресторан-музей «Чум»",
+          "en": "Chum Restaurant Museum",
+          "cn": "Chum 餐厅博物馆",
+          "coordinates": [57.140873, 65.554444],
+          "category": "food",
+          "gastro": true,
+          "url": "https://maxim-rest.ru/establishments/restoran-muzey-chum/",
+          "geoUrl": "https://yandex.com/maps/org/chum/136469200341/"
         }
       ]
     }

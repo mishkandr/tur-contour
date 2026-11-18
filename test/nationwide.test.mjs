@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {detectCities,draftItinerary,listCities} from '../nationwide.mjs';
+import {parseBrief} from '../planner-brief.mjs';
 
 const offline = async () => { throw new Error('Test connection unavailable'); };
 const request = {cityId:'524901',days:2,date:'2026-11-28',size:18,market:'zh',theme:'museum'};
@@ -40,6 +41,38 @@ test('national planner resolves common alternate city names and ignores directly
     ['不去莫斯科。叶卡捷琳堡两天。',['Екатеринбург']],
     ['Не едем в Казань напрямую. Сначала Уфа, затем Казань.',['Уфа','Казань']],
   ]) assert.deepEqual((await detectCities(input)).map(city=>city.name),expected);
+});
+
+test('South Sakhalinsk supports current and historical Chinese names in both brief and city search',async()=>{
+  const [city]=await detectCities('南萨哈林斯克三天，明天出发，十四人，中国团队。');
+  assert.equal(city?.id,'2119441');
+  assert.equal(city.cn,'南萨哈林斯克');
+  assert.equal(city.timezone,'Asia/Sakhalin');
+  for (const query of ['南萨哈林斯克','南萨哈林斯克市','南薩哈林斯克','豐原']) {
+    const [result]=(await listCities(query)).cities;
+    assert.equal(result?.id,city.id);
+    assert.equal(result.cn,city.cn);
+  }
+});
+
+test('a Chinese South Sakhalinsk brief schedules sourced food and lodging from the offline catalog',async()=>{
+  const brief='南萨哈林斯克三天，明天出发，十四人，中国团队，参观博物馆。';
+  const [city]=await detectCities(brief);
+  const result=await draftItinerary(
+    {...parseBrief(brief,'2026-11-27'),cityId:city.id},{fetchImpl:offline});
+  assert.equal(result.source.status,'snapshot');
+  assert.equal(result.settings.market,'zh');
+  assert.equal(result.settings.size,14);
+  assert.deepEqual(result.plan.days.map(day=>day.stops.some(stop=>stop.type==='food')),[true,true,true]);
+  assert.deepEqual(result.plan.days.map(day=>day.stops.some(stop=>stop.type==='stay')),[true,true,false]);
+  const amenities=result.places.filter(place=>['food','stay'].includes(place.kind));
+  assert.equal(amenities.length,4);
+  for (const place of amenities) {
+    assert.ok(place.cn);
+    assert.ok(place.url.startsWith('https://'));
+    assert.equal(place.status,'unknown');
+    assert.equal(result.geodata.places[place.id].source,place.geoUrl ?? place.url);
+  }
 });
 
 test('three geographically separate snapshots supply mapped places but leave all visits provisional',async()=>{
@@ -133,11 +166,39 @@ test('multi-city drafts visit selected cities in order and leave transfer timing
     assert.equal(day.transfer.status,'unknown');
     assert.equal(day.transfer.distanceType,'straight-line');
     assert.ok(day.transfer.distanceKm>500);
+    assert.equal(day.transfer.timing.status,'unconfirmed');
     assert.ok(day.missing.some(text=>text.includes('переезд')));
     assert.ok(day.stops.every(stop=>stop.type!=='travel'));
   }
   assert.ok(result.geodata.cities.Владивосток.coordinates[1]>100);
   await assert.rejects(draftItinerary({...request,additionalCityIds:['551487','2013348']},{fetchImpl:offline}),{status:400});
+});
+
+test('a long by-car leg reserves arrival time and offers unscheduled sightseeing separately',async()=>{
+  const result=await draftItinerary({...request,days:3,size:8,transport:'car',additionalCityIds:['551487'],
+    required:['Казанский кремль']},{fetchImpl:offline});
+  const [,arrival,nextDay]=result.plan.days;
+  assert.equal(arrival.transfer.status,'unknown');
+  assert.equal(arrival.transfer.timing.status,'estimated');
+  assert.equal(arrival.transfer.timing.departureTime,'08:00');
+  assert.equal(arrival.transfer.timing.arrivalDate,arrival.date);
+  assert.ok(arrival.transfer.timing.arrivalTime>'18:00');
+  assert.equal(arrival.transfer.timing.visitsLimited,true);
+  assert.ok(arrival.stops.every(stop=>stop.type!=='visit' && stop.start>=arrival.transfer.timing.arrivalTime));
+  assert.ok(arrival.transfer.candidates.some(place=>place.id==='Q603622'));
+  assert.ok(nextDay.stops.some(stop=>stop.id==='Q603622' && stop.required));
+});
+
+test('a road arrival beyond the trip does not schedule visits on later days in that city',async()=>{
+  const result=await draftItinerary({...request,days:3,transport:'car',additionalCityIds:['2013348'],
+    required:['Владивостокская крепость']},{fetchImpl:offline});
+  const [departure,...unreached]=result.plan.days;
+  const [first,last]=unreached;
+  assert.ok(departure.stops.length);
+  assert.ok(first.transfer.timing.reserveMinutes>3*24*60);
+  assert.ok(first.transfer.timing.arrivalDate>last.date);
+  assert.ok(unreached.every(day=>day.logistics.arrivalAfterDay && day.logistics.arrivalPending && day.stops.length===0));
+  assert.equal(result.plan.required[0].scheduled,false);
 });
 
 test('visit deadlines constrain sightseeing while preserving afternoon services',async()=>{
@@ -156,7 +217,7 @@ test('visit deadlines constrain sightseeing while preserving afternoon services'
 });
 
 test('a tight schedule keeps multiple mandatory visits, a realistic lunch window and same-city overnight continuity',async()=>{
-  const city=(await listCities('Тюмень')).cities[0];
+  const city=(await listCities('Псков')).cities[0];
   const [lat,lon]=city.coordinates;
   const records=[
     [1,0.003,0.000,{name:'Музей из обязательного списка',tourism:'museum'}],
@@ -195,7 +256,7 @@ test('a tight schedule keeps multiple mandatory visits, a realistic lunch window
 });
 
 test('scoped replacements keep all required visits, exact slots and other days intact',async()=>{
-  const city=(await listCities('Тюмень')).cities[0];
+  const city=(await listCities('Псков')).cities[0];
   const [lat,lon]=city.coordinates;
   const element=(id,name,x,tags)=>({type:'node',id,lat:lat+x,lon:lon+0.0002,tags:{name,...tags}});
   const required=Array.from({length:5},(_,i)=>'Музей обязательный '+(i+1));
@@ -248,7 +309,7 @@ test('scoped replacements keep all required visits, exact slots and other days i
 });
 
 test('an outdoor stop offers an indoor same-time candidate for checking before a trip',async()=>{
-  const city=(await listCities('Тюмень')).cities[0];
+  const city=(await listCities('Псков')).cities[0];
   const [lat,lon]=city.coordinates;
   const place=(id,name,tags)=>({type:'node',id,lat,lon:lon+id*0.00001,tags:{name,...tags}});
   const parks=Array.from({length:12},(_,index)=>place(index+1,`Сквер ${index+1}`,{leisure:'park'}));
@@ -274,7 +335,7 @@ test('a relaxed Kazan plan uses the morning while keeping mandatory visits and g
 });
 
 test('similarly named venues require a choice and out-of-range lunch remains a gap',async()=>{
-  const city=(await listCities('Тюмень')).cities[0];
+  const city=(await listCities('Псков')).cities[0];
   const [lat,lon]=city.coordinates;
   const elements=[
     {type:'node',id:1,lat,lon,tags:{name:'Музей природы у реки',tourism:'museum'}},
@@ -289,7 +350,7 @@ test('similarly named venues require a choice and out-of-range lunch remains a g
 });
 
 test('excluded themes outrank mandatory names and themed coverage counts only scheduled stops',async()=>{
-  const city=(await listCities('Тюмень')).cities[0];
+  const city=(await listCities('Псков')).cities[0];
   const [lat,lon]=city.coordinates;
   const tags=[
     {name:'Городской музей',tourism:'museum'},
@@ -369,6 +430,122 @@ test('fallback labels add crafts and pilgrimage only when site names are explici
   assert.equal(result.source.id,'wikimedia');
   assert.deepEqual(result.plan.interestCoverage,[{theme:'craft',count:1},{theme:'pilgrimage',count:1}]);
   assert.ok(!result.places.find(place=>place.name==='Городской собор').tags.includes('pilgrimage'));
+});
+
+test('Wikipedia transport and civic records do not become stops, while a named metro museum remains a visit',async()=>{
+  const {cities}=await listCities('Иркутск');
+  const [lat,lon]=cities[0].coordinates;
+  const fetchImpl=async url=>{
+    if (!String(url).includes('wikipedia.org')) throw new Error('Overpass test timeout');
+    return Response.json({query:{geosearch:[
+      {pageid:810,title:'Площадь Тукая (станция метро)',lat,lon},
+      {pageid:811,title:'Здание администрации',lat:lat+0.001,lon},
+      {pageid:812,title:'Музей истории метро',lat:lat+0.002,lon},
+    ]}});
+  };
+  const result=await draftItinerary({...request,cityId:cities[0].id},{fetchImpl});
+  assert.deepEqual(result.places.map(place=>place.id),['ruwiki-812']);
+  assert.ok(result.plan.days.flatMap(day=>day.stops).some(stop=>stop.id==='ruwiki-812'));
+});
+
+test('gastro counts only distinct culinary places supported by map details',async()=>{
+  const city=(await listCities('Псков')).cities[0];
+  const [lat,lon]=city.coordinates;
+  const place=(id,name,tags)=>({type:'node',id,lat,lon:lon+id*0.0001,tags:{name,...tags}});
+  const elements=[
+    place(1,'Музей хлеба',{tourism:'museum'}),
+    place(2,'Городской рынок',{amenity:'marketplace'}),
+    place(3,'Фермерский рынок',{amenity:'marketplace'}),
+    place(4,'Местная кухня',{amenity:'restaurant',cuisine:'regional'}),
+    place(5,'Быстрый обед',{amenity:'restaurant',cuisine:'international'}),
+    place(6,'Дом истории',{tourism:'museum'}),
+  ];
+  const result=await draftItinerary({...request,cityId:city.id,days:3,theme:'gastro'},{fetchImpl:async()=>Response.json({elements})});
+  const stops=result.plan.days.flatMap(day=>day.stops);
+  assert.ok(stops.some(stop=>stop.type==='food' && stop.gastro && stop.cuisineHint==='regional'));
+  assert.ok(stops.some(stop=>stop.name==='Фермерский рынок' && stop.gastro));
+  assert.ok(!result.places.some(place=>place.name==='Городской рынок'));
+  assert.ok(!result.places.find(place=>place.name==='Быстрый обед').tags.includes('gastro'));
+  assert.deepEqual(result.plan.interestCoverage,[{theme:'gastro',count:new Set(stops.filter(stop=>stop.gastro).map(stop=>stop.id)).size}]);
+});
+
+test('Kazan culinary opening hours and official links survive a live-source merge, including a sourced restaurant',async()=>{
+  const city=(await listCities('Казань')).cities[0];
+  const fetchImpl=async()=>Response.json({elements:[
+    {type:'node',id:901,lat:55.782035,lon:49.112529,tags:{name:'Музей Чак-чака',tourism:'museum'}},
+    {type:'node',id:902,lat:55.7812,lon:49.116,tags:{name:'Обычный ресторан',amenity:'restaurant'}},
+  ]});
+  const result=await draftItinerary({...request,cityId:city.id,theme:'gastro',size:8,
+    required:['Музей чак-чака']},{fetchImpl});
+  const stops=result.plan.days.flatMap(day=>day.stops);
+  const museum=stops.find(stop=>stop.id==='osm-node-901');
+  assert.ok(museum.gastro && museum.status==='unknown');
+  assert.equal(museum.url,'https://chak-chak.museum/');
+  assert.ok(museum.start>='10:00');
+  assert.ok(stops.some(stop=>stop.type==='food' && stop.gastro));
+});
+
+test('exact pins schedule food and lodging, deduplicate required names and report unavailable ids',async()=>{
+  const result=await draftItinerary({...request,cityId:'551487',size:8,required:['Гранд Отель Казань','Ресторан «Татарская усадьба»'],
+    requiredPlaceIds:['kazan-grand-hotel','kazan-tatar-estate','missing-provider-venue','kazan-grand-hotel']},{fetchImpl:offline});
+  assert.deepEqual(result.settings.requiredPlaceIds,['kazan-grand-hotel','kazan-tatar-estate','missing-provider-venue']);
+  assert.deepEqual(result.plan.required.map(({requestedId,scheduled,reason})=>[requestedId,scheduled,reason]),[
+    ['kazan-grand-hotel',true,undefined],['kazan-tatar-estate',true,undefined],['missing-provider-venue',false,'not-found'],
+  ]);
+  const stops=result.plan.days.flatMap(day=>day.stops);
+  assert.ok(stops.some(stop=>stop.type==='stay' && stop.id==='kazan-grand-hotel' && stop.required));
+  assert.ok(stops.some(stop=>stop.type==='food' && stop.id==='kazan-tatar-estate' && stop.required));
+  const competing=await draftItinerary({...request,cityId:'551487',requiredPlaceIds:['kazan-grand-hotel','kazan-shalyapin-palace']},{fetchImpl:offline});
+  const missed=competing.plan.required.filter(item=>!item.scheduled);
+  assert.equal(missed.length,1);
+  assert.equal(missed[0].reason,'no-slot');
+  await assert.rejects(draftItinerary({...request,requiredPlaceIds:['invalid id']},{fetchImpl:offline}),{status:400});
+  await assert.rejects(draftItinerary({...request,requiredPlaceIds:Array.from({length:11},(_,i)=>'venue-'+i)},{fetchImpl:offline}),{status:400});
+});
+
+test('a visit-only Saint Petersburg source still offers provisional group dining and lodging with venue links',async()=>{
+  const elements=Array.from({length:12},(_,index)=>({
+    type:'node',id:300+index,lat:59.93+index/2000,lon:30.34,
+    tags:{name:'Петербургский музей '+index,tourism:'museum'},
+  }));
+  const result=await draftItinerary({...request,cityId:'498817',days:3,size:6,access:true},
+    {fetchImpl:async()=>Response.json({elements})});
+  assert.equal(result.source.status,'live');
+  assert.equal(result.source.supplemental.status,'snapshot');
+  assert.equal(result.places.filter(place=>place.kind==='food').length,3);
+  assert.equal(result.places.filter(place=>place.kind==='stay').length,3);
+  assert.ok(result.plan.days.every(day=>day.stops.some(stop=>stop.type==='food')));
+  const overnightIds=result.plan.days.slice(0,2).map(day=>day.stops.find(stop=>stop.type==='stay')?.id);
+  assert.ok(overnightIds[0]);
+  assert.equal(overnightIds[0],overnightIds[1]);
+  const logistics=result.plan.days.flatMap(day=>day.stops.filter(stop=>stop.type!=='visit'));
+  for (const stop of logistics) {
+    assert.equal(stop.status,'unknown');
+    assert.match(stop.url,/^https:\/\//u);
+  }
+});
+
+test('Hermitage hours apply to the selected day and retain the mandatory museum with a slow provider',async()=>{
+  const result=await draftItinerary({...request,cityId:'498817',date:'2026-11-23',size:8,required:['Государственный Эрмитаж']},
+    {fetchImpl:offline});
+  assert.equal(result.plan.required[0].scheduled,true);
+  assert.equal(result.plan.days[0].stops.some(stop=>stop.id==='Q132783'),false);
+  const hermitage=result.plan.days[1].stops.find(stop=>stop.id==='Q132783');
+  assert.ok(hermitage.start>='11:00');
+  assert.equal(hermitage.status,'unknown');
+});
+
+test('a hotel with an official catalog listing keeps the same selection with or without live venue results',async()=>{
+  const query={...request,cityId:'498817',requiredPlaceIds:['spb-saint-petersburg-hotel','spb-helvetia-hotel']};
+  const live=async()=>Response.json({elements:[
+    {type:'node',id:981,lat:59.92965,lon:30.35378,tags:{name:'Отель «Гельвеция»',tourism:'hotel'}},
+  ]});
+  for (const fetchImpl of [live,offline]) {
+    const draft=await draftItinerary(query,{fetchImpl});
+    assert.equal(draft.places.filter(place=>place.name.includes('Гельвеция')).length,1);
+    assert.ok(draft.places.some(place=>place.id==='spb-saint-petersburg-hotel'));
+    assert.ok(draft.plan.required.every(item=>item.matched?.id===item.requestedId));
+  }
 });
 
 test('invalid dates, city IDs and group sizes are rejected',async()=>{

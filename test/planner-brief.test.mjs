@@ -4,6 +4,20 @@ import { interpretBrief, parseBrief } from '../planner-brief.mjs';
 
 const reference = '2026-11-17';
 
+test('requires an explicitly named place without quotes and recognizes food tours across languages',()=>{
+  for (const [input,place] of [
+    ['Гастротур по Казани. Обязательно Музей чак-чака.', 'Музей чак-чака'],
+    ['Food tour in Kazan. Must visit the Chak-Chak Museum, at a relaxed pace.', 'Chak-Chak Museum'],
+    ['喀山美食之旅，必须参观恰克恰克博物馆，8人。', '恰克恰克博物馆'],
+  ]) {
+    const parsed=parseBrief(input,reference);
+    assert.ok(parsed.interests.includes('gastro'));
+    assert.deepEqual(parsed.required,[place]);
+  }
+  assert.deepEqual(parseBrief('Казань. Не обязательно Музей чак-чака. Без «Эрмитажа».',reference).required,[]);
+  assert.deepEqual(parseBrief('Казань, обязательно музей чак-чака. Обязательно до обеда.',reference).required,['музей чак-чака']);
+});
+
 test('extracts the user date, group, interests, required places and visit deadline between other numbers', () => {
   const result = parseBrief('Казань для 12 человек на три дня с 21 ноября. Музеи и пешие прогулки, только до обеда. Обязательно «Казанский кремль».',reference);
   assert.equal(result.days,3);

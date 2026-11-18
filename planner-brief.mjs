@@ -1,4 +1,4 @@
-const themes = ['heritage','museum','family','romantic','nature','hike','craft','pilgrimage','any'];
+const themes = ['heritage','museum','family','romantic','nature','hike','craft','pilgrimage','gastro','any'];
 const themePatterns = {
   museum:/музе[йяие]|экспозици|museum|博物馆/iu,
   heritage:/архитектур|истор|культур|heritage|histor|architectur|文化|历史|建筑/iu,
@@ -8,6 +8,7 @@ const themePatterns = {
   hike:/(?<!\p{L})(?:пеш|поход|троп|hike(?:s)?\b|hiking\b|trails?\b)|徒步/iu,
   craft:/ремес|мастер-класс|стекл|craft|workshop|工艺|手工/iu,
   pilgrimage:/паломнич|монастыр|pilgrim|monaster|朝圣|修道院/iu,
+  gastro:/гастроном|гастротур|(?:местн|региональн|татарск)\p{L}*\s+кухн|дегустац|кулинарн\p{L}*\s+мастер|food tour|local cuisine|gastronom|culinary|美食|地方菜|品尝/iu,
 };
 const exclusions = {
   museum:/(?:без\s+(?:(?:экскурси\p{L}*|посещени\p{L}*)\s+(?:по\s+)?)?|исключи\p{L}*\s+)музе|(?:no|without|skip)\s+(?:(?:visits?|tours?)\s+(?:to|of)\s+)?museums?|(?:不要|不去|不参观)博物馆/iu,
@@ -16,6 +17,7 @@ const exclusions = {
   nature:/без\s+(?:парк|природ)|(?:no|without|skip)\s+(?:parks?|nature)|不要公园/iu,
   craft:/без\s+(?:ремес|мастер-класс)|(?:no|without|skip)\s+(?:crafts?|workshops?)|不要手工/iu,
   pilgrimage:/без\s+(?:храм|монастыр)|(?:no|without|skip)\s+(?:churches|monasteries|pilgrimage)|不参观修道院/iu,
+  gastro:/без\s+(?:дегустац|гастроном|гастротур)|(?:no|without|skip)\s+(?:food tours?|tastings?)|不(?:要美食|参加品尝)/iu,
 };
 const digitWords = { один:1,одного:1,два:2,двух:2,три:3,трех:3,четыре:4,четырех:4,пять:5,пяти:5,шесть:6,шести:6,
   семь:7,семи:7,восемь:8,восьми:8,девять:9,девяти:9,десять:10,десяти:10,одиннадцать:11,одиннадцати:11,
@@ -105,6 +107,18 @@ const noAccessRequirement=new RegExp('(?:не\\s+(?:нуж[а-я]*|треб[а-�
 const noAccessAfter=new RegExp(accessTerm+'(?:\\s+(?:доступ|вход))?\\s+(?:не\\s+(?:нуж[а-я]*|треб[а-я]*)|(?:is not|isn.t) (?:needed|required))|'+
   '(?:无障碍(?:设施|通行)?|轮椅)\\s*(?:不需要|不用|无需)','giu');
 const needsAccess=new RegExp(accessTerm+'|без\\s+(?:лестниц|ступене[кй])|no stairs|无台阶','iu');
+const negativePlace = /(?:^|[\s,.!?;])(?:без|кроме|исключить|пропустить|не(?:\s+(?:обязательно(?:\s+посетить)?|посещать|включать|ходить\s+в))?|without|skip|not(?:\s+(?:required|include|visit))?)\s*$/iu;
+const namedRequirement = /(?<!\p{L})(?:обязательно\s+(?:(?:посетить|включить|увидеть|зайти\s+в)\s+)?|must\s+(?:visit|include)\s+(?:the\s+)?)(?!в\s|на\s|с\s|до\s|после\s|без\s|успеть\s|проверить\s|уточнить\s|чтобы\s)([\p{L}][^,;.!?«“"\n]{1,89})|必[须須](?:参观|參觀|游览|包含|去)\s*([\p{Script=Han}][^,;.!?，；。！？、«“"\n]{1,89})/giu;
+
+function requiredPlaces(brief) {
+  const input = String(brief).normalize('NFKC');
+  const confirmed = [...input.matchAll(/[«“"]([^»”"\n]{2,90})[»”"]/gu),...input.matchAll(namedRequirement)]
+    .filter(match=>!negativePlace.test(input.slice(Math.max(0,match.index-48),match.index)) &&
+      !/(?:不要|不去|不参观|不用|不必)\s*$/u.test(input.slice(Math.max(0,match.index-8),match.index)))
+    .sort((left,right)=>left.index-right.index)
+    .map(match=>(match[1]??match[2]).trim());
+  return [...new Map(confirmed.map(value=>[sameFold(value),value])).values()];
+}
 
 export function parseBrief(brief, referenceDate = new Date().toISOString().slice(0,10)) {
   const text = sameFold(brief);
@@ -124,7 +138,7 @@ export function parseBrief(brief, referenceDate = new Date().toISOString().slice
   const access = needsAccess.test(mentionsAccess) ? true : mentionsAccess!==text ? false : null;
   const visitDeadline = text.match(/(?:только\s+)?(?:до|before|until)\s+((?:09|1[0-8]):[0-5]\d)(?!\d)/iu)?.[1] ??
     (/до обеда|к обеду|до полудня|before noon|before lunch|中午前|午餐前/u.test(text) ? '12:00' : null);
-  const required = [...new Set([...String(brief).matchAll(/[«“"]([^»”"\n]{2,90})[»”"]/gu)].map(match=>match[1].trim()))];
+  const required = requiredPlaces(brief);
   return {...dateIn(text,referenceDate),days:[2,3].includes(requestedDays) ? requestedDays : null,
     requestedDays, size,invalidSize:requestedSize!=null && size==null ? String(requestedSize) : null,
     theme:interests[0] ?? null, interests, excludedInterests, pace, transport, market, access, required, visitDeadline};

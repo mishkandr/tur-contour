@@ -1339,8 +1339,14 @@ try {
   [data, geodata] = await Promise.all([api('state'), api('map').catch(()=>({}))]);
   render();
   if (!data.refreshedAt) setTimeout(async()=>{
-    if (!busy && !dialog.open && !activeRouteAnalysis && !knowledge?.waiting && !screen.contains(document.activeElement)) {
-      try { data = await api('state'); render(); } catch { /* last rendered state remains usable */ }
+    const screenIsIdle=()=>!busy && !dialog.open && !activeRouteAnalysis && !knowledge?.waiting &&
+      !screen.contains(document.activeElement);
+    if (screenIsIdle()) {
+      try {
+        data = await api('state');
+        // The national planner owns its requests and does not depend on dashboard data.
+        if (!composer && screenIsIdle()) render();
+      } catch { /* last rendered state remains usable */ }
     }
   },8000);
 } catch(error) {

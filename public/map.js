@@ -156,7 +156,8 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   });
   const referencePane = map.createPane('routeBase');
   referencePane.style.zIndex = 205;
-  map.createPane('routeLabels').style.zIndex = 380;
+  const labelPane = map.createPane('routeLabels');
+  labelPane.style.zIndex = 380;
   map.createPane('routeTraffic').style.zIndex = 390;
   const attribution = L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(map);
   const zoom = L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -227,7 +228,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     element.classList.toggle('map--fallback',status === 'fallback' || status === 'partial');
     element.dataset.tiles = status;
     referencePane.style.visibility = status === 'ready' ? 'hidden' : '';
-    if (!initialFrame) drawMarkers();
+    labelPane.style.visibility = referencePane.style.visibility;
     onStatus?.({ tiles: status, base });
   }
 
@@ -411,26 +412,28 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   }
 
   function drawGroup(city,group,type='city') {
-    const popup = type!=='city';
-    const action = popup ? copy[type] : copy.showPlaces;
+    const wholeCity = type==='city';
+    const bounds = wholeCity ? L.latLngBounds(group.map(place=>place.point)) : null;
+    const popup = !wholeCity || map.getBoundsZoom(bounds,false,L.point(84,84))<13;
+    const action = wholeCity ? copy.showPlaces : copy[type];
     const cityGroup = document.createElement('div');
     cityGroup.className = 'map-city';
     if (group.some(place => current.stops.has(place.id))) cityGroup.classList.add('map-city--route');
     if (group.some(place => changedIds.has(place.id))) cityGroup.classList.add('map-city--changed');
     if (group.some(place => place.id === selectedId)) cityGroup.classList.add('map-city--selected');
     const label = cityLabel(city);
-    if (!popup) {
+    if (wholeCity) {
       addLandmark(cityGroup,label).className = 'map-city__name';
       cityGroup.append(document.createTextNode(' '));
     }
     addLandmark(cityGroup,String(group.length)).className = 'map-city__count';
     const title = label+' · '+action+' · '+group.length;
-    const accessibleName = (popup ? String(group.length) : label+' '+group.length)+' · '+action;
-    const marker = L.marker(popup ? group[0].point : cityPoints(group,city), {
+    const accessibleName = (wholeCity ? label+' '+group.length : String(group.length))+' · '+action;
+    const marker = L.marker(wholeCity ? cityPoints(group,city) : group[0].point, {
       title,keyboard:true,zIndexOffset:popup && group.some(place=>place.id===selectedId) ? 900 : 0,
       icon: L.divIcon({ className: 'map-marker', html: cityGroup, iconSize: [30, 30], iconAnchor: [15, 15] }),
     });
-    decorateMarker(marker,accessibleName,(popup ? 'cluster:'+group[0].point.join(',') : 'city:'+city),group);
+    decorateMarker(marker,accessibleName,(wholeCity ? 'city:'+city : 'cluster:'+group[0].point.join(',')),group);
     if (popup) {
       const contents = document.createElement('div');
       contents.className = 'map-places-popup';
@@ -457,7 +460,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       });
     } else {
       marker.on('click',event=>{
-        map.fitBounds(L.latLngBounds(group.map(place=>place.point)), {padding:[42,42],maxZoom:16,animate:false});
+        map.fitBounds(bounds,{padding:[42,42],maxZoom:16,animate:false});
         if (event.keyboard) markersByPlace.get(group[0].id)?.focus({preventScroll:true});
       });
     }
@@ -518,20 +521,17 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       if (group.length > 1) drawGroup(city,group,group.every(place=>samePoint(place.point,group[0].point))?'sharedAddress':'city');
       else drawPlace(group[0]);
     }
-    const streetTiles = tileStatus === 'ready';
-    if (!streetTiles) {
-      for (const [city, entry] of Object.entries(geodata?.cities ?? {})) {
-        const point = coordinates(entry);
-        if (!point || (cityGroups.get(city)?.length ?? 0) > 1) continue;
-        if (!cityGroups.has(city) && visible.some(place=>
-          map.latLngToContainerPoint(point).distanceTo(map.latLngToContainerPoint(place.point)) < 100)) continue;
-        const body = document.createElement('span');
-        body.textContent = cityLabel(city);
-        L.marker(point, {
-          pane: 'routeLabels', interactive: false, keyboard: false,
-          icon: L.divIcon({ className: 'map-base-label', html: body, iconSize: [1, 1], iconAnchor: [-11, 8] }),
-        }).addTo(labels);
-      }
+    for (const [city, entry] of Object.entries(geodata?.cities ?? {})) {
+      const point = coordinates(entry);
+      if (!point || (cityGroups.get(city)?.length ?? 0) > 1) continue;
+      if (!cityGroups.has(city) && visible.some(place=>
+        map.latLngToContainerPoint(point).distanceTo(map.latLngToContainerPoint(place.point)) < 100)) continue;
+      const body = document.createElement('span');
+      body.textContent = cityLabel(city);
+      L.marker(point, {
+        pane: 'routeLabels', interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'map-base-label', html: body, iconSize: [1, 1], iconAnchor: [-11, 8] }),
+      }).addTo(labels);
     }
     if (key || focusId) (markerElements.get(key) ?? markersByPlace.get(focusId) ?? element).focus({preventScroll:true});
   }

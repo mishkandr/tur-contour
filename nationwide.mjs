@@ -35,6 +35,7 @@ const paceModes = {
   dense:{ visits:4, starts:540, duration:55 },
 };
 const pilotCityNames=new Set(['Владимир','Суздаль','Кидекша','Муром','Гусь-Хрустальный','Боголюбово','Александров']);
+const smallerRegionalCapitals=new Set(['2127202','523392','6313621']);
 const cityAliases = {
   '2013348':['符拉迪沃斯托克'], '2119441':['南萨哈林斯克','南萨哈林斯克市','南薩哈林斯克','南薩哈林斯克市'],
   '1486209':['叶卡捷琳堡','葉卡捷琳堡','Ekaterinburg'],
@@ -158,7 +159,7 @@ export async function detectCities(brief) {
   const matchText=' '+query+' ';
   const found=[];
   for (const row of data.cities) {
-    if (row[6]<40_000 && !pilotCityNames.has(row[1])) continue;
+    if (row[6]<40_000 && !pilotCityNames.has(row[1]) && !smallerRegionalCapitals.has(String(row[0]))) continue;
     const forms=[...new Set([...citySearchForms(row),...russianVariants(row[1])])];
     const matched=forms.map(form=>({form,index:firstCityUse(query,matchText,form)}))
       .filter(item=>item.index>0).sort((a,b)=>a.index-b.index || b.form.length-a.form.length)[0];

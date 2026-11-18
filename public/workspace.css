@@ -151,6 +151,12 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-coverage ul{list-style:none;margin:5px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 12px}
 .composer-coverage li{display:flex;align-items:center;gap:5px 7px;font-size:.8rem;flex-wrap:wrap}
 .composer-extra{margin:4px 0;padding:0;display:flex;flex-wrap:wrap;gap:6px;list-style:none}
+#draft-add-city>summary{min-height:44px;align-content:center}
+.composer-form #draft-add-city input{min-height:44px;font-size:max(1rem,16px)}
+.composer-extra-city-results{display:grid;gap:8px;margin:8px 0 0;padding:0;list-style:none}
+.composer-extra-city-results button{width:100%;min-height:44px;justify-content:start;flex-wrap:wrap;
+  text-align:start;white-space:normal;overflow-wrap:anywhere}
+.composer-extra-city-results small{color:var(--muted)}
 .composer-extra button{font-size:.8rem;min-height:36px;white-space:normal}
 .composer-map-frame{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:12px 0}
 .composer-map-frame .atlas-map-top{padding:8px;min-height:40px}

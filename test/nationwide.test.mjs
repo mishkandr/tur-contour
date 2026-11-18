@@ -30,6 +30,15 @@ test('free-text city matching keeps whole words, inflections and multiple cities
   assert.deepEqual(await detectCities('Подмосковный парк и петербургский музей'),[]);
 });
 
+test('free-text city matching keeps the smaller regional capitals in explicit routes',async()=>{
+  for (const [brief,names] of [
+    ['Калининград — Анадырь на два дня.', ['Калининград','Анадырь']],
+    ['Магас → Нарьян-Мар на два дня.', ['Магас','Нарьян-Мар']],
+    ['Москва. Не едем в Анадырь.', ['Москва']],
+    ['Живописный лес, музей и новые деревни.', []],
+  ]) assert.deepEqual((await detectCities(brief)).map(city=>city.name),names);
+});
+
 test('national planner resolves common alternate city names and ignores directly excluded destinations',async()=>{
   for (const [input, expected] of [
     ['Уфа для восемнадцати гостей, не едем в Казань.',['Уфа']],

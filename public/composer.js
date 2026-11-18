@@ -181,6 +181,10 @@ addLocaleMessages([
   ['Википедия','Wikipedia','维基百科'],
   ['Wikidata и сайты объектов','Wikidata and venue websites','维基数据与地点官网'],
   ['Другие города маршрута','Other cities in the itinerary','行程中的其他城市'],
+  ['Добавить город','Add a city','添加城市'],
+  ['Название следующего города','Next city name','下一座城市的名称'],
+  ['Добавить {city}','Add {city}','添加 {city}'],
+  ['В маршруте уже есть этот город.','This city is already in the itinerary.','此城市已在行程中。'],
   ['Удалить {city}','Remove {city}','移除 {city}'],
   ['Несколько городов найдено в тексте. Проверьте порядок.','Several cities were found in the request. Check their order.','需求中识别出多个城市，请核对顺序。'],
   ['Городов больше, чем дней. Уберите лишние города или увеличьте длительность.','There are more cities than days. Remove a city or extend the itinerary.','城市数多于行程天数，请移除多余城市或延长行程。'],
@@ -283,6 +287,10 @@ function formMarkup() {
     '<label class="field composer-city"><span>'+tr('Город начала')+'</span><input id="city-query" type="search" value="'+
     safe(state.query)+'" placeholder="'+tr('Название города')+'" autocomplete="off" aria-controls="city-results"></label>'+
     '<div id="city-results"></div><div id="draft-additional-cities"></div><div id="draft-omitted"></div>'+
+    '<details id="draft-add-city" hidden><summary>'+tr('Добавить город')+'</summary>'+
+    '<label class="field">'+tr('Название следующего города')+
+    '<input id="extra-city-query" type="search" autocomplete="off" maxlength="100" aria-controls="extra-city-results"></label>'+
+    '<div id="extra-city-results"></div></details>'+
     '<div class="composer-fields"><label class="field">'+tr('Дата начала')+
     '<input type="date" name="date" min="2000-01-01" max="2099-12-31" value="'+safe(settings.date)+'" required></label>'+
     '<label class="field">'+tr('Длительность')+'<select name="days">'+[2,3].map(day=>'<option value="'+day+'"'+(settings.days===day?' selected':'')+'>'+
@@ -507,11 +515,15 @@ export function mountComposer(container, api) {
   let map;
   let localizedGeodata;
   let searchTimer;
+  let extraSearchTimer;
+  let extraSearchVersion=0;
+  let extraMatches=[];
   let pending;
   let mounted=true;
   const serviceView={open:false,query:'',kind:'all',city:'',limit:8};
   container.innerHTML = '<header class="page-head"><h1>'+tr('Конструктор маршрутов')+'</h1></header>'+
     itineraryTabs(false)+'<div class="composer-layout">'+formMarkup()+'<div class="composer-result" id="composer-result"></div></div>';
+  const syncAdditionalCitiesControl=()=>{find('#draft-add-city').hidden=!state.selectedCity || state.extraCities.length>=2;};
   function cityOptions(noMatches=false) {
     if (!mounted) return;
     find('#city-results').innerHTML = state.cities.length ? '<label class="field"><span class="sr-only">'+tr('Выберите город')+'</span>'+
@@ -522,9 +534,34 @@ export function mountComposer(container, api) {
     find('#draft-additional-cities').innerHTML=state.extraCities.length ? '<p class="caption">'+tr('Другие города маршрута')+'</p>'+
       '<ul class="composer-extra">'+state.extraCities.map(city=>'<li><button type="button" class="button-quiet" data-composer="remove-city" data-value="'+safe(city.id)+
       '" aria-label="'+tr('Удалить {city}',{city:name(city)})+'"><span data-source-text>'+safe(name(city))+'</span> <span aria-hidden="true">×</span></button></li>').join('')+'</ul>':'';
+    syncAdditionalCitiesControl();
     find('#draft-omitted').innerHTML=state.omitted.length ? '<p class="caption">'+tr('Исключённые точки')+'</p>'+
       '<ul class="composer-extra">'+state.omitted.map(place=>'<li><button type="button" class="button-quiet" data-composer="restore-stop" data-value="'+safe(place.id)+
       '" aria-label="'+tr('Вернуть {place}',{place:name(place)})+'"><span data-source-text>'+safe(name(place))+'</span> <span aria-hidden="true">↶</span></button></li>').join('')+'</ul>':'';
+  }
+  function searchAdditionalCity(query) {
+    const results=find('#extra-city-results');
+    const version=++extraSearchVersion;
+    clearTimeout(extraSearchTimer);
+    extraMatches=[];
+    results.replaceChildren();
+    if (query.length<2) return;
+    extraSearchTimer=setTimeout(async()=>{
+      try {
+        const {cities}=await api('cities?q='+encodeURIComponent(query));
+        if (!mounted || version!==extraSearchVersion) return;
+        const chosen=new Set([state.selectedCity?.id,...state.extraCities.map(city=>city.id)]);
+        extraMatches=cities.filter(city=>!chosen.has(city.id)).slice(0,5);
+        results.innerHTML=extraMatches.length?'<ul class="composer-extra-city-results">'+extraMatches.map(city=>
+          '<li><button type="button" class="button-quiet" data-composer="add-city" data-value="'+safe(city.id)+
+          '"><span>'+tr('Добавить {city}',{city:name(city)})+'</span>'+
+          (city.region?'<small>'+safe(regionName(city))+'</small>':'')+'</button></li>').join('')+'</ul>':
+          '<p class="caption" role="status">'+tr(cities.length?'В маршруте уже есть этот город.':
+            'Город не найден. Попробуйте другое написание.')+'</p>';
+      } catch(error) {
+        if (mounted && version===extraSearchVersion) results.textContent=t(error.message);
+      }
+    },250);
   }
   function updateExtraction() {
     if (!mounted) return;
@@ -893,6 +930,10 @@ export function mountComposer(container, api) {
   };
   const input = event=>{
     const control=event.target;
+    if (control.id==='extra-city-query') {
+      searchAdditionalCity(control.value.trim());
+      return;
+    }
     if (control.id==='draft-service-query' || control.id==='draft-service-kind' || control.id==='draft-service-city') {
       serviceView.query=find('#draft-service-query').value;
       serviceView.kind=find('#draft-service-kind').value;
@@ -949,6 +990,7 @@ export function mountComposer(container, api) {
         find('#city-id')?.focus();
       }
       if (state.selectedCity) state.query=find('#city-query').value=name(state.selectedCity);
+      syncAdditionalCitiesControl();
     }
     state.settings=settingsFrom(find('#draft-input'));
     showDefaults();
@@ -993,11 +1035,28 @@ export function mountComposer(container, api) {
     }
     if (action==='remove-city') {
       state.extraCities=state.extraCities.filter(city=>city.id!==value);
+      if (!state.overrideFields.includes('city')) state.overrideFields.push('city');
       cityOptions();
       setDirty();
       showDefaults();
       retainDraft();
-      (find('#draft-additional-cities button')??find('#city-query')).focus();
+      (find('#draft-additional-cities button')??find('#draft-add-city summary')).focus();
+      return;
+    }
+    if (action==='add-city') {
+      const city=extraMatches.find(item=>item.id===value);
+      if (!city || !state.selectedCity || pending || state.extraCities.length>=2 ||
+          state.selectedCity.id===city.id || state.extraCities.some(item=>item.id===city.id)) return;
+      state.extraCities.push(city);
+      if (!state.overrideFields.includes('city')) state.overrideFields.push('city');
+      const query=find('#extra-city-query');
+      query.value='';
+      searchAdditionalCity('');
+      cityOptions();
+      setDirty();
+      showDefaults();
+      retainDraft();
+      (find('#draft-add-city').hidden?find('#draft-additional-cities li:last-child button'):query)?.focus();
       return;
     }
     if (action==='restore-stop') {
@@ -1109,6 +1168,7 @@ export function mountComposer(container, api) {
     mounted=false;
     if (pending) {pending.controller.abort();finish(pending);}
     clearTimeout(searchTimer);
+    clearTimeout(extraSearchTimer);
     map?.destroy();
     container.removeEventListener('submit',submit);
     container.removeEventListener('input',input);

@@ -41,6 +41,21 @@ test('reads English and Simplified Chinese without creating parameters the user 
   assert.equal(mode,'rules');
 });
 
+test('AI may classify interests, while operating constraints require explicit input',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>Response.json({
+    message:{content:JSON.stringify({i:['craft'],r:[],t:'car',p:'dense',m:'zh',a:true})},
+  }));
+  const {parsed,mode}=await interpretBrief('Казань. Показать, как люди расписывают глиняную посуду.',
+    {baseUrl:'http://model.test',model:'test-model',referenceDate:reference});
+  assert.equal(mode,'ai');
+  assert.deepEqual(parsed.interests,['craft']);
+  for (const field of ['transport','pace','market','access']) assert.equal(parsed[field],null);
+  assert.equal(parseBrief('Казань, нужна еда из Китая.',reference).market,null);
+  for (const input of ['Казань для группы из Китая.','Казань, нужен китайскоязычный гид.','Kazan for travelers from China.','喀山需要中文导游。']) {
+    assert.equal(parseBrief(input,reference).market,'zh');
+  }
+});
+
 test('never converts a no-museums instruction into a positive museum preference', () => {
   const parsed = parseBrief('Казань, семейная программа с парками, без музеев.',reference);
   assert.deepEqual(parsed.excludedInterests,['museum']);

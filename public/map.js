@@ -625,6 +625,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
 
   return {
     update, select: selectPlace, fit, focusCity,
+    resize() { if (!inactive) map.invalidateSize({pan:false}); },
     setBase(next) {
       setBase(next);
       if (!inactive) drawMarkers();

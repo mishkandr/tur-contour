@@ -110,6 +110,7 @@ addLocaleMessages([
   ['ТурКонтур — мониторинг маршрутов', 'TourContour — route monitoring', '旅域监测 · 线路监测'],
   ['К содержанию', 'Skip to content', '跳转到主要内容'],
   ['Разделы', 'Main navigation', '主导航'],
+  ['Обзор', 'Overview', '概览'],
   ['Карта', 'Map', '地图'],
   ['Карта маршрутов', 'Route map', '线路地图'],
   ['Интерактивная карта Владимирской области', 'Interactive map of Vladimir Oblast', '弗拉基米尔州交互地图'],

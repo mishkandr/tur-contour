@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { interpretBrief, parseBrief } from '../planner-brief.mjs';
+import { createBriefInterpreter, interpretBrief, parseBrief } from '../planner-brief.mjs';
 
 const reference = '2026-11-17';
 
@@ -54,6 +54,53 @@ test('AI may classify interests, while operating constraints require explicit in
   for (const input of ['Казань для группы из Китая.','Казань, нужен китайскоязычный гид.','Kazan for travelers from China.','喀山需要中文导游。']) {
     assert.equal(parseBrief(input,reference).market,'zh');
   }
+});
+
+test('reuses successful model output without caching dates or aborting another reader',async()=>{
+  let calls=0;
+  let complete;
+  const response=new Promise(resolve=>{complete=resolve;});
+  const interpret=createBriefInterpreter({baseUrl:'http://model.test',model:'test-model',fetchImpl:async(_url,request)=>{
+    calls+=1;
+    assert.equal(JSON.parse(request.body).model,'test-model');
+    const answer=await response;
+    assert.equal(request.signal.aborted,false);
+    return answer;
+  }});
+  const brief='Казань завтра на два дня. Посмотреть, как расписывают глину.';
+  const controller=new AbortController();
+  const cancelled=interpret(brief,{signal:controller.signal,referenceDate:reference});
+  const shared=interpret(brief,{referenceDate:reference});
+  controller.abort();
+  assert.equal((await cancelled).mode,'fallback');
+  complete(Response.json({message:{content:'{"i":["craft"],"r":[]}'},done_reason:'stop',load_duration:2_500_000_000}));
+  const modelResponse=await shared;
+  assert.deepEqual(modelResponse.parsed.interests,['craft']);
+  assert.equal(modelResponse.timings.model_load,2500);
+  const cached=await interpret(brief,{referenceDate:'2026-11-18'});
+  assert.equal(cached.cached,true);
+  assert.equal(cached.parsed.date,'2026-11-19');
+  assert.deepEqual(cached.parsed.interests,modelResponse.parsed.interests);
+  assert.equal(calls,1);
+});
+
+test('model cancellations and incomplete output do not enter the reusable cache',async()=>{
+  let calls=0;
+  const interpret=createBriefInterpreter({baseUrl:'http://model.test',model:'test-model',fetchImpl:(_url,{signal})=>{
+    calls+=1;
+    if (calls===1) return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+    return Response.json({message:{content:'{"i":[],"r":[]}'},done_reason:calls===2?'length':'stop'});
+  }});
+  const brief='Владивосток на два дня.';
+  const controller=new AbortController();
+  const cancelled=interpret(brief,{signal:controller.signal});
+  await Promise.resolve();
+  controller.abort();
+  assert.equal((await cancelled).mode,'fallback');
+  assert.equal((await interpret(brief)).mode,'fallback');
+  assert.equal((await interpret(brief)).mode,'ai');
+  assert.equal((await interpret(brief)).cached,true);
+  assert.equal(calls,3);
 });
 
 test('never converts a no-museums instruction into a positive museum preference', () => {

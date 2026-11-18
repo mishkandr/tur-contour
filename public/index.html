@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/atlas.css">
 <link rel="stylesheet" href="/workspace.css">
 <link rel="stylesheet" href="/map-workspace.css">
+<link rel="stylesheet" href="/app-shell.css">
 <script src="/vendor/leaflet.js" defer></script>
 <script type="module" src="/app.js"></script>
 </head>
@@ -19,13 +20,13 @@
   <div class="top-inner">
     <a href="#overview" class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><span lang="ru" data-source-text>ТурКонтур</span></a>
     <nav aria-label="Разделы">
-      <a href="#overview">Обзор</a>
-      <a href="#impact">Карта</a>
-      <a href="#catalog">Объекты</a>
-      <a href="#route">Маршруты</a>
-      <a href="#stats">Статистика</a>
-      <a href="#ask">Вопрос ИИ</a>
-      <a class="nav-sources" href="#sources">Источники</a>
+      <a href="#overview"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><rect x="13.5" y="13.5" width="7" height="7" rx="1"/></svg><span>Обзор</span></a>
+      <a href="#impact"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3.5 6.5 5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2zM9 4.5v13m6-11v13"/></svg><span>Карта</span></a>
+      <a href="#catalog"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5h10l3 4.5v10.5H4V9l3-4.5zM4 9h16m-11 4h6m-6 3.5h6"/></svg><span>Объекты</span></a>
+      <a href="#route"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6h8a3 3 0 0 1 0 6h-9a3 3 0 0 0 0 6H15"/></svg><span>Маршруты</span></a>
+      <a href="#stats"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4v16h16m-12-4v-4m5 4V8m5 8V5"/></svg><span>Статистика</span></a>
+      <a href="#ask"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 15a2 2 0 0 1-2 2h-6l-5 3v-3H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2zM8 8.5h8m-8 4h5"/></svg><span>Вопрос ИИ</span></a>
+      <a class="nav-sources" href="#sources"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v6a7.5 3 0 0 0 15 0V6M4.5 12v6a7.5 3 0 0 0 15 0v-6"/></svg><span>Источники</span></a>
     </nav>
     <label class="locale-picker"><span class="sr-only">Язык</span>
       <select id="locale" aria-label="Язык">
@@ -40,7 +41,6 @@
   <p id="toast" class="toast" role="status" hidden></p>
   <div id="screen" aria-busy="true"><p>Загружаем мониторинг…</p></div>
 </main>
-<footer><span>ТурКонтур</span><a href="#sources">Данные и методика</a></footer>
 <dialog id="place-dialog" aria-labelledby="place-title"></dialog>
 </body>
 </html>

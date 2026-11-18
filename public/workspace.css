@@ -110,12 +110,21 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .itinerary-tabs{margin:0 0 17px;gap:0;border-bottom:1px solid #d7dcd0}
 .itinerary-tabs a{border-radius:7px 7px 0 0;min-height:43px;padding:8px 15px}
 .itinerary-tabs a[aria-current=page]{box-shadow:inset 0 -2px var(--accent)}
-.composer-layout{display:grid;grid-template-columns:minmax(320px,.72fr) minmax(0,1fr);gap:16px;align-items:start}
-.composer-layout:has(.composer-result:empty){grid-template-columns:minmax(0,1fr)}
-.composer-layout:has(.composer-result:empty) .composer-inputs{width:min(100%,780px)}
+.planner-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 24px;margin-block-end:20px}
+.planner-heading h1{font:720 clamp(1.38rem,2.8vw,1.8rem)/1.25 Inter,system-ui,sans-serif;letter-spacing:-.025em}
+.planner-heading .itinerary-tabs{margin:0}
+.composer-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
 .composer-result:empty{display:none}
 .composer-inputs,.composer-result{min-width:0}
+.composer-inputs{border:1px solid var(--line);border-radius:10px;background:var(--white)}
+.planner-editor-head{display:flex;justify-content:space-between;align-items:center;gap:8px 18px;flex-wrap:wrap;
+  min-height:55px;border-bottom:1px solid var(--line);padding:12px clamp(14px,2vw,24px)}
+.planner-editor-head h2{font-size:1rem;font-weight:720}
+.planner-editor-head button{white-space:normal;text-align:start}
 .composer-form,.composer-parameters{display:grid;grid-template-columns:minmax(0,1fr);gap:11px}
+.composer-form{gap:20px;padding:clamp(14px,2.5vw,24px)}
+.planner-brief-entry{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-content:start;min-width:0}
+.planner-editor-actions{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}
 .composer-parameters{padding-top:8px}
 .composer-parameters>div:empty,.composer-form #draft-status:empty{display:none}
 .composer-request>span,.knowledge-feed label>span{font-size:1rem;font-weight:730}
@@ -141,11 +150,32 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   display:grid;grid-template-columns:1fr 1fr;gap:0 6px;min-width:0}
 .composer-themes legend{padding-inline:3px;font-size:.81rem;color:var(--muted)}
 .composer-form details .check{min-height:34px;font-size:.82rem;line-height:1.3}
-.composer-title{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}
-.composer-title h2{font-family:var(--display);font-weight:400;font-size:clamp(1.65rem,2.85vw,2.4rem);letter-spacing:-.03em}
-.composer-title .caption{margin-top:4px}
-.composer-source{margin:0 0 5px;padding:0;display:flex;flex-wrap:wrap;gap:4px 12px;list-style:none}
-.composer-source a{display:inline-flex;align-items:center;min-height:28px}
+.composer-title{display:flex;justify-content:space-between;gap:12px 20px;align-items:center;flex-wrap:wrap;
+  padding:clamp(14px,2vw,22px);border:1px solid var(--line);border-radius:10px 10px 0 0;background:var(--white)}
+.composer-title h2{font-size:clamp(1.32rem,3vw,2rem);font-weight:730;line-height:1.2;letter-spacing:-.025em;overflow-wrap:anywhere}
+.planner-title-line{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}
+.composer-title .caption{margin-top:6px;font-size:.87rem}
+.planner-toolbar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.planner-toolbar-actions button{white-space:normal;text-align:start}
+.planner-switch{display:flex;align-items:stretch;gap:0 8px;padding:0 clamp(8px,1vw,16px);background:var(--white);
+  border:1px solid var(--line);border-top:0;border-radius:0 0 10px 10px}
+.planner-switch button{min-height:46px;padding:8px 12px;border:0;border-bottom:3px solid transparent;background:none;
+  color:var(--muted);text-align:start;font-size:.9rem;font-weight:650;line-height:1.25}
+.planner-switch button:hover{color:var(--ink);background:var(--bg)}
+.planner-switch button[aria-pressed=true]{border-color:var(--accent);color:var(--strong);background:var(--light);font-weight:740}
+.planner-workarea{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px;margin-block-start:14px}
+.planner-workarea>*{min-width:0}
+.planner-workarea:not([data-view=schedule]) .planner-schedule,
+.planner-workarea:not([data-view=map]) .composer-map-frame,
+.planner-workarea:not([data-view=venues]) .composer-services,
+.planner-workarea:not([data-view=review]) :is(.composer-evidence,.planner-sources),
+.planner-workarea:is([data-view=review],[data-view=venues]) .composer-day-head{display:none}
+.planner-schedule,.composer-services,.composer-evidence,.planner-sources{border:1px solid var(--line);border-radius:9px;background:var(--white);
+  padding:clamp(12px,1.7vw,20px)}
+.planner-check-summary{color:var(--strong);font-weight:700;margin:.5rem 0}
+.composer-source{margin:0;padding:0;list-style:none;color:var(--muted);font-size:.87rem}
+.composer-source li+li{border-top:1px solid var(--line)}
+.composer-source a{display:inline-flex;align-items:center;min-height:44px}
 .composer-coverage{margin:12px 0}
 .composer-coverage h3{font-size:.85rem}
 .composer-coverage ul{list-style:none;margin:5px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 12px}
@@ -158,12 +188,13 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   text-align:start;white-space:normal;overflow-wrap:anywhere}
 .composer-extra-city-results small{color:var(--muted)}
 .composer-extra button{font-size:.8rem;min-height:36px;white-space:normal}
-.composer-map-frame{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:12px 0}
+.composer-map-frame{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:0;background:var(--white)}
 .composer-map-frame .atlas-map-top{padding:8px;min-height:40px}
-.composer-map-frame .atlas-map-top button{min-height:37px}
-.composer-map-scene{height:clamp(255px,31vw,395px);position:relative;isolation:isolate;background:#e7ebdf}
+.composer-map-frame .atlas-map-top button{min-height:44px}
+.composer-map-scene{height:clamp(295px,57svh,580px);position:relative;isolation:isolate;background:#e7ebdf}
 #draft-map{position:absolute;inset:0;background:#e7ebdf}
-.composer-day{margin-top:15px}
+.composer-day+.composer-day{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.composer-day h3{font-size:1rem;line-height:1.35}
 .day-weather{display:grid;gap:3px;margin:6px 0 9px;line-height:1.5}
 .day-weather p{margin:0}
 .day-weather strong{color:var(--ink)}
@@ -171,10 +202,8 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .day-weather-alternative{min-height:40px;text-align:start;white-space:normal}
 .day-weather-source{font-size:.76rem}
 .composer-output[data-dirty=true] .day-weather,
-.composer-output[data-dirty=true] .composer-alternatives,
-.composer-output[data-dirty=true] .composer-services{display:none}
-.composer-services{border-top:1px solid var(--line);padding-block:6px 10px}
-.composer-services summary{align-content:center;cursor:pointer;font-weight:680;min-height:44px}
+.composer-output[data-dirty=true] .composer-alternatives{display:none}
+.composer-services h3{margin-block-end:10px}
 .composer-service-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:8px 10px;margin-bottom:8px}
 .composer-service-fields .field{min-width:0}
 .composer-service-fields .field :is(input,select){font-size:max(1rem,16px);min-height:44px}
@@ -192,7 +221,9 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .route-workbench:not([data-dirty=true]) .pilot-previous-result,
 .route-workbench[data-dirty=true] .day-weather{display:none}
 #catalog-conditions-status:empty{margin:0}
-.composer-day-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+.composer-day-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.composer-day-head #draft-days{gap:6px}
+.composer-day-head #draft-days button{min-height:44px}
 .composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
 .composer-logistics li{margin:0}
 .composer-transfer{margin-block:7px 10px;padding:7px 10px;border-inline-start:2px solid var(--line);font-size:.8rem}
@@ -217,10 +248,28 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-alternatives button{min-height:40px;text-align:start}
 .composer-alternatives li>p{margin:0 0 4px}
 .composer-swap-status:empty{display:none}
-.composer-evidence{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
-.composer-evidence ul{padding-inline-start:1.2rem;font-size:.86rem;color:var(--muted)}
+.composer-evidence ul{margin-block:8px 0;padding-inline-start:1.2rem;font-size:.9rem;color:var(--muted)}
 .composer-evidence li+li{margin-top:5px}
-.composer-export{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.planner-sources .composer-coverage{margin:0 0 16px}
+
+@media(min-width:890px){
+  .composer-form{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px}
+  .composer-form #draft-parameters{border-top:0;border-inline-start:1px solid var(--line);padding:0 0 0 24px}
+  .planner-workarea[data-view=review]{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media(min-width:1050px){
+  .planner-workarea[data-view=schedule]{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px 16px}
+  .planner-workarea[data-view=schedule] .composer-day-head{grid-column:1/-1}
+  .planner-workarea[data-view=schedule] .composer-map-frame{display:block}
+}
+@media(max-width:520px){
+  .planner-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:0;gap:0}
+  .planner-switch button:nth-child(n+3){border-top:1px solid var(--line)}
+  .planner-switch button:nth-child(even){border-inline-start:1px solid var(--line)}
+  .planner-heading .itinerary-tabs{flex-wrap:wrap;gap:0}
+  .composer-form [name=brief]{font-size:max(1rem,16px)}
+  .planner-toolbar-actions button{flex:1 1 auto}
+}
 .atlas-search{margin-top:12px}
 .atlas-inspect-fields{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;margin-top:.7rem}
 .atlas-inspect-fields label{font-size:.78rem}

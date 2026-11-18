@@ -8,6 +8,7 @@ addLocaleMessages([
   ['Объектов с опубликованными условиями','Places with published conditions','已公布条件的地点'],
   ['Условия подтверждены поставщиком','Supplier-confirmed conditions','供应方已确认的条件'],
   ['Проверка источников','Source check','数据源检查'],
+  ['Обновление ожидается','Awaiting a refresh','等待更新'],
   ['Собрать маршрут','Build an itinerary','编制行程'],
   ['Маршрут по России','Itinerary across Russia','俄罗斯全境行程'],
   ['Открыть карту','Open map','打开地图'],
@@ -46,7 +47,7 @@ const rooms = value=>typeof value==='number' ? formatNumber(value) :
 const timestamp = value=>value ? formatDate(value,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : t('Нет данных');
 const shortdate = value=>formatDate(value,{day:'numeric',month:'short',year:'numeric'});
 const changeId = change=>JSON.stringify([change.at,change.id ?? change.name,change.key,change.field,change.url]);
-const action = (label, href, kind='button-quiet')=>'<a class="'+kind+'" href="'+html(href)+'">'+local(label)+' <span aria-hidden="true">↗</span></a>';
+const action = (label, href, kind='button-quiet')=>'<a class="'+kind+'" href="'+html(href)+'">'+local(label)+'</a>';
 const linkTo = (page,params) => '#'+page+'?'+new URLSearchParams(params);
 
 function programLink(record, place) {
@@ -66,7 +67,9 @@ function recordList(records) {
 
 export function renderOverview(data, view) {
   const programmes = data.affected ?? [];
-  const awaiting = programmes.filter(record=>record.affected).length;
+  const scope = programmes.filter(record=>!record.settings.demo);
+  const training = programmes.filter(record=>record.settings.demo);
+  const awaiting = scope.filter(record=>record.affected).length;
   const timeline = (data.changes ?? []).map(change=>({change,id:changeId(change),
     programmes:programmes.filter(record=>change.affectedProgramIds?.includes(record.id))}));
   const visible = timeline.filter(entry=>view.filter==='impact' ? entry.programmes.length : view.filter==='external' ? !entry.change.demo : true);
@@ -74,34 +77,31 @@ export function renderOverview(data, view) {
   const sortOrder = visible.slice().sort((left,right)=>Number(Boolean(right.programmes.length))-Number(Boolean(left.programmes.length)));
   const publishedCount = data.publishedConditions?.objectCount ?? 0;
   const verifiedCount = data.auditFeed?.objectCount ?? 0;
-  const scope = programmes.filter(record=>!record.settings.demo);
-  const training = programmes.filter(record=>record.settings.demo);
   return `
     <header class="ops-head">
       <div><p class="ops-kicker">${local('Владимирская область')}</p><h1>${local('Обзор региона')}</h1></div>
       <div class="actions ops-head-actions">${action('Проверить программу','#route?scope=pilot','button')}${action('Маршрут по России','#route')}</div>
     </header>
     <div class="ops-metrics" aria-label="${local('Данные Владимирской области')}">
-      <a href="#overview?focus=programmes"><span>${local('На контроле')}</span><strong>${formatNumber(programmes.length)}</strong><small>${local('Требуют пересмотра')} · ${formatNumber(awaiting)}</small></a>
+      <a href="#overview?focus=programmes"><span>${local('На контроле')}</span><strong>${formatNumber(scope.length)}</strong><small>${local('Требуют пересмотра')} · ${formatNumber(awaiting)}</small></a>
       <a href="#catalog"><span>${local('Условия опубликованы')}</span><strong>${formatNumber(publishedCount)} <small>${local('из {total}',{total:formatNumber(data.places.length)})}</small></strong><small>${local('Условия подтверждены поставщиком')} · ${formatNumber(verifiedCount)}</small></a>
-      <a href="#sources"><span>${local('Проверка источников')}</span><strong class="ops-check">${html(timestamp(data.refreshedAt))}</strong><small>${local('Журнал источников')} <span aria-hidden="true">↗</span></small></a>
+      <a href="#sources"><span>${local('Проверка источников')}</span><strong class="ops-check">${data.refreshedAt?html(timestamp(data.refreshedAt)):local('Обновление ожидается')}</strong><small>${local('Журнал источников')} <span aria-hidden="true">↗</span></small></a>
     </div>
     <div class="ops-board">
       <section class="panel ops-log" aria-labelledby="ops-changes">
         <header class="section-head"><h2 id="ops-changes">${local('Изменения')}</h2><a href="#sources">${local('Журнал источников')} <span aria-hidden="true">↗</span></a></header>
         <div class="ops-filters" role="group" aria-label="${local('Изменения')}">${[['all','Все события'],['impact','Влияют на программы'],['external','Из внешнего источника']]
-          .map(([key,label])=>'<button type="button" aria-pressed="'+(view.filter===key)+'" data-action="overview-filter" data-value="'+key+'">'+local(label)+'</button>').join('')}</div>
-        <div class="ops-change-list">${sortOrder.length ? sortOrder.slice(0,12).map(item=>`
-          <button type="button" class="ops-change" data-action="overview-change" data-value="${html(item.id)}" aria-pressed="${item.id===entry?.id}">
+          .map(([key,label])=>'<button type="button" aria-controls="ops-change-list" aria-pressed="'+(view.filter===key)+'" data-action="overview-filter" data-value="'+key+'">'+local(label)+'</button>').join('')}</div>
+        <div id="ops-change-list" class="ops-change-list">${sortOrder.length ? sortOrder.slice(0,12).map(item=>`
+          <button type="button" class="ops-change" data-action="overview-change" data-value="${html(item.id)}" aria-controls="ops-change-detail" aria-pressed="${item.id===entry?.id}">
             <span class="ops-change-dot ${item.programmes.length?'ops-change-dot--active':''}" aria-hidden="true"></span>
-            <span><strong>${html(item.change.name)}</strong><small>${html(t(item.change.field))} · ${html(rooms(item.change.before))} → ${html(rooms(item.change.after))}</small></span>
+            <span><strong>${html(item.change.name)}</strong><small>${html(t(item.change.field))} · ${html(rooms(item.change.before))} → ${html(rooms(item.change.after))}</small>${item.programmes.length?'<small>'+local('Программ затронуто сейчас: {count}',{count:formatNumber(item.programmes.length)})+'</small>':''}</span>
             <time datetime="${html(item.change.at)}">${html(timestamp(item.change.at))}</time>
           </button>`).join('') : '<p class="empty">'+local('В этом разделе пока нет изменений.')+'</p>'}
         </div>
       </section>
-      <section class="panel ops-readout" aria-labelledby="ops-selected">
-        ${entry ? `
-          <span class="ops-kicker">${local('Просмотр изменения')}</span><h2 id="ops-selected">${html(entry.change.name)}</h2>
+      ${entry ? `<section class="panel ops-readout" id="ops-change-detail" aria-labelledby="ops-selected">
+          <h2 id="ops-selected">${html(entry.change.name)}</h2>
           <div class="ops-signal"><span>${html(t(entry.change.field))}</span><strong>${html(rooms(entry.change.before))} <span aria-hidden="true">→</span> ${html(rooms(entry.change.after))}</strong></div>
           <p class="caption"><a href="${html(entry.change.url)}" target="_blank" rel="noopener noreferrer">${html(entry.change.source)}</a> · ${html(timestamp(entry.change.at))}</p>
           <p class="ops-source-kind"><span class="chip ${entry.change.demo?'warn':'plain'}">${local(entry.change.demo?'Учебное изменение':'Из внешнего источника')}</span></p>
@@ -111,14 +111,11 @@ export function renderOverview(data, view) {
             <li><strong>${html(record.title)}</strong><small>${html(t(record.subtitle))} · ${html(shortdate(record.settings.date))} · ${formatNumber(record.settings.size)}${record.settings.demo?' · '+local('Учебная программа'):''}</small>
               ${action('Сравнить варианты',programLink(record,entry.change.id))}</li>`).join('')+'</ul>' :
             data.places.some(place=>place.id===entry.change.id) ? action('Открыть на карте',linkTo('impact',{place:entry.change.id,layer:entry.change.demo?'route':'official'})) : ''}
-        ` : `<span class="ops-kicker">${local('ИИ · статистика')}</span><h2 id="ops-selected">${local('Ответить на вопрос по данным')}</h2>
-          ${action('Вопрос по данным','#ask')}`}
+      </section>` : ''}
+      <section class="panel ops-monitor" id="ops-programmes" tabindex="-1" aria-labelledby="ops-monitor">
+        <header class="section-head"><h2 id="ops-monitor">${local('На контроле')}</h2></header>
+        ${recordList(scope)}
+        ${training.length ? '<details class="ops-training" '+(training.some(record=>record.affected)?'open':'')+'><summary>'+local('Учебные программы')+' · '+formatNumber(training.length)+'</summary>'+recordList(training)+'</details>':''}
       </section>
-    </div>
-    <section class="panel ops-monitor" id="ops-programmes" tabindex="-1" aria-labelledby="ops-monitor">
-      <header class="section-head"><div><h2 id="ops-monitor">${local('На контроле')}</h2><p class="caption">${local('Дата · группа · режим проверки')}</p></div></header>
-      ${scope.length ? '<h3 class="ops-subheading">'+local('Программы в работе')+'</h3>'+recordList(scope):''}
-      ${training.length ? '<details class="ops-training" '+(training.some(record=>record.affected)?'open':'')+'><summary>'+local('Учебные программы')+' · '+formatNumber(training.length)+'</summary>'+recordList(training)+'</details>':''}
-      ${!training.length&&!scope.length ? recordList([]):''}
-    </section>`;
+    </div>`;
 }

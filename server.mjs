@@ -13,7 +13,7 @@ import { readVerifiedAudit } from './verified-audit.mjs';
 import { mergePublishedConditions } from './published-conditions.mjs';
 import { getDemoOffers } from './ota-offers.mjs';
 import { detectCities, draftItinerary, listCities } from './nationwide.mjs';
-import { interpretBrief, parseBrief } from './planner-brief.mjs';
+import { createBriefInterpreter, parseBrief } from './planner-brief.mjs';
 import { answerKnowledge, classifyKnowledge } from './knowledge-chat.mjs';
 import { createRegionalStatistics, statisticsRegions } from './regional-statistics.mjs';
 import { createWeatherForecast } from './weather.mjs';
@@ -87,6 +87,8 @@ async function withModel(action, fallback, signal) {
     else modelBusy = false;
   }
 }
+
+const briefInterpreter=createBriefInterpreter({baseUrl:ollamaUrl,model:briefModel,run:withModel});
 
 async function persist(next) {
   await mkdir(stateDir,{recursive:true});
@@ -454,9 +456,9 @@ async function answer(question, settings, trustedPlan = null, signal) {
   return {plan,title:'Уточните запрос',text:'Запросите сезонность размещения во Владимирской области, влияние изменений на маршрут или приоритеты проверки.'};
 }
 
-function respond(response,status,data) {
+function respond(response,status,data,headers={}) {
   if (response.destroyed) return;
-  response.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+  response.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});
   response.end(JSON.stringify(data));
 }
 
@@ -485,6 +487,7 @@ const assets = {
   '/':['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'],
   '/atlas.js':['atlas.js','text/javascript'], '/atlas.css':['atlas.css','text/css'], '/map.js':['map.js','text/javascript'],
   '/overview.js':['overview.js','text/javascript'], '/workspace.css':['workspace.css','text/css'],
+  '/app-shell.css':['app-shell.css','text/css'],
   '/locale.js':['locale.js','text/javascript'], '/map-workspace.css':['map-workspace.css','text/css'],
   '/composer.js':['composer.js','text/javascript'], '/knowledge.js':['knowledge.js','text/javascript'],
   '/weather.js':['weather.js','text/javascript'],
@@ -529,6 +532,7 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='POST' && path==='/api/brief') {
       const signal=clientSignal(response);
+      const started=performance.now();
       const input = await readBody(request);
       const brief = typeof input.text==='string' ? input.text.trim() : '';
       if (brief.length<3 || brief.length>600) return respond(response,400,{error:'Опишите задачу в пределах 600 символов.'});
@@ -539,8 +543,11 @@ export async function handleRequest(request,response) {
       catch { referenceDate=now.toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'}); }
       const fast = {parsed:parseBrief(brief,referenceDate),mode:'rules'};
       const allowed = input.mode==='ai' && process.env.TUR_NO_LLM!=='1';
-      const result = allowed ? await withModel(()=>interpretBrief(brief,{baseUrl:ollamaUrl,model:briefModel,referenceDate,signal}),{...fast,mode:'busy'},signal) : fast;
-      return respond(response,200,{...result,cities,referenceDate});
+      const rules=performance.now()-started;
+      const {timings,...result}=allowed ? await briefInterpreter(brief,{signal,direct:fast.parsed}) : fast;
+      const latency={brief:performance.now()-started,rules,...timings};
+      const serverTiming=Object.entries(latency).map(([key,value])=>key+';dur='+value.toFixed(1)).join(', ');
+      return respond(response,200,{...result,cities,referenceDate},{'Server-Timing':serverTiming});
     }
     if (request.method==='GET' && path==='/api/demo-offers-source') return respond(response,200,demoOffers);
     if (request.method==='POST' && path==='/api/demo-offers') return respond(response,200,getDemoOffers(demoOffers,await readBody(request)));

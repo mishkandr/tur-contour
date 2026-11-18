@@ -21,6 +21,8 @@ addLocaleMessages([
   ['Все места','All places','所有地点'],
   ['Карта города','City map','城市地图'],
   ['Места и проекты','Places and projects','地点与项目'],
+  ['Найти место по названию','Find a place by name','按名称查找地点'],
+  ['По этому названию ничего не найдено.','No places match that name.','未找到名称匹配的地点。'],
   ['В этой выборке нет объектов выбранной категории.','No places in this category were found in the current search.','当前检索未返回此类别的地点。'],
   ['По этому городу пока нет записей из подключённых источников проектов.','The connected project sources have no records for this city yet.','已接入的项目数据源暂无该城市的记录。'],
   ['Показать ещё {count}','Show {count} more','再显示 {count} 个'],
@@ -63,6 +65,7 @@ const translated=(item,key='name')=>getLocale()==='zh' ? item[key==='name'?'cn':
 const regionName=city=>getLocale()==='zh' ? city.regionCn || city.region : getLocale()==='en' ? city.regionEn || city.region : city.region;
 const validDate=value=>typeof value==='string' && Number.isFinite(Date.parse(value));
 const dateLabel=(value,options)=>validDate(value) ? formatDate(value,options) : '';
+const searchText=value=>String(value??'').normalize('NFKC').toLowerCase().replaceAll('ё','е').trim();
 
 function getCached(cache,key) {
   const entry=cache.get(key);
@@ -126,7 +129,7 @@ function placeInfoMarkup(place,cityId) {
     (route||source?'<div class="city-place-actions">'+route+source+'</div>':'')+'</div>';
 }
 
-function reportMarkup(data,places,sources) {
+function reportMarkup(data,places,sources,placeQuery) {
   const {city,region,counts}=data;
   const regionLabel=region && (region.name===city.name?translated(city):translated(region));
   const projectCount=data.projects?.status==='published' ? data.projects.records.length : '–';
@@ -143,6 +146,9 @@ function reportMarkup(data,places,sources) {
     '<a class="button-quiet" href="#ask?'+escape(ask)+'">'+msg('Вопрос по городу')+'</a></div></header>'+
     (sources.catalog || sources.projects ? '<section class="city-overview-inventory" aria-label="'+msg('Места и проекты')+'">'+
     '<div class="city-inventory-filters" role="group" aria-label="'+msg('Места и проекты')+'">'+entries.join('')+'</div>'+
+    (places.length?'<label class="field city-place-search"><span class="sr-only">'+msg('Найти место по названию')+'</span>'+
+    '<input id="overview-place-query" type="search" maxlength="120" autocomplete="off" value="'+escape(placeQuery)+
+    '" placeholder="'+msg('Найти место по названию')+'" aria-controls="city-overview-rows"></label>':'')+
     '<div class="city-inventory-layout"><div id="city-overview-map" role="region" aria-label="'+msg('Карта города')+'"></div>'+
     '<div id="city-overview-objects"><div id="city-overview-place" aria-live="polite"></div><div id="city-overview-rows"></div></div></div>'+
     (sources.catalog ? '<p class="caption city-inventory-scope">'+msg('Объекты в городе и окрестностях')+'</p>'+catalogSourcesMarkup(data.catalogSources):'')+'</section>':'')+
@@ -188,6 +194,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   let map;
   let places=[];
   let filter='all';
+  let placeQuery='';
   let selected;
   let limit=placeLimit();
   let cityId;
@@ -198,6 +205,8 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     params.set('city',cityId);
     if (filter==='all') params.delete('category');
     else params.set('category',filter);
+    if (placeQuery.trim()) params.set('q',placeQuery.trim());
+    else params.delete('q');
     if (selected) params.set('place',selected);
     else params.delete('place');
     history.replaceState(history.state,'','#overview?'+params);
@@ -221,8 +230,14 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     }
   }
 
+  function visiblePlaces() {
+    const needle=searchText(placeQuery);
+    return places.filter(place=>(filter==='all' || place.kind===filter) && (!needle ||
+      [place.name,place.en,place.cn,...(place.aliases ?? [])].some(label=>searchText(label).includes(needle))));
+  }
+
   function paintPlaces(frame=false) {
-    const visible=filter==='all'?places:places.filter(place=>place.kind===filter);
+    const visible=visiblePlaces();
     const hits=visible.slice(0,limit);
     const detail=visible.find(place=>place.id===selected);
     const rows=find('#city-overview-rows');
@@ -232,7 +247,8 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       msg(place.kind==='project'?stages[place.stage]??stages.planned:filters[place.kind])+'</small></button></li>').join('')+'</ul>'+
       (visible.length>hits.length?'<button type="button" class="button-quiet" data-overview-next>'+
         msg('Показать ещё {count}',{count:formatNumber(Math.min(8,visible.length-hits.length))})+'</button>':'') :
-      '<p class="caption">'+msg(filter==='project' && data.projects?.status!=='published' ?
+      '<p class="caption" role="status">'+msg(placeQuery.trim()?'По этому названию ничего не найдено.' :
+        filter==='project' && data.projects?.status!=='published' ?
         'По этому городу пока нет записей из подключённых источников проектов.' :
         'В этой выборке нет объектов выбранной категории.')+'</p>';
     for (const button of container.querySelectorAll('[data-overview-filter]')) {
@@ -277,7 +293,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     }
   }
 
-  async function selectCity(id,{focus=false,category,placeId}={}) {
+  async function selectCity(id,{focus=false,category,placeId,nameQuery}={}) {
     if (!/^\d{1,12}$/u.test(id)) return;
     clearTimeout(queryTimer);
     queryRequest?.abort();
@@ -288,6 +304,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     data=null;
     cityId=id;
     filter='all';
+    placeQuery=nameQuery?.slice(0,120) ?? '';
     selected=null;
     limit=placeLimit();
     monitor.hidden=true;
@@ -312,9 +329,9 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       input.value=translated(city);
       const params=new URLSearchParams(location.hash.split('?')[1]);
       if (Object.hasOwn(filters,category) && (category==='project'?sources.projects:sources.catalog)) filter=category;
-      if (places.some(place=>place.id===placeId && (filter==='all'||filter===place.kind))) selected=placeId;
+      if (visiblePlaces().some(place=>place.id===placeId)) selected=placeId;
       updateOverviewLink();
-      report.innerHTML=reportMarkup(data,places,sources);
+      report.innerHTML=reportMarkup(data,places,sources,placeQuery);
       const mapElement=find('#city-overview-map');
       if (mapElement && geodata) {
         map=createRouteMap(mapElement,{locale:getLocale(),minZoom:0,zoomPosition:'topright',
@@ -343,6 +360,14 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   }
 
   function onInput(event) {
+    if (event.target.id==='overview-place-query') {
+      placeQuery=event.target.value;
+      if (!visiblePlaces().some(place=>place.id===selected)) selected=null;
+      limit=placeLimit();
+      updateOverviewLink();
+      paintPlaces(true);
+      return;
+    }
     if (event.target!==input) return;
     clearTimeout(queryTimer);
     queryRequest?.abort();
@@ -397,7 +422,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   container.addEventListener('keydown',onKey);
   if (initialCity && /^\d{1,12}$/u.test(initialCity)) {
     const params=new URLSearchParams(location.hash.split('?')[1]);
-    void selectCity(initialCity,{category:params.get('category'),placeId:params.get('place')});
+    void selectCity(initialCity,{category:params.get('category'),placeId:params.get('place'),nameQuery:params.get('q')});
   }
   else if (lastChosenCity) void selectCity(lastChosenCity);
   else void search('');

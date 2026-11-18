@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as wait } from 'node:timers/promises';
 import { catalogRefreshMs, catalogVersion, maxCatalogPlaces, readCatalog, saveCatalog } from './national-catalog.mjs';
+import { findPublishedVenue, publishedHours } from './engine.mjs';
 
 const loadJson = file => readFile(new URL('./data/'+file,import.meta.url),'utf8').then(JSON.parse);
 const geonames = 'https://www.geonames.org/';
@@ -706,6 +707,25 @@ function openingWindow(place,date) {
   return place.dailyWindow ?? [0,24*60];
 }
 
+function draftWindows(place,date,size,catalog) {
+  const official = findPublishedVenue(catalog,place);
+  if (official && !official.conflict) {
+    if (official.publishedConditions?.limits?.some(limit=>limit.max<size)) return [];
+    const hours=publishedHours(official,date);
+    if (hours?.windows) return hours.windows.map(([open,close])=>[open,close,close-(hours.lastEntryMinutes ?? 0)]);
+  }
+  const [opens,closes]=openingWindow(place,date);
+  return [[opens,closes,closes]];
+}
+
+function openingSlot(windows,earliest,latest,duration) {
+  for (const [open,close,lastEntry] of windows) {
+    const start=Math.max(open,earliest);
+    if (start<=lastEntry && start+duration<=Math.min(close,latest)) return start;
+  }
+  return null;
+}
+
 const visitFormats=['gastro','craft','pilgrimage','nature','museum','family','heritage'];
 const standardFocus=['heritage','museum','nature'];
 const areaRadius=transport=>transport==='walking' ? 0.55 : 0.75;
@@ -722,13 +742,12 @@ function matchesFocus(place,theme) {
   return place.tags.includes(theme) && (place.kind==='visit' || (place.kind==='food' && theme==='gastro'));
 }
 
-function availableActivities({allowed,allScheduled,date,pace,startMinute,visitEnd}) {
+function availableActivities({allowed,allScheduled,openingHours,pace,startMinute,visitEnd}) {
   return allowed.filter(place=>{
     if (allScheduled.has(place.id)) return false;
-    const [opens,closes]=openingWindow(place,date);
-    return place.kind==='visit'
-      ? Math.max(opens,startMinute)+pace.duration<=Math.min(closes,visitEnd)
-      : place.kind==='food' && Math.max(opens,startMinute,lunchWindow.start)+50<=Math.min(closes,lunchWindow.end);
+    const windows=openingHours.get(place.id);
+    return place.kind==='visit' ? openingSlot(windows,startMinute,visitEnd,pace.duration)!==null :
+      place.kind==='food' && openingSlot(windows,Math.max(startMinute,lunchWindow.start),lunchWindow.end,50)!==null;
   });
 }
 
@@ -764,7 +783,7 @@ function supportedFocus(stops,settings,preferred) {
 }
 
 function pickStops(context) {
-  const {settings,pace,date,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay,
+  const {settings,pace,openingHours,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay,
     startMinute,overnightEnd,focus,newArea}=context;
   const visit={kind:'visit',duration:pace.duration};
   const morningCount=visitEnd<=13*60 ? pace.visits : Math.ceil(pace.visits/2);
@@ -777,7 +796,6 @@ function pickStops(context) {
   const grouped=new Map(['visit','food','stay'].map(kind=>[kind,allowed.filter(place=>place.kind===kind)]));
   const baseScores=new Map(allowed.map(place=>[place.id,fitScore(place,settings)]));
   const formats=new Map(grouped.get('visit').map(place=>[place.id,visitFormats.find(format=>place.tags.includes(format))]));
-  const openingHours=new Map(allowed.map(place=>[place.id,openingWindow(place,date)]));
   let states=[{stops:[],score:0,visitCount:0,place:origin,cursor:startMinute}];
 
   for (const slot of slots) {
@@ -790,11 +808,11 @@ function pickStops(context) {
       const candidates=grouped.get(slot.kind).flatMap(place=>{
         if (slot.kind==='visit' && (allScheduled.has(place.id) || path.stops.some(stop=>stop.place.id===place.id))) return [];
         const leg=estimateLeg(path.place,place,settings);
-        const [opens,closes]=openingHours.get(place.id);
-        const start=Math.max(slot.earliest,path.cursor+leg.minutes,opens);
         const overnight=slot.kind==='stay' && origin.id===place.id;
-        const end=start+(overnight ? 15 : slot.duration);
-        if (!leg.inRange || end>Math.min(slot.latest,closes)) return [];
+        const duration=overnight ? 15 : slot.duration;
+        const start=openingSlot(openingHours.get(place.id),Math.max(slot.earliest,path.cursor+leg.minutes),slot.latest,duration);
+        if (!leg.inRange || start===null) return [];
+        const end=start+duration;
         const mandatory=requested.has(place.id) && !allScheduled.has(place.id);
         const covered=place.tags.filter(theme=>coverage.get(theme)===0 &&
           !path.stops.some(stop=>stop.place.tags.includes(theme))).length;
@@ -828,15 +846,15 @@ function pickStops(context) {
   return states[0];
 }
 
-function replacementLegs(place,stops,index,{settings,date,origin,startMinute}) {
+function replacementLegs(place,stops,index,{settings,openingHours,origin,startMinute}) {
   const current=stops[index];
   const previous=stops[index-1];
   const next=stops[index+1];
   const inbound=estimateLeg(previous?.place ?? origin,place,settings);
   const outbound=next ? estimateLeg(place,next.place,settings) : null;
   const earliest=previous ? previous.end+turnaround : startMinute;
-  const [opens,closes]=openingWindow(place,date);
-  if (!inbound.inRange || earliest+inbound.minutes>current.start || current.start<opens || current.end>closes ||
+  const fitsHours=openingSlot(openingHours.get(place.id),current.start,current.end,current.end-current.start)!==null;
+  if (!inbound.inRange || earliest+inbound.minutes>current.start || !fitsHours ||
       (outbound && (!outbound.inRange || current.end+turnaround+outbound.minutes>next.start))) return null;
   return {inbound,outbound};
 }
@@ -881,7 +899,7 @@ function applyReplacement(days,change) {
   return {...change,status:'applied'};
 }
 
-function schedule(contexts,settings) {
+function schedule(contexts,settings,officialCatalog) {
   const mode=transportModes[settings.transport];
   const pace=paceModes[settings.pace];
   const eligible=(places,origin)=>places.filter(place=>distance(place.coordinates,origin.coordinates)<=mode.radius);
@@ -923,9 +941,10 @@ function schedule(contexts,settings) {
     const candidates=eligible(places,origin);
     for (const place of candidates) inScope.add(place.id);
     const allowed=candidates.filter(place=>!isOmitted(place,omitted) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
+    const openingHours=new Map(allowed.map(place=>[place.id,draftWindows(place,date,settings.size,officialCatalog)]));
     const needsStay=day<settings.days-1;
     const overnightEnd=arrivalMinute ? 22*60 : endOfDay;
-    const dayContext={settings,pace,date,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay,startMinute,overnightEnd};
+    const dayContext={settings,pace,openingHours,visitEnd,origin,allowed,allScheduled,requested,coverage,needsStay,startMinute,overnightEnd};
     const activities=availableActivities(dayContext);
     const earlierVisits=visitedByCity.get(location.id) ?? [];
     dayContext.newArea=newAreaVisits(activities,settings,earlierVisits);
@@ -966,7 +985,7 @@ function schedule(contexts,settings) {
     }
     visitedByCity.set(location.id,earlierVisits);
     days.push({city:location.name,cityId:location.id,date,arrivalAfterDay,
-      chosen:chosen.stops,context:{settings,date,origin,allowed,requested,startMinute,focus:dayContext.focus},
+      chosen:chosen.stops,context:{settings,openingHours,origin,allowed,requested,startMinute,focus:dayContext.focus},
       missing,needsStay,...(transfer ? {transfer} : {})});
     previousStay=overnight;
   }
@@ -999,8 +1018,10 @@ function schedule(contexts,settings) {
       estimatedTransferMinutes:chosen.reduce((sum,stop)=>sum+stop.leg.minutes,0)};
     if (lunch) meals.add(lunch.place.id);
     const stops=chosen.map(({place,start,end,leg,action},index)=>{
-      const knownHours=place.weeklyWindows || place.dailyWindow;
-      const [opens,closes]=knownHours ? openingWindow(place,day.date) : [];
+      const official=findPublishedVenue(officialCatalog,place);
+      const published=official && !official.conflict && publishedHours(official,day.date)?.windows;
+      const knownHours=published || place.weeklyWindows || place.dailyWindow;
+      const [opens,closes]=knownHours ? context.openingHours.get(place.id).find(([from,to])=>from<=start && end<=to) : [];
       return {
         id:place.id,type:place.kind,name:place.name,en:place.en,cn:place.cn,coordinates:place.coordinates,url:venueUrl(place),
         start:time(start),end:time(end),estimatedTransfer:leg.minutes,status:'unknown',geoStatus:place.geoStatus,
@@ -1065,7 +1086,7 @@ export async function cityCatalog(city,{fetchImpl=globalThis.fetch,local,include
   return {places,geodata:mapData([city],places,sources),catalogSources:sources,counts};
 }
 
-export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,local,recordCatalog} = {}) {
+export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,local,recordCatalog,officialCatalog=new Map()} = {}) {
   if (!input || typeof input!=='object' || Array.isArray(input)) throw error('Укажите параметры программы.');
   const settings=readSettings(input);
   const data=await cityData();
@@ -1090,7 +1111,7 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,l
   const places=[...new Map(contexts.flatMap(context=>context.places).map(place=>[place.id,place])).values()]
     .filter(place=>!isOmitted(place,omitted) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
   const sources=contexts.map(({location,source})=>({cityId:location.id,city:location.name,...source}));
-  const {days,required,replacements,interestCoverage}=schedule(contexts,settings);
+  const {days,required,replacements,interestCoverage}=schedule(contexts,settings,officialCatalog);
   const location=locations[0];
   const source=contexts[0].source;
   const warnings=['Время остановок и переездов ориентировочное. Для группы нужно подтвердить график, вместимость, питание, размещение и запись.'];

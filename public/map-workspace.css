@@ -1,57 +1,63 @@
+.route-map,
+.atlas-map-shell { --map-alternative: #6352a9; }
+
 .route-map {
-  --map-focus: #104e80;
-  --map-change: #9a441f;
-  --map-unknown: #835b0f;
-  --map-blocked: #ab391f;
+  --map-base: #e8e9df;
+  --map-focus: var(--accent);
+  --map-change: var(--warn);
+  --map-unknown: var(--warn);
+  --map-blocked: var(--error);
+  font-family: var(--display);
 }
+
+#draft-map.route-map,
+#tour-map.route-map { background-color: var(--map-base); }
+
+.route-map .leaflet-tile-pane { filter: saturate(.8); }
+.route-map .map-path-main { stroke: var(--accent); }
+.route-map .map-path-alternative { stroke: var(--map-alternative); }
+.route-map .map-pin--alternative .map-pin__core { border-color: var(--map-alternative); }
 
 .route-map .map-marker:focus-visible,
 .route-map .leaflet-control-zoom a:focus-visible,
 .route-map .map-group-popup .leaflet-popup-close-button:focus-visible,
 .route-map .map-places-popup button:focus-visible {
   outline: 2px solid var(--map-focus);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .route-map .map-marker:focus-visible .map-pin__core,
 .route-map .map-marker:focus-visible .map-city__count {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--white);
   outline-offset: 0;
-}
-
-.route-map .map-pin--unknown .map-pin__core,
-.route-map .map-pin--blocked .map-pin__core {
-  position: relative;
 }
 
 .route-map .map-pin--unknown .map-pin__core::after,
 .route-map .map-pin--blocked .map-pin__core::after {
   position: absolute;
-  right: -3px;
-  bottom: -2px;
-  width: 7px;
-  height: 7px;
-  border: 1px solid white;
+  inset-inline-end: 0;
+  bottom: 1px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--white);
   background: var(--map-unknown);
   content: '';
-}
-
-.route-map .map-pin--unknown .map-pin__core::after {
   transform: rotate(45deg);
 }
 
 .route-map .map-pin--blocked .map-pin__core::after {
-  right: -4px;
-  width: 9px;
-  height: 4px;
-  border-radius: 1px;
+  inset-inline-end: -2px;
+  width: 11px;
+  height: 5px;
+  border-radius: 2px;
   background: var(--map-blocked);
+  transform: none;
 }
 
 .route-map .map-city--changed .map-city__count {
-  border-color: #fff;
+  border-color: var(--white);
   background: var(--map-change);
-  color: #fff;
+  color: var(--white);
 }
 
 .route-map .map-city--selected .map-city__count {
@@ -61,8 +67,9 @@
 
 .route-map .map-tooltip {
   padding: 8px 10px;
-  border: 1px solid #cedcd4;
-  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
   white-space: normal;
 }
 
@@ -73,59 +80,39 @@
   max-width: min(230px, 58vw);
 }
 
-.route-map .map-tooltip strong {
-  font-size: .77rem;
-  font-weight: 720;
-}
-
-.route-map .map-tooltip small {
-  color: #435c51;
-  font-size: .7rem;
-  line-height: 1.4;
-}
-
-.route-map .map-group-popup .leaflet-popup-content {
-  margin-inline-end: 36px;
-}
-
-.route-map .map-group-popup .leaflet-popup-scrolled {
-  overscroll-behavior: contain;
-}
+.route-map .map-tooltip strong { font-size: .8rem; font-weight: 700; }
+.route-map .map-tooltip small { color: var(--muted); font-size: .74rem; line-height: 1.4; }
+.route-map .map-group-popup .leaflet-popup-content { margin-inline-end: 46px; }
+.route-map .map-group-popup .leaflet-popup-scrolled { overscroll-behavior: contain; }
 
 .route-map .map-group-popup .leaflet-popup-close-button {
-  width: 40px;
-  height: 40px;
-  line-height: 40px;
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  color: var(--ink);
 }
 
-.route-map .map-places-popup {
-  display: grid;
-  gap: 3px;
-}
-
-.route-map .map-places-popup strong {
-  margin: 1px 0 3px;
-  color: #254236;
-  font-weight: 720;
-  line-height: 1.3;
-}
+.route-map .map-places-popup { display: grid; gap: 4px; }
+.route-map .map-places-popup strong { margin: 1px 0 3px; color: var(--ink); font-weight: 700; line-height: 1.3; }
 
 .route-map .map-places-popup button {
-  min-height: 34px;
+  min-height: 44px;
+  border: 1px solid var(--line);
   border-radius: 5px;
+  color: var(--accent);
 }
 
 .route-map .map-city__name,
 .route-map .map-pin__caption {
-  max-width: min(165px, 45vw);
+  max-width: min(174px, 48vw);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .route-map .map-city--transfer .map-city__name {
-  left: 50%;
+  inset-inline-start: 50%;
   top: auto;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 6px);
   transform: translateX(-50%);
   width: max-content;
   max-width: 126px;
@@ -134,27 +121,41 @@
   text-align: center;
 }
 
-@media (pointer: coarse) {
-  #tour-map.route-map .leaflet-control-zoom a {
-    width: 42px;
-    height: 42px;
-    line-height: 42px;
+.route-map .leaflet-control-zoom {
+  overflow: hidden;
+  border: 1px solid var(--control-line);
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.route-map .leaflet-control-zoom a { color: var(--ink); }
+.route-map .leaflet-control-zoom a:focus-visible { outline-offset: -3px; }
+.route-map .leaflet-control-scale-line { border-color: var(--muted); background: var(--paper); color: var(--ink); }
+.route-map .leaflet-bottom.leaflet-right { max-width: calc(100% - 100px); }
+.route-map .leaflet-control.leaflet-control-attribution,
+.route-map .leaflet-control-attribution a { white-space: normal; overflow-wrap: anywhere; }
+.route-map .leaflet-control-attribution a { color: var(--strong); }
+
+@media (max-width: 520px) {
+  .route-map .map-pin--selected .map-pin__caption,
+  .route-map .map-city--selected .map-city__name {
+    inset-inline-start: 50%;
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 56vw;
   }
+}
+
+@media (pointer: coarse) {
+  .route-map .leaflet-control-zoom a,
+  #tour-map.route-map .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; }
 }
 
 @media (forced-colors: active) {
   .route-map .map-marker:focus-visible,
   .route-map .leaflet-control-zoom a:focus-visible,
-  .route-map .map-places-popup button:focus-visible {
-    outline-color: Highlight;
-  }
-}
-.route-map .leaflet-bottom.leaflet-right {
-  max-width: calc(100% - 106px);
-}
-
-.route-map .leaflet-control.leaflet-control-attribution,
-#tour-map .leaflet-control-attribution a {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  .route-map .map-group-popup .leaflet-popup-close-button:focus-visible,
+  .route-map .map-places-popup button:focus-visible { outline-color: Highlight; }
 }

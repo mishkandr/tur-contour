@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import {
   region, metricInfo, normalizeStatistics, statSummary, number, routeSettings, defaultRoute, trackedRoutes, objectsFrom,
-  planRoute, routeAlternatives, portfolioImpact, impacts, attributeChanges, recommendations, fieldNames, assess,
+  planRoute, routeAlternatives, portfolioImpact, impacts, attributeChanges, recommendations, fieldNames, assess, verifyDraftStops,
 } from './engine.mjs';
 import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
@@ -548,8 +548,11 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/stat-regions') return respond(response,200,{regions:await statisticsRegions()});
     if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
-    if (request.method==='POST' && path==='/api/draft') return respond(response,200,
-      await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog}));
+    if (request.method==='POST' && path==='/api/draft') {
+      const officialCatalog = new Map(objectsFrom(catalog,state).map(place=>[place.id,place]));
+      const draft = await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog,officialCatalog});
+      return respond(response,200,{...draft,verification:verifyDraftStops(draft,officialCatalog)});
+    }
     if (request.method==='POST' && path==='/api/weather') return respond(response,200,await weatherForecast(await readBody(request)));
     if (request.method==='POST' && path==='/api/knowledge') {
       const signal=clientSignal(response);

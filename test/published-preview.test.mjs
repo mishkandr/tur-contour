@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { defaultRoute, groupApplicationDeadline, objectsFrom, planRoute, previewPublishedRoute, publishedHours, routeAlternatives } from '../engine.mjs';
+import { defaultRoute, groupApplicationDeadline, objectsFrom, planRoute, previewPublishedRoute, publishedHours, routeAlternatives, verifyDraftStops } from '../engine.mjs';
 import { mergePublishedConditions } from '../published-conditions.mjs';
 import { chineseItinerary, chineseItineraryText } from '../public/chinese-itinerary.mjs';
+import { createLocalPlaceCatalog } from '../city-overview.mjs';
+import { draftItinerary } from '../nationwide.mjs';
 
 const load = name=>JSON.parse(readFileSync(new URL('../data/'+name+'.json',import.meta.url),'utf8'));
 const catalog=load('catalog');
@@ -11,6 +13,35 @@ const feeds=['published-vladimir','published-suzdal','published-hospitality','pu
 const places=objectsFrom(catalog,{publishedConditions:mergePublishedConditions(catalog,feeds)});
 const working={...defaultRoute,demo:false};
 const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3));
+
+test('draft verification checks the exact day and time, including aliases from the map catalog',()=>{
+  const stops=[{id:'osm-cathedral',start:'10:15',end:'10:50'}, {id:'golden-gate',start:'14:00',end:'14:30'},
+    {id:'new-place',start:'16:00',end:'17:00'}];
+  const draft={settings:{...working,date:'2026-11-20'},places:[{id:'osm-cathedral',sourceIds:['dmitrovsky']}],
+    plan:{days:[{date:'2026-11-20',stops:[]},{date:'2026-11-21',stops}]}};
+  const [empty,checks]=verifyDraftStops(draft,new Map(places.map(place=>[place.id,place])));
+  assert.deepEqual(empty,[]);
+  assert.deepEqual(checks.map(check=>[check.id,check.status]),[
+    ['osm-cathedral','blocked'],['golden-gate','unknown'],['new-place','unknown'],
+  ]);
+  assert.deepEqual(checks[0].hours.windows,[[660,1140]]);
+  assert.equal(checks[0].deadline.date,'2026-11-14');
+  assert.ok(checks[1].notes.length);
+  assert.equal(checks[2].hours,null);
+});
+
+test('the draft uses the published visit window before inserting the required museum',async()=>{
+  const local=createLocalPlaceCatalog(catalog,load('map'));
+  const officialCatalog=new Map(places.map(place=>[place.id,place]));
+  const draft=await draftItinerary({cityId:'473247',date:'2026-11-21',size:8,days:2,requiredPlaceIds:['dmitrovsky']},{
+    local,officialCatalog,fetchImpl:async()=>Response.json({elements:[],query:{geosearch:[]}}),
+  });
+  assert.equal(draft.plan.required[0].scheduled,true);
+  const checks=verifyDraftStops(draft,officialCatalog).flat();
+  assert.ok(!checks.some(check=>check.id==='dmitrovsky' && check.status==='blocked'));
+  const saturday=draft.plan.days[0].stops.find(stop=>stop.id==='dmitrovsky');
+  if (saturday) assert.ok(saturday.start>='11:00');
+});
 
 test('published preview is actionable without becoming approved supplier evidence',()=>{
   const strict = planRoute(places,working);

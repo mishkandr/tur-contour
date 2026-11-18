@@ -165,6 +165,35 @@ export function assess(place, settings, day = 0) {
   return { status:reasons.length ? 'unknown' : 'ready', reasons };
 }
 
+export function findPublishedVenue(catalog, venue) {
+  return catalog.get(venue.id) ?? (venue.sourceIds ?? []).map(id=>catalog.get(id)).find(Boolean);
+}
+
+export function verifyDraftStops(draft, catalog) {
+  const venues = new Map(draft.places.map(place=>[place.id,place]));
+  const settings = {...draft.settings,demo:false};
+  return draft.plan.days.map((day,offset)=>day.stops.map(stop=>{
+    const place = findPublishedVenue(catalog,venues.get(stop.id) ?? stop);
+    const evidence = place?.publishedConditions;
+    const hours = place && publishedHours(place,day.date);
+    const assessment = place ? assess(place,settings,offset) : {
+      status:'unknown',reasons:['Уточните условия приёма группы у объекта.'],
+    };
+    const audit = place?.verifiedAudit;
+    const windows = audit && assessment.status==='ready' ? openingWindows(place,audit,settings,offset) :
+      hours?.windows?.map(([open,close])=>[open,close,close-(hours.lastEntryMinutes ?? 0)]);
+    const start = clockMinutes(stop.start);
+    const end = clockMinutes(stop.end);
+    const outsideHours = !place?.conflict && windows?.length && !windows.some(([open,close,lastEntry])=>
+      open<=start && start<=lastEntry && end<=close);
+    return {id:stop.id,status:outsideHours ? 'blocked' : assessment.status,
+      reasons:[...(outsideHours ? ['Время остановки выходит за доступные часы или время последнего входа.'] : []), ...assessment.reasons],
+      hours:hours ? {windows:hours.windows,lastEntryMinutes:hours.lastEntryMinutes,url:hours.url} : null,
+      booking:evidence?.booking ?? null,deadline:place ? groupApplicationDeadline(place,day.date) : null,
+      limits:evidence?.limits ?? [],notes:evidence?.notes ?? [],checkedAt:evidence?.checkedAt ?? null};
+  }));
+}
+
 function themeFit(place, theme) {
   if (place.kind !== 'visit') return 0;
   if (place.formats?.includes(theme)) return 2;

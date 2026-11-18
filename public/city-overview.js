@@ -302,7 +302,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     }
   }
 
-  async function selectCity(id,{focus=false,category,placeId,nameQuery}={}) {
+  async function selectCity(id,{focus=false,reveal=false,category,placeId,nameQuery}={}) {
     if (!/^\d{1,12}$/u.test(id)) return;
     clearTimeout(queryTimer);
     queryRequest?.abort();
@@ -357,7 +357,9 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
         monitor.hidden=false;
         if (params.get('focus')==='programmes') find('#ops-programmes')?.focus();
       }
-      if (focus) find('#overview-city-title').focus();
+      const title=find('#overview-city-title');
+      if (focus) title.focus();
+      if (reveal && window.matchMedia('(max-width: 520px)').matches) title.scrollIntoView({block:'start'});
       if (selected) requestAnimationFrame(()=>{
         if (mounted && cityId===id && selected===placeId) find('.city-place-info')?.scrollIntoView({block:'nearest'});
       });
@@ -393,7 +395,8 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     if (!button) return;
     const {overviewCity,overviewFilter,overviewPlace}=button.dataset;
     if (overviewCity) {
-      void selectCity(overviewCity,{focus:true});
+      const keyboard=event.detail===0;
+      void selectCity(overviewCity,{focus:keyboard,reveal:!keyboard});
     } else if (overviewFilter) {
       filter=overviewFilter;
       selected=null;

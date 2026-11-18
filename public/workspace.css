@@ -115,7 +115,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-layout:has(.composer-result:empty) .composer-inputs{width:min(100%,780px)}
 .composer-result:empty{display:none}
 .composer-inputs,.composer-result{min-width:0}
-.composer-form,.composer-parameters{display:grid;gap:11px}
+.composer-form,.composer-parameters{display:grid;grid-template-columns:minmax(0,1fr);gap:11px}
 .composer-parameters{padding-top:8px}
 .composer-parameters>div:empty,.composer-form #draft-status:empty{display:none}
 .composer-request>span,.knowledge-feed label>span{font-size:1rem;font-weight:730}
@@ -170,7 +170,11 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-services{border-top:1px solid var(--line);padding-block:6px 10px}
 .composer-services summary{align-content:center;cursor:pointer;font-weight:680;min-height:44px}
 .composer-service-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:8px 10px;margin-bottom:8px}
-.composer-service-fields :is(input,select){font-size:max(1rem,16px);min-height:44px}
+.composer-service-fields .field{min-width:0}
+.composer-service-fields .field :is(input,select){font-size:max(1rem,16px);min-height:44px}
+.composer-service-select select{appearance:none;grid-area:2/1;padding-inline-end:2rem}
+.composer-service-select::after{content:"";grid-area:2/1;place-self:center end;width:8px;height:8px;margin-inline-end:16px;
+  border-bottom:2px solid var(--muted);border-right:2px solid var(--muted);transform:rotate(45deg);pointer-events:none}
 .composer-service-list{margin:5px 0;padding:0;list-style:none}
 .composer-service-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-block:8px;border-top:1px solid var(--line)}
 .composer-service-list li>div{min-width:0;overflow-wrap:anywhere}
@@ -197,7 +201,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   grid-template-columns:max(8ch,72px) minmax(0,1fr) fit-content(36%);gap:8px;align-items:center;text-align:left;padding:6px 8px;border-radius:6px}
 .composer-stops li>button[aria-pressed=true],.composer-stops li>button:hover{background:#edf3e9;border-color:#d6e1d3}
 .composer-stops button time,.composer-stops button small{font-size:.75rem;color:var(--muted)}
-.composer-stops button small{overflow-wrap:anywhere}
+.composer-stops button :is(span,small){overflow-wrap:anywhere}
 .composer-stops button time{font-variant-numeric:tabular-nums}
 .composer-stop-actions{padding:.3rem 8px .3rem max(9ch,84px);display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;font-size:.8rem}
 .composer-stop-actions>*{min-height:36px;display:inline-flex;align-items:center}

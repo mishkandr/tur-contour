@@ -48,6 +48,41 @@
           "geoUrl": "https://www.wikidata.org/wiki/Q38646"
         },
         {
+          "id": "Q215423",
+          "name": "Исаакиевский собор",
+          "en": "Saint Isaac's Cathedral",
+          "cn": "圣以撒大教堂",
+          "coordinates": [59.93405, 30.30595],
+          "category": "museum",
+          "weeklyWindows": [[600, 1080], [600, 1080], [600, 1080], null, [600, 1080], [600, 1080], [600, 1080]],
+          "closedDates": ["01-01"],
+          "url": "https://www.cathedral.ru/ru/visitors/time",
+          "geoUrl": "https://www.wikidata.org/wiki/Q215423"
+        },
+        {
+          "id": "Q215208",
+          "name": "Спас на Крови",
+          "en": "Church of the Saviour on Spilled Blood",
+          "cn": "滴血救世主教堂",
+          "coordinates": [59.94, 30.328611],
+          "category": "museum",
+          "weeklyWindows": [[600, 1080], [600, 1080], [600, 1080], null, [600, 1080], [600, 1080], [600, 1080]],
+          "closedDates": ["01-01"],
+          "url": "https://www.cathedral.ru/ru/visitors/time",
+          "geoUrl": "https://www.wikidata.org/wiki/Q215208"
+        },
+        {
+          "id": "Q1229234",
+          "name": "Летний сад",
+          "en": "Summer Garden",
+          "cn": "夏园",
+          "coordinates": [59.944722, 30.335556],
+          "category": "park",
+          "weeklyWindows": [[600, 1080], [600, 1080], null, [600, 1080], [600, 1080], [600, 1080], [600, 1080]],
+          "url": "https://rusmuseum.ru/museums/summer-garden/",
+          "geoUrl": "https://www.wikidata.org/wiki/Q1229234"
+        },
+        {
           "id": "spb-saint-petersburg-hotel",
           "name": "Отель «Санкт-Петербург»",
           "en": "Saint Petersburg Hotel",
@@ -690,6 +725,17 @@
           "coordinates": [46.958762, 142.7393529],
           "category": "heritage",
           "url": "https://www.wikidata.org/wiki/Q4409419"
+        },
+        {
+          "id": "osm-relation-7809929",
+          "name": "Городской парк культуры и отдыха имени Ю. А. Гагарина",
+          "en": "Yuri Gagarin Park",
+          "cn": "尤里·加加林公园",
+          "aliases": ["Парк Гагарина"],
+          "coordinates": [46.9647547, 142.757136],
+          "category": "park",
+          "url": "https://www.culture.ru/institutes/34944/park-kultury-i-otdykha-im-yu-gagarina-g-yuzhno-sakhalinska",
+          "geoUrl": "https://www.openstreetmap.org/relation/7809929"
         },
         {
           "id": "yuzhno-sakhalinsk-mega-palace",

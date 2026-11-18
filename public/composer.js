@@ -178,6 +178,8 @@ addLocaleMessages([
   ['Сохранённый снимок','Saved snapshot','已保存的数据快照'],
   ['Внешний источник','External source','外部数据源'],
   ['Поиск объектов недоступен','Place search unavailable','地点搜索暂不可用'],
+  ['Википедия','Wikipedia','维基百科'],
+  ['Wikidata и сайты объектов','Wikidata and venue websites','维基数据与地点官网'],
   ['Другие города маршрута','Other cities in the itinerary','行程中的其他城市'],
   ['Удалить {city}','Remove {city}','移除 {city}'],
   ['Несколько городов найдено в тексте. Проверьте порядок.','Several cities were found in the request. Check their order.','需求中识别出多个城市，请核对顺序。'],
@@ -399,7 +401,7 @@ function forecastDays(result, dirty=false) {
     const city = result.locations?.find(location=>location.id===day.cityId) ?? result.location;
     const outdoors = day.stops.filter(stop=>stop.exposure==='outdoors');
     const stop = !dirty && outdoors.find(item=>item.alternatives?.some(candidate=>candidate.exposure==='indoors'));
-    return {date:day.date,coordinates:city?.coordinates,
+    return {date:day.date,coordinates:day.logistics?.arrivalAfterDay ? null : city?.coordinates,
       outdoors:outdoors.length>0 || result.plan.settings.interests?.some(theme=>['hike','nature'].includes(theme)),
       alternative:stop?{stop,name:name(stop)}:null};
   });
@@ -432,9 +434,9 @@ function serviceSearchMarkup(result,view) {
   return '<details id="draft-services" class="composer-services"'+(view.open?' open':'')+'><summary>'+tr('Найти отель или ресторан')+'</summary>'+
     '<div class="composer-service-fields"><label class="field">'+tr('Название отеля или ресторана')+
     '<input type="search" id="draft-service-query" value="'+safe(view.query)+'" maxlength="100"></label>'+
-    '<label class="field">'+tr('Что ищем')+'<select id="draft-service-kind">'+
+    '<label class="field composer-service-select">'+tr('Что ищем')+'<select id="draft-service-kind">'+
     options({all:'Все варианты',stay:'Отели',food:'Рестораны'},view.kind)+'</select></label>'+
-    (locations.length>1?'<label class="field">'+tr('Город поиска')+'<select id="draft-service-city">'+
+    (locations.length>1?'<label class="field composer-service-select">'+tr('Город поиска')+'<select id="draft-service-city">'+
       '<option value="">'+tr('Все города маршрута')+'</option>'+locations.map(city=>
         '<option value="'+safe(city.name)+'"'+(view.city===city.name?' selected':'')+' data-source-text>'+safe(name(city))+'</option>').join('')+
       '</select></label>':'')+'</div><p class="caption">'+tr('Места и условия для группы подтвердите у отеля или ресторана.')+'</p>'+
@@ -448,7 +450,7 @@ function draftMarkup(result,serviceView) {
   const sources = evidenceSources(result).map(item=>{
     const status = item.status==='live' ? 'Внешний источник' : item.status==='snapshot' ? 'Сохранённый снимок' : 'Поиск объектов недоступен';
     const date = item.checkedAt && Number.isFinite(Date.parse(item.checkedAt)) ? ' · '+formatDate(item.checkedAt) : '';
-    return '<li><a href="'+safe(item.url)+'" target="_blank" rel="noopener noreferrer" data-source-text>'+safe(item.name)+'</a>'+
+    return '<li><a href="'+safe(item.url)+'" target="_blank" rel="noopener noreferrer">'+tr(item.name)+'</a>'+
       ' · '+tr(status)+safe(date)+(item.city && venues.length>1?' · '+safe(item.city):'')+'</li>';
   }).join('');
   return '<section class="panel composer-output" data-dirty="'+state.dirty+'" aria-labelledby="draft-title"><header class="composer-title"><div><p class="ops-kicker">'+
@@ -479,14 +481,14 @@ function download(result) {
     date:formatDate(settings.date),days:formatNumber(settings.days),size:formatNumber(settings.size)});
   const lines = [t('Черновик')+' · '+(result.locations??[location]).map(name).join(' → '),summary,
     ...(settings.access?[t('Безбарьерный доступ')]:[]),
-    ...evidenceSources(result).map(item=>item.name+' · '+item.url), location.sourceUrl,'',
+    ...evidenceSources(result).map(item=>t(item.name)+' · '+item.url), location.sourceUrl,'',
     ...plan.days.flatMap((day,index)=>[t('День {day}',{day:index+1})+' · '+formatDate(day.date)+' · '+(day.cityId ?
       name(result.locations?.find(item=>item.id===day.cityId)??location):name(location)),
       ...transferNotes(day,result),
       ...weather[index],...day.stops.map(stop=>{
         const place=places.get(stop.id);
         return [stop.start+'–'+stop.end+' '+name(stop),accessEvidence(settings.access,place),stop.url,
-          place?.officialUrl ? t('Официальный сайт объекта')+' '+place.officialUrl : ''].filter(Boolean).join(' · ');
+          place?.officialUrl && place.officialUrl!==stop.url ? t('Официальный сайт объекта')+' '+place.officialUrl : ''].filter(Boolean).join(' · ');
       }),...dayLogistics(day),...dayGaps(day),
       ...(day.transfer?.candidates?.length?[t('Объекты вне расписания'),...day.transfer.candidates.map(candidate=>name(candidate)+' · '+candidate.url)]:[]),'']),
     t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>requirementName(item)+' · '+eligibility(item)),
@@ -503,6 +505,7 @@ function download(result) {
 export function mountComposer(container, api) {
   const find = selector=>container.querySelector(selector);
   let map;
+  let localizedGeodata;
   let searchTimer;
   let pending;
   let mounted=true;
@@ -607,10 +610,11 @@ export function mountComposer(container, api) {
         when?t('В расписании · {when}',{when:formatDate(when.date)+' · '+when.time}):mandatory?t('Нет времени в расписании'):'',
         accessEvidence(state.result.settings.access,place)].filter(Boolean);
       const infoId='draft-venue-info-'+index;
+      const venueId='draft-venue-name-'+index;
       const link=place.officialUrl??place.url;
-      return '<li><div>'+(link?'<a target="_blank" rel="noopener noreferrer" href="'+safe(link)+'" data-source-text>'+safe(name(place))+
-        '</a>':'<strong data-source-text>'+safe(name(place))+'</strong>')+'<p class="caption" id="'+infoId+'">'+safe(info.join(' · '))+
-        '</p></div><button type="button" class="button-quiet" aria-describedby="'+infoId+'" data-composer="'+
+      return '<li><div>'+(link?'<a id="'+venueId+'" target="_blank" rel="noopener noreferrer" href="'+safe(link)+'" data-source-text>'+safe(name(place))+
+        '</a>':'<strong id="'+venueId+'" data-source-text>'+safe(name(place))+'</strong>')+'<p class="caption" id="'+infoId+'">'+safe(info.join(' · '))+
+        '</p></div><button type="button" class="button-quiet" aria-describedby="'+venueId+' '+infoId+'" data-composer="'+
         (mandatory?'service-release':'service-include')+'" data-value="'+safe(place.id)+'"'+(pending?' disabled':'')+'>'+
         tr(mandatory?'Убрать из обязательных':'Включить в маршрут')+'</button></li>';
     }).join('')+'</ul>'+(places.length>visible.length?'<button type="button" class="button-quiet" data-composer="service-more">'+
@@ -642,7 +646,7 @@ export function mountComposer(container, api) {
   }
   const isCurrent = (request,revision)=>mounted && pending===request && state.revision===revision;
   function paintDays(frame=false) {
-    const {plan,places,geodata} = state.result;
+    const {plan,places} = state.result;
     const byId=new Map(places.map(place=>[place.id,place]));
     const days=plan.days.map((day,index)=>({day,index})).filter(({index})=>state.mapDay==='all'||String(index)===state.mapDay);
     const region=find('#draft-days');
@@ -652,7 +656,7 @@ export function mountComposer(container, api) {
     const visible=places.filter(place=>included.has(place.id));
     find('#draft-timeline').innerHTML = days.map(({day,index})=>'<section class="composer-day"><h3>'+tr('День {day}',{day:index+1})+
       ' · '+safe(formatDate(day.date))+(state.result.locations?.length>1?' · '+safe(name(state.result.locations.find(city=>city.id===day.cityId)??{name:day.city})): '')+
-      '</h3>'+transferMarkup(day,state.result)+weatherSlot(index)+
+      '</h3>'+transferMarkup(day,state.result)+(day.logistics?.arrivalAfterDay?'':weatherSlot(index))+
       '<ul class="composer-logistics caption">'+dayLogistics(day).map(item=>'<li>'+safe(item)+'</li>').join('')+'</ul>'+
       '<ul class="composer-stops">'+day.stops.map(stop=>{
         const selected=state.point===stop.id && state.pointDay===index;
@@ -661,7 +665,8 @@ export function mountComposer(container, api) {
         return '<li><button type="button" data-composer="stop" data-value="'+safe(stop.id)+'" data-day="'+index+'" aria-pressed="'+selected+'">'+
           '<time>'+safe(stop.start)+'–'+safe(stop.end)+'</time><span data-source-text>'+safe(name(stop))+'</span><small>'+safe(notes)+'</small></button>'+
           (selected?'<div class="composer-stop-actions"><a href="'+safe(stop.url)+'" target="_blank" rel="noopener noreferrer">'+tr('Источник сведений об объекте')+'</a>'+
-            (place?.officialUrl?'<a href="'+safe(place.officialUrl)+'" target="_blank" rel="noopener noreferrer">'+tr('Официальный сайт объекта')+'</a>':'')+
+            (place?.officialUrl && place.officialUrl!==stop.url?
+              '<a href="'+safe(place.officialUrl)+'" target="_blank" rel="noopener noreferrer">'+tr('Официальный сайт объекта')+'</a>':'')+
             (stop.leg?.minutes?'<span class="caption">'+tr('Переезд к точке · около {minutes} мин, {distance} км по прямой',{
               minutes:formatNumber(stop.leg.minutes),distance:formatNumber(stop.leg.distanceKm)})+'</span>':'')+
             (stop.required?'':'<button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>')+
@@ -672,7 +677,8 @@ export function mountComposer(container, api) {
     loadPlanWeather(find('#draft-timeline'),forecastDays(state.result,state.dirty),api);
     const mapDays=days.map(({day})=>state.mapDay!=='all' && day.stops.length ? {...day,transfer:undefined} : day);
     map?.update({places:visible,route:{...plan,days:mapDays},selectedId:state.point,
-      dayIndex:state.mapDay==='all'?0:Number(state.mapDay),geodata,frame:frame?'route':false,base:'streets',locale:getLocale(),showPlaces:true});
+      dayIndex:state.mapDay==='all'?0:Number(state.mapDay),geodata:localizedGeodata,
+      frame:frame?'route':false,base:'streets',locale:getLocale(),showPlaces:true});
     retainDraft();
   }
   function resultMarkup(focus=false) {
@@ -682,9 +688,11 @@ export function mountComposer(container, api) {
     const previousServices=find('#draft-services');
     if (previousServices) serviceView.open=previousServices.open;
     if (serviceView.city && !state.result.locations?.some(place=>place.name===serviceView.city)) serviceView.city='';
+    const {geodata}=state.result;
+    localizedGeodata={...geodata,attribution:geodata.attribution?.map(credit=>({...credit,label:t(credit.label)}))};
     find('#composer-result').innerHTML=draftMarkup(state.result,serviceView);
     paintServices();
-    map=createRouteMap(find('#draft-map'),{locale:getLocale(),onSelect(id,_place,context){
+    map=createRouteMap(find('#draft-map'),{locale:getLocale(),minZoom:0,onSelect(id,_place,context){
       if (pending?.feedback) {pending.controller.abort();finish(pending);}
       state.point=id;
       const day=context?.dayIndex;

@@ -55,14 +55,18 @@ test('South Sakhalinsk supports current and historical Chinese names in both bri
   }
 });
 
-test('a Chinese South Sakhalinsk brief schedules sourced food and lodging from the offline catalog',async()=>{
-  const brief='南萨哈林斯克三天，明天出发，十四人，中国团队，参观博物馆。';
+test('a Chinese South Sakhalinsk brief schedules a park and sourced food and lodging from the offline catalog',async()=>{
+  const brief='南萨哈林斯克三天，明天出发，十四人，中国团队。历史、博物馆、公园。';
   const [city]=await detectCities(brief);
   const result=await draftItinerary(
     {...parseBrief(brief,'2026-11-27'),cityId:city.id},{fetchImpl:offline});
   assert.equal(result.source.status,'snapshot');
   assert.equal(result.settings.market,'zh');
   assert.equal(result.settings.size,14);
+  const park=result.plan.days.flatMap(day=>day.stops).find(stop=>stop.id==='osm-relation-7809929');
+  assert.ok(park && park.type==='visit' && park.exposure==='outdoors');
+  assert.ok(result.plan.interestCoverage.some(({theme,count})=>theme==='nature' && count>0));
+  assert.equal(result.geodata.places[park.id].source,'https://www.openstreetmap.org/relation/7809929');
   assert.deepEqual(result.plan.days.map(day=>day.stops.some(stop=>stop.type==='food')),[true,true,true]);
   assert.deepEqual(result.plan.days.map(day=>day.stops.some(stop=>stop.type==='stay')),[true,true,false]);
   const amenities=result.places.filter(place=>['food','stay'].includes(place.kind));

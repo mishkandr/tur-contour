@@ -443,7 +443,8 @@ async function requestPois(city,fetchImpl) {
         ...(archived.kind!=='visit' ? {id:archived.id} : {}),
         ...(exposure ? {exposure} : {}),
         ...(archived.gastro===true ? {gastro:true} : {}),
-        ...(archived.geoUrl ? {officialUrl:archived.url,geoUrl:place.geoUrl ?? place.url} : {}),
+        ...(archived.geoUrl || (archived.kind!=='visit' && !saved.source.provider?.includes('Overpass')) ?
+          {officialUrl:archived.officialUrl ?? archived.url,geoUrl:place.geoUrl ?? place.url} : {}),
         ...(archived.dailyWindow ? {dailyWindow:archived.dailyWindow} : {}),
         ...(archived.weeklyWindows ? {weeklyWindows:archived.weeklyWindows,closedDates:archived.closedDates} : {}),
         tags:[...new Set([...place.tags,...archived.tags])]};
@@ -456,6 +457,7 @@ async function requestPois(city,fetchImpl) {
 
 function sameSite(place,archived) {
   if (place.kind!==archived.kind) return false;
+  if (place.id===archived.id) return true;
   const gap=distance(place.coordinates,archived.coordinates);
   if (gap>0.18) return false;
   return searchable(place).some(name=>searchable(archived).some(savedName=>{

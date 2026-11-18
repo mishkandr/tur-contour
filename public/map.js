@@ -1,5 +1,6 @@
 const pilotBounds = [[56.08, 40.30], [56.47, 40.62]];
 const fitOptions = { padding: [42, 42], maxZoom: 13, animate: false };
+const transferFitOptions = { ...fitOptions, padding: [66, 48] };
 const osmCredit = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 const samePoint = (a, b) => a[0] === b[0] && a[1] === b[1];
 const mapCopy = {
@@ -7,7 +8,7 @@ const mapCopy = {
     kinds:{visit:'Достопримечательность',food:'Питание',stay:'Размещение'},
     statuses:{blocked:'Ограничение',unknown:'Требуется проверка',ready:'Подходит по условиям'},
     zoomIn:'Приблизить',zoomOut:'Отдалить',showPlaces:'Показать объекты',sharedAddress:'Объекты по одному адресу',
-    nearby:'Объекты рядом',
+    nearby:'Объекты рядом',closePlaces:'Закрыть список объектов',
     keyboard:'Используйте стрелки для панорамирования, плюс и минус для изменения масштаба. Клавиша Tab переводит фокус на точки карты.',
     stops:(day,order)=>'День '+day+', точка '+order, alternative:'Другой вариант', changed:'Условия изменились',
   },
@@ -15,7 +16,7 @@ const mapCopy = {
     kinds:{visit:'Attraction',food:'Dining',stay:'Accommodation'},
     statuses:{blocked:'Restriction',unknown:'Needs confirmation',ready:'Meets the requirements'},
     zoomIn:'Zoom in',zoomOut:'Zoom out',showPlaces:'Show sites',sharedAddress:'Sites at the same address',
-    nearby:'Nearby sites',
+    nearby:'Nearby sites',closePlaces:'Close list of sites',
     keyboard:'Use the arrow keys to pan, plus and minus to zoom, and Tab to move to map markers.',
     stops:(day,order)=>'Day '+day+', stop '+order, alternative:'Alternative', changed:'Conditions changed',
   },
@@ -23,7 +24,7 @@ const mapCopy = {
     kinds:{visit:'景点',food:'餐饮',stay:'住宿'},
     statuses:{blocked:'有条件限制',unknown:'需要确认',ready:'满足条件'},
     zoomIn:'放大',zoomOut:'缩小',showPlaces:'查看地点',sharedAddress:'同一地址的地点',
-    nearby:'附近地点',
+    nearby:'附近地点',closePlaces:'关闭地点列表',
     keyboard:'使用方向键移动地图，使用加号和减号缩放，使用 Tab 键切换至地图标记。',
     stops:(day,order)=>'第'+day+'天，第'+order+'站', alternative:'备选方案', changed:'条件已变更',
   },
@@ -86,6 +87,7 @@ function routeGeometry(route, places, geodata, firstDay = 0) {
   const days = Array.isArray(route) ? [{ stops: route }] : route?.days ?? [];
   const stops = new Map();
   const segments = [];
+  const transferCities = new Map();
   let last;
 
   function connect(from, to, schematic = true) {
@@ -110,8 +112,12 @@ function routeGeometry(route, places, geodata, firstDay = 0) {
     let order = 0;
     if (value.transfer?.distanceType==='straight-line') {
       const {from,to}=value.transfer;
-      const origin=last?.city===from ? last.point : coordinates(geodata?.cities?.[from]);
-      const destination=coordinates(geodata?.cities?.[to]);
+      for (const city of [from,to]) {
+        const point=coordinates(geodata?.cities?.[city]);
+        if (point) transferCities.set(city,point);
+      }
+      const origin=last?.city===from ? last.point : transferCities.get(from);
+      const destination=transferCities.get(to);
       connect(origin,destination);
       if (destination) last={city:to,point:destination};
     }
@@ -136,7 +142,7 @@ function routeGeometry(route, places, geodata, firstDay = 0) {
       last = place;
     }
   }
-  return {stops,segments};
+  return {stops,segments,transferCities};
 }
 
 function segmentKey(points) {
@@ -145,14 +151,14 @@ function segmentKey(points) {
   return direct < reversed ? direct : reversed;
 }
 
-export function createRouteMap(element, { onSelect, onStatus, locale: initialLocale } = {}) {
+export function createRouteMap(element, { onSelect, onStatus, locale: initialLocale, minZoom = 6 } = {}) {
   const L = globalThis.L;
   if (!element || !L) return null;
 
   element.classList.add('route-map');
   const map = L.map(element, {
     zoomControl: false, attributionControl: false, scrollWheelZoom: false,
-    minZoom: 6, maxZoom: 18, zoomSnap: 0.5,
+    minZoom, maxZoom: 18, zoomSnap: 0.5,
   });
   const referencePane = map.createPane('routeBase');
   referencePane.style.zIndex = 205;
@@ -185,8 +191,8 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   let initialFrame = true;
   let selectedId;
   let changedIds = new Set();
-  let current = {stops:new Map(),segments:[]};
-  let alternative = {stops:new Map(),segments:[]};
+  let current = routeGeometry();
+  let alternative = routeGeometry();
   const markersByPlace = new Map();
   const markerElements = new Map();
   let showPlaces = true;
@@ -418,6 +424,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     const action = wholeCity ? copy.showPlaces : copy[type];
     const cityGroup = document.createElement('div');
     cityGroup.className = 'map-city';
+    if (wholeCity && current.transferCities.has(city)) cityGroup.classList.add('map-city--transfer');
     if (group.some(place => current.stops.has(place.id))) cityGroup.classList.add('map-city--route');
     if (group.some(place => changedIds.has(place.id))) cityGroup.classList.add('map-city--changed');
     if (group.some(place => place.id === selectedId)) cityGroup.classList.add('map-city--selected');
@@ -451,8 +458,17 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
         marker.closePopup();
         marker.getElement()?.focus({preventScroll:true});
       });
-      marker.bindPopup(contents);
-      marker.on('popupopen',()=>marker.getElement()?.setAttribute('aria-expanded','true'));
+      const {x:width,y:height}=map.getSize();
+      const maxWidth=Math.min(300,Math.max(60,width-80));
+      marker.bindPopup(contents,{
+        className:'map-group-popup',minWidth:Math.min(155,maxWidth),maxWidth,
+        maxHeight:Math.max(72,height-128),autoPanPaddingTopLeft:[8,8],
+        autoPanPaddingBottomRight:[8,68],keepInView:true,
+      });
+      marker.on('popupopen',({popup})=>{
+        marker.getElement()?.setAttribute('aria-expanded','true');
+        popup.getElement().querySelector('.leaflet-popup-close-button')?.setAttribute('aria-label',copy.closePlaces);
+      });
       marker.on('popupclose',()=>marker.getElement()?.setAttribute('aria-expanded','false'));
       marker.on('add',()=>marker.getElement()?.setAttribute('aria-expanded','false'));
       marker.on('click',event=>{
@@ -465,6 +481,24 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       });
     }
     marker.addTo(markers);
+  }
+
+  function drawUnscheduledCities(visible) {
+    const scheduled = new Set(visible.map(place => place.city));
+    for (const [city, point] of current.transferCities) {
+      if (scheduled.has(city)) continue;
+      const body = document.createElement('div');
+      body.className = 'map-city map-city--route map-city--transfer';
+      addLandmark(body,cityLabel(city)).className = 'map-city__name';
+      const dot = addLandmark(body,'·');
+      dot.className = 'map-city__count';
+      dot.setAttribute('aria-hidden','true');
+      const marker = L.marker(point,{
+        interactive:false,keyboard:false,
+        icon:L.divIcon({className:'map-marker',html:body,iconSize:[30,30],iconAnchor:[15,15]}),
+      });
+      marker.on('add',()=>{ marker.getElement().dataset.mapEndpoint=city; }).addTo(markers);
+    }
   }
 
   function drawStreetMarkers(places) {
@@ -493,6 +527,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     markerElements.clear();
     const visible = [...entries.values()].filter(place =>
       showPlaces || current.stops.has(place.id) || alternative.stops.has(place.id) || changedIds.has(place.id) || place.id === selectedId);
+    drawUnscheduledCities(visible);
     const cluster = map.getZoom() < 13;
     if (!cluster) {
       drawStreetMarkers(visible);
@@ -518,12 +553,13 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
       else drawPlace(place);
     }
     for (const [city, group] of cityGroups) {
-      if (group.length > 1) drawGroup(city,group,group.every(place=>samePoint(place.point,group[0].point))?'sharedAddress':'city');
+      if (current.transferCities.has(city)) drawGroup(city,group);
+      else if (group.length > 1) drawGroup(city,group,group.every(place=>samePoint(place.point,group[0].point))?'sharedAddress':'city');
       else drawPlace(group[0]);
     }
     for (const [city, entry] of Object.entries(geodata?.cities ?? {})) {
       const point = coordinates(entry);
-      if (!point || (cityGroups.get(city)?.length ?? 0) > 1) continue;
+      if (!point || current.transferCities.has(city) || (cityGroups.get(city)?.length ?? 0) > 1) continue;
       if (!cityGroups.has(city) && visible.some(place=>
         map.latLngToContainerPoint(point).distanceTo(map.latLngToContainerPoint(place.point)) < 100)) continue;
       const body = document.createElement('span');
@@ -539,12 +575,13 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   function fit({ routeOnly = false, allPlaces = false } = {}) {
     if (inactive) return;
     const activePoints = [...current.segments,...alternative.segments].flatMap(segment=>segment.points).concat(activeWalks().flat());
+    activePoints.push(...current.transferCities.values(),...alternative.transferCities.values());
     for (const id of new Set([...current.stops.keys(),...alternative.stops.keys(),...changedIds])) {
       if (entries.has(id)) activePoints.push(entries.get(id).point);
     }
     const focus = allPlaces ? [...entries.values()].map(place=>place.point) : routeOnly ? activePoints : [];
     const bounds = L.latLngBounds(focus.length ? focus : geodata?.bounds ?? pilotBounds);
-    if (bounds.isValid()) map.fitBounds(bounds, fitOptions);
+    if (bounds.isValid()) map.fitBounds(bounds, current.transferCities.size ? transferFitOptions : fitOptions);
   }
 
   function focusCity(city) {

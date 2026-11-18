@@ -5,7 +5,7 @@ import { defaultRoute, groupApplicationDeadline, objectsFrom, planRoute, preview
 import { mergePublishedConditions } from '../published-conditions.mjs';
 import { chineseItinerary, chineseItineraryText } from '../public/chinese-itinerary.mjs';
 import { createLocalPlaceCatalog } from '../city-overview.mjs';
-import { draftItinerary } from '../nationwide.mjs';
+import { draftItinerary, listCities } from '../nationwide.mjs';
 
 const load = name=>JSON.parse(readFileSync(new URL('../data/'+name+'.json',import.meta.url),'utf8'));
 const catalog=load('catalog');
@@ -41,6 +41,22 @@ test('the draft uses the published visit window before inserting the required mu
   assert.ok(!checks.some(check=>check.id==='dmitrovsky' && check.status==='blocked'));
   const saturday=draft.plan.days[0].stops.find(stop=>stop.id==='dmitrovsky');
   if (saturday) assert.ok(saturday.start>='11:00');
+});
+
+test('compares departures on one catalog and shows the required museum gained on another date',async()=>{
+  const local=createLocalPlaceCatalog(catalog,load('map'));
+  const officialCatalog=new Map(places.map(place=>[place.id,place]));
+  const {cities}=await listCities('Суздаль');
+  const suzdal=cities.find(city=>city.name==='Суздаль');
+  const result=await draftItinerary({cityId:'473247',additionalCityIds:[suzdal.id],date:'2026-11-23',size:8,days:2,
+    requiredPlaceIds:['palaty']},{local,officialCatalog,compareDates:true,
+    fetchImpl:async()=>Response.json({elements:[],query:{geosearch:[]}})});
+  assert.equal(result.current.required,0);
+  assert.equal(result.current.totalRequired,1);
+  assert.equal(result.datesChecked,7);
+  assert.equal(result.options.length,3);
+  assert.equal(result.options[0].required,1);
+  assert.deepEqual(result.options[0].gained,['Музейный центр «Палаты»']);
 });
 
 test('published preview is actionable without becoming approved supplier evidence',()=>{

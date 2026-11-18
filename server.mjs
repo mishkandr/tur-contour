@@ -30,6 +30,10 @@ const [catalog, originalAudit, changedAudit, regionalAudit, initial] = await Pro
 const withRegionalAudit = audit => ({...audit,objects:{...regionalAudit.objects,...audit.objects}});
 const baseline = withRegionalAudit(originalAudit);
 const alternateAudit = withRegionalAudit(changedAudit);
+const portfolioTraining = {
+  ...portfolioImpact(catalog,{...initial,audit:alternateAudit,savedRoutes:[]},baseline,initial.wiki,true),
+  change:{placeId:'suzdal-kremlin',before:baseline.objects['suzdal-kremlin'].capacity,after:alternateAudit.objects['suzdal-kremlin'].capacity},
+};
 const mapData = await load('map.json');
 const demoOffers = await load('demo-ota.json');
 const publishedConditions = mergePublishedConditions(catalog,await Promise.all([
@@ -272,6 +276,7 @@ function dashboard(snapshot) {
     decisions:snapshot.decisions ?? [],
     portfolio:portfolioImpact(catalog,snapshot,baseline,initial.wiki,true),
     portfolioVerified:portfolioImpact(catalog,snapshot,baseline,initial.wiki,false),
+    portfolioTraining,
     nights:{...statSummary(snapshot.stats.nights,[]),availableYears:snapshot.stats.nights.years},
     people:{...statSummary(snapshot.stats.people,[]),availableYears:snapshot.stats.people.years},
     recommendations:recommendations(places,snapshot,affected),
@@ -548,10 +553,12 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/stat-regions') return respond(response,200,{regions:await statisticsRegions()});
     if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
-    if (request.method==='POST' && path==='/api/draft') {
+    if (request.method==='POST' && (path==='/api/draft' || path==='/api/draft-dates')) {
       const officialCatalog = new Map(objectsFrom(catalog,state).map(place=>[place.id,place]));
-      const draft = await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog,officialCatalog});
-      return respond(response,200,{...draft,verification:verifyDraftStops(draft,officialCatalog)});
+      const compareDates = path==='/api/draft-dates';
+      const signal = compareDates ? clientSignal(response) : undefined;
+      const draft = await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog,officialCatalog,compareDates,signal});
+      return respond(response,200,compareDates ? draft : {...draft,verification:verifyDraftStops(draft,officialCatalog)});
     }
     if (request.method==='POST' && path==='/api/weather') return respond(response,200,await weatherForecast(await readBody(request)));
     if (request.method==='POST' && path==='/api/knowledge') {

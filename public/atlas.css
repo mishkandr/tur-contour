@@ -204,10 +204,23 @@
 .portfolio-head { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
 .portfolio-head h2 { margin: 0 0 6px; font-size: clamp(1.3rem, 2vw, 1.7rem); line-height: 1.15; letter-spacing: -.035em; }
 .portfolio-head p, .portfolio-count span, .portfolio-note { margin: 0; color: var(--muted); font-size: .84rem; }
-.portfolio-count strong { font-size: 1.45rem; line-height: 1.2; letter-spacing: -.04em; }
+.portfolio-count { display: grid; gap: 3px; min-width: 0; }
+.portfolio-count strong { font-size: 1.45rem; line-height: 1.2; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 .portfolio-count small { color: var(--muted); font-size: .69em; }
+.portfolio-baseline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.portfolio-baseline .portfolio-count { grid-template-rows: 1fr auto; padding: 10px 12px; border-radius: 6px; background: var(--paper); }
 .portfolio-grid { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr); align-items: start; gap: 12px; }
 .portfolio-scope { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.portfolio-scope .atlas-option { min-height: 44px; padding-inline: 12px; }
+.portfolio-page-head { align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 16px; }
+.portfolio-page-head .caption { margin-top: 3px; }
+.portfolio-back { display: inline-flex; min-height: 44px; align-items: center; font-size: .87rem; font-weight: 600; }
+.portfolio-main { margin-top: 0; padding: clamp(14px, 2.3vw, 25px); }
+.portfolio-main .portfolio-head { gap: 12px 20px; align-items: end; }
+.portfolio-main .portfolio-head h2 { margin-bottom: 3px; }
+.portfolio-empty p { margin-top: 4px; color: var(--muted); }
+.portfolio-coverage { padding: 0; margin: 14px 0; list-style: none; font-size: .85rem; color: var(--muted); }
+.portfolio-coverage li + li { margin-top: 4px; }
 .portfolio-options { display: grid; gap: 4px; }
 .portfolio-options button {
   display: flex;
@@ -303,4 +316,5 @@
   .atlas-map-shell--expanded { inset: 0; }
   .portfolio { padding: 12px; }
   .portfolio-grid { grid-template-columns: minmax(0, 1fr); }
+  .portfolio-main .portfolio-baseline { width: 100%; }
 }

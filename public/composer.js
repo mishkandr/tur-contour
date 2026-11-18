@@ -24,6 +24,19 @@ addLocaleMessages([
   ['Условия и источники','Conditions and sources','条件与来源'],
   ['Предельная дата заявки · {date}','Application deadline · {date}','申请截止日期 · {date}'],
   ['Сведения сверены {date}','Sources checked on {date}','资料核对日期 {date}'],
+  ['Сравнить даты выезда','Compare departure dates','比较出发日期'],
+  ['Рассчитать ближайшие даты','Check nearby dates','计算近期日期'],
+  ['Пересчитываем расписание на ближайшие даты…','Checking the schedule on nearby dates…','正在核查近期日期的日程…'],
+  ['После выбранной даты проверено {count} вариантов.','Checked {count} dates after the selected departure.','已核查所选出发日期之后的 {count} 个日期。'],
+  ['Обязательные точки {included}/{total}','Required stops {included}/{total}','必到地点 {included}/{total}'],
+  ['Посещения {visits} · обеды {meals} · ночёвки {nights}',
+    'Visits {visits} · lunches {meals} · overnight stays {nights}','参观 {visits} · 午餐 {meals} · 住宿 {nights}'],
+  ['Можно добавить','Can be included','可加入'],
+  ['Выпадает из программы','Drops out of the schedule','将从日程移除'],
+  ['Текущая дата','Current date','当前日期'],
+  ['Выбрать дату','Select date','选择日期'],
+  ['Пересчитать на {date}','Rebuild for {date}','重新编制 {date} 的行程'],
+  ['Свободные места и запись нужно подтвердить у объектов.','Confirm availability and reservations with the venues.','请向场馆确认名额和预订。'],
   ['Пересчитайте сохранённый маршрут для проверки остановок.','Rebuild the saved itinerary to check its stops.','请重新编制已保存的行程以核查各站。'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
   ['Пожелания к маршруту','Itinerary preferences','行程偏好'],
@@ -607,6 +620,30 @@ function draftStopChecks(result) {
   }).join('')+'</section>';
 }
 
+function draftDateReview(dirty) {
+  return '<details class="draft-date-review" id="draft-date-review"><summary>'+tr('Сравнить даты выезда')+'</summary>'+
+    '<div class="draft-date-feedback"><button class="button-quiet" type="button" data-composer="compare-dates"'+(dirty?' disabled':'')+'>'+
+    tr('Рассчитать ближайшие даты')+'</button><div class="composer-swap-progress" hidden></div><p class="caption composer-swap-status" role="status"></p>'+
+    '<div id="draft-date-options"></div></div></details>';
+}
+
+function draftDateOptions({current,options}) {
+  const metrics = row => [row.totalRequired ? tr('Обязательные точки {included}/{total}',{
+    included:formatNumber(row.required),total:formatNumber(row.totalRequired)}) : '',
+    tr('Посещения {visits} · обеды {meals} · ночёвки {nights}',{
+      visits:formatNumber(row.visits),meals:formatNumber(row.meals),nights:formatNumber(row.nights)}),
+  ].filter(Boolean).join(' · ');
+  const changes = (label,places) => places.length ? '<p><strong>'+tr(label)+'</strong> · <span data-source-text>'+
+    safe(places.join(', '))+'</span></p>' : '';
+  return '<ul class="draft-date-list">'+[current,...options].map((row,index)=>{
+    const date = formatDate(row.date);
+    return '<li><div><strong>'+(index===0?tr('Текущая дата')+' · ':'')+'<time datetime="'+safe(row.date)+'">'+safe(date)+'</time></strong>'+
+      '<p class="caption">'+metrics(row)+'</p>'+changes('Можно добавить',row.gained)+changes('Выпадает из программы',row.lost)+'</div>'+
+      (index===0?'':'<button class="button-quiet" type="button" data-composer="use-date" data-value="'+safe(row.date)+'" aria-label="'+
+        tr('Пересчитать на {date}',{date})+'">'+tr('Выбрать дату')+'</button>')+'</li>';
+  }).join('')+'</ul><p class="caption">'+tr('Свободные места и запись нужно подтвердить у объектов.')+'</p>';
+}
+
 function draftMarkup(result,serviceView,state) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
@@ -652,7 +689,7 @@ function draftMarkup(result,serviceView,state) {
     (plan.required.length?'<p class="planner-check-summary">'+tr('{count} из {total} обязательных точек в расписании',{
       count:formatNumber(requiredCount),total:formatNumber(plan.required.length)})+'</p>':'')+'<ul>'+
     plan.required.filter(item=>!item.scheduled).map(item=>'<li><span data-source-text>'+safe(requirementName(item,state.requiredServices))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
-    '</ul>'+draftDayRisks(result)+draftStopChecks(result)+publishedCheck(result)+'</section>'+
+    '</ul>'+draftDateReview(state.dirty)+draftDayRisks(result)+draftStopChecks(result)+publishedCheck(result)+'</section>'+
     '<div class="planner-sources">'+coverageMarkup(plan.interestCoverage)+'<h3>'+tr('Источники маршрута')+'</h3>'+
     '<ul class="composer-source">'+sources+'<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul></div>'+
     '</div></section>';
@@ -826,7 +863,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     submit.textContent=t(pending?.refining?'Собрать маршрут сейчас':state.result?'Пересчитать маршрут':'Собрать маршрут');
     find('[data-composer=close-editor]').disabled=Boolean(pending && !pending.feedback);
     find('[data-composer=refine]').disabled=loadingCity || Boolean(pending) || state.brief.trim().length<3;
-    for (const button of container.querySelectorAll('[data-composer=service-include],[data-composer=service-release]')) {
+    for (const button of container.querySelectorAll('[data-composer=service-include],[data-composer=service-release],[data-composer=compare-dates],[data-composer=use-date]')) {
       button.disabled=Boolean(pending) || state.dirty;
     }
   }
@@ -1088,6 +1125,22 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       }
     } catch(error) {
       if (isCurrent(request,revision)) showNote(error.message);
+    } finally {
+      finish(request);
+    }
+  }
+  async function compareDates(feedback) {
+    if (pending || state.dirty || !state.result) return;
+    const request=start('Пересчитываем расписание на ближайшие даты…',feedback);
+    const revision=state.revision;
+    try {
+      const result=await api('draft-dates',{...state.result.settings,replacements:state.replacements},'POST',{signal:request.controller.signal});
+      if (!isCurrent(request,revision)) return;
+      feedback.querySelector('#draft-date-options').innerHTML=draftDateOptions(result);
+      feedback.querySelector('.composer-swap-status').textContent=t('После выбранной даты проверено {count} вариантов.',{
+        count:formatNumber(result.datesChecked)});
+    } catch(error) {
+      if (isCurrent(request,revision)) feedback.querySelector('.composer-swap-status').textContent=t(error.message);
     } finally {
       finish(request);
     }
@@ -1384,6 +1437,18 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       return;
     }
     if (!state.result) return;
+    if (action==='compare-dates') {
+      void compareDates(button.closest('.draft-date-feedback'));
+      return;
+    }
+    if (action==='use-date' && !state.dirty && !pending) {
+      const form=find('#draft-input');
+      form.elements.date.value=value;
+      form.elements.date.dispatchEvent(new Event('input',{bubbles:true}));
+      setEditor(true);
+      void build(form,null,button.closest('.draft-date-feedback'));
+      return;
+    }
     if (action==='service-more') {
       const previous=serviceView.limit;
       serviceView.limit+=8;

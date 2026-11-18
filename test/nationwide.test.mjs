@@ -609,6 +609,33 @@ test('a two-day walking itinerary can pair the Tambov centre and a second local 
   }
 });
 
+test('a full itinerary favors distinct visits while keeping nearby memorials and museum branches available as exact pins',async()=>{
+  const [city]=(await listCities('Псков')).cities;
+  const [lat,lon]=city.coordinates;
+  const point=(id,name,offset,tags)=>({type:'node',id,lat:lat+offset,lon,tags:{name,...tags}});
+  const elements=[
+    point(1,'Дом-музей архитектора',.00012,{tourism:'museum'}),
+    point(2,'Архитектор',.00017,{historic:'memorial',artwork_type:'bust'}),
+    point(3,'Второй корпус музея',.00042,{tourism:'museum'}),
+    point(4,'Крепость на холме',.006,{historic:'castle'}),
+    point(5,'Городской ботанический сад',.0085,{leisure:'garden'}),
+    point(6,'Музей мостов',.0103,{tourism:'museum'}),
+    point(7,'Ресторан',.0029,{amenity:'restaurant'}),
+    point(8,'Гостиница',.0044,{tourism:'hotel'}),
+  ];
+  const input={...request,cityId:city.id,theme:'heritage',interests:['museum'],pace:'relaxed',transport:'walking'};
+  const options={fetchImpl:async()=>Response.json({elements})};
+  const draft=await draftItinerary({...input,requiredPlaceIds:['osm-node-1']},options);
+  const visits=draft.plan.days.flatMap(day=>day.stops.filter(stop=>stop.type==='visit'));
+  assert.deepEqual(new Set(visits.map(stop=>stop.id)),new Set([1,4,5,6].map(id=>'osm-node-'+id)));
+  assert.ok(visits.every(stop=>stop.status==='unknown' && stop.leg.mode==='walking'));
+  for (const id of ['osm-node-2','osm-node-3']) {
+    assert.ok(draft.places.some(place=>place.id===id));
+    const pinned=await draftItinerary({...input,requiredPlaceIds:['osm-node-1',id]},options);
+    assert.ok(pinned.plan.required.every(stop=>stop.scheduled));
+  }
+});
+
 test('a hotel with an official catalog listing keeps the same selection with or without live venue results',async()=>{
   const query={...request,cityId:'498817',requiredPlaceIds:['spb-saint-petersburg-hotel','spb-helvetia-hotel']};
   const live=async()=>Response.json({elements:[

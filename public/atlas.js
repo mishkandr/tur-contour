@@ -39,12 +39,35 @@ addLocaleMessages([
   ['Предварительное время','Provisional time','暂定时间'],
   ['Показать объекты на карте','Fit the visible places','显示地图上的地点'],
   ['Изменение','Change','变化'],
+  ['Эффект улучшений','Impact of improvements','改进措施的影响'],
+  ['К мониторингу','Back to monitoring','返回监测'],
+  ['Рабочие данные','Working data','工作数据'],
+  ['Учебный расчёт','Training scenario','教学情景计算'],
+  ['Нет рабочих программ на контроле.','No working itineraries are being monitored.','目前没有纳入监测的实际行程。'],
+  ['Для расчёта согласуйте программу с подтверждёнными условиями.','Approve an itinerary with confirmed conditions to calculate the impact.','请先批准一条已确认参观条件的行程，再计算改进效果。'],
+  ['Опубликованные условия · {count} объектов','Published conditions · {count} places','已公布参观条件 · {count} 个地点'],
+  ['Подтверждено поставщиками · {count} объектов','Confirmed by suppliers · {count} places','供应方已确认 · {count} 个地点'],
+  ['Проверить программу','Check an itinerary','核查行程'],
+  ['Открыть каталог объектов','Open the place catalogue','打开地点目录'],
+  ['Учебный расчёт недоступен.','The training scenario is unavailable.','教学情景计算暂不可用。'],
+  ['{place} · учебный лимит группы {before} → {after} чел.',
+    '{place} · training group limit {before} → {after} people','{place} · 教学情景的团队人数上限由 {before} 人降为 {after} 人'],
+  ['До снижения','Before the reduction','人数上限下调前'],
+  ['После снижения','After the reduction','人数上限下调后'],
+  ['{count} из {total}','{count} of {total}','{total} 个中的 {count} 个'],
+  ['Заменить недоступные остановки, сохранив даты, размер группы и требования.',
+    'Replace unavailable stops while keeping the dates, group size and requirements.','替换无法安排的停留点，保留日期、团队规模和要求。'],
+  ['Если музей подтвердит два последовательных сеанса, в каждой подгруппе будет до {limit} человек.',
+    'If the museum confirms two consecutive sessions, each subgroup can have up to {limit} people.','如果博物馆确认可连续安排两场参观，每个小组最多 {limit} 人。'],
+  ['Если объект вернёт прежний лимит в {limit} человек, остальные условия сохранятся.',
+    'If the place restores its previous limit of {limit} people, the other conditions will stay in place.','如果该地点恢复原先 {limit} 人的上限，其他条件维持不变。'],
   ['Черновик по опубликованным графикам. Запись, вместимость и сопровождение требуют подтверждения.',
     'Draft based on published opening hours. Booking, capacity and group support still need confirmation.',
     '草案依据公布的开放时间。预约、接待人数和团队服务仍需确认。'],
 ]);
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const local = (label, params) => esc(t(label, params));
 const dayDate = value => formatDate(value,{day:'numeric',month:'long'});
 const placeName = place => getLocale()==='zh' ? place.cn || place.name : getLocale()==='en' ? place.en || place.name : place.name;
 const programName = title => title.split(' → ').map(city=>t(city)).join(' → ');
@@ -88,7 +111,104 @@ function placeFitsDay(place,day) {
   return place.city===day.city && (!day.visitIds || day.visitIds.includes(place.id));
 }
 
-export function mountAtlas(container, initialData, geodata, { programId, placeId, initialLayer, pilot, restored, onOpenRoute, onOpenPlace }) {
+function portfolioScope(active, standalone) {
+  const training = standalone ? 'training' : 'demo';
+  return `<div class="portfolio-scope" role="group" aria-label="${local('Набор сравниваемых программ')}">
+    ${option(standalone?'Рабочие данные':'Рабочие','scenarioScope','verified',active==='verified')}
+    ${option(standalone?'Учебный расчёт':'Учебные','scenarioScope',training,active===training)}</div>`;
+}
+
+function portfolioPanel(data, view, standalone = false) {
+  const haveVerified = data.portfolioVerified?.total > 0;
+  const verified = view.scenarioScope === 'verified' && (standalone || haveVerified);
+  const training = standalone && !verified;
+  const portfolio = verified ? data.portfolioVerified : training ? data.portfolioTraining : data.portfolio;
+  const scenario = portfolio?.scenarios.find(item=>item.id===view.scenario) ?? portfolio?.scenarios[0];
+  const scopeLabel = verified ? 'Рабочие программы' : 'Учебные программы';
+  const title = standalone ? scopeLabel : 'Какие улучшения помогут';
+  const count = (value, label) => `<div class="portfolio-count"><span>${local(label)}</span>
+    <strong>${formatNumber(value)} <small>/ ${formatNumber(portfolio.total)}</small></strong></div>`;
+  const header = `<h2 id="portfolio-title">${local(title)}</h2>`;
+  if (standalone && verified && !haveVerified) {
+    return `<header class="portfolio-head">${header}</header><div class="portfolio-empty">
+      <strong>${local('Нет рабочих программ на контроле.')}</strong>
+      <p>${local('Для расчёта согласуйте программу с подтверждёнными условиями.')}</p>
+      <ul class="portfolio-coverage"><li>${local('Опубликованные условия · {count} объектов',{
+        count:formatNumber(data.publishedConditions?.objectCount ?? 0)})}</li><li>${local('Подтверждено поставщиками · {count} объектов',{
+        count:formatNumber(data.auditFeed?.objectCount ?? 0)})}</li></ul>
+      <div class="actions"><a class="button" href="#route?scope=pilot">${local('Проверить программу')}</a>
+        <a class="button-quiet" href="#catalog">${local('Открыть каталог объектов')}</a></div></div>`;
+  }
+  if (!portfolio || !scenario) return standalone ? header+`<p>${local('Учебный расчёт недоступен.')}</p>` : '';
+  const change = training ? portfolio.change : null;
+  const place = change && data.places?.find(item=>item.id===change.placeId);
+  const trainingChange = place && local('{place} · учебный лимит группы {before} → {after} чел.',{
+    place:placeName(place),before:formatNumber(change.before),after:formatNumber(change.after),
+  });
+  const status = (feasible, group)=>`<span class="portfolio-state ${feasible?'portfolio-state--feasible':''}">
+    <span class="sr-only">${local(group)}: </span><i aria-hidden="true"></i>${local(feasible?'Выполнима':'Требует проверки')}</span>`;
+  const signed = value=>value>0 ? '+'+formatNumber(value) : formatNumber(value);
+  let description = esc(scenario.description);
+  if (scenario.id==='replacement') description = local('Заменить недоступные остановки, сохранив даты, размер группы и требования.');
+  if (change && scenario.id==='split') description = local('Если музей подтвердит два последовательных сеанса, в каждой подгруппе будет до {limit} человек.',{
+    limit:formatNumber(change.after),
+  });
+  if (change && scenario.id==='capacity') description = local('Если объект вернёт прежний лимит в {limit} человек, остальные условия сохранятся.',{
+    limit:formatNumber(change.before),
+  });
+  return `<header class="portfolio-head"><div>${header}
+      <p>${trainingChange || (standalone?'':local(scopeLabel)+' · ')+local('Сравниваем один и тот же набор дат и групп.')}</p></div>
+      ${training ? `<div class="portfolio-baseline">${count(portfolio.baselineCount,'До снижения')}
+        ${count(portfolio.currentCount,'После снижения')}</div>` : count(portfolio.currentCount,'выполнимы сейчас')}</header>
+    ${!standalone && haveVerified ? portfolioScope(verified?'verified':'demo', false) : ''}
+    <div class="portfolio-grid"><div class="portfolio-options" role="group" aria-label="${local('Варианты улучшения')}">${portfolio.scenarios.map(item=>
+      `<button type="button" data-atlas="scenario" data-value="${esc(item.id)}" aria-pressed="${item.id===scenario.id}">
+        <span>${local(item.title)}</span><strong><span class="sr-only">${local('Изменение')}: </span>${signed(item.delta)}</strong></button>`).join('')}</div>
+    <div class="portfolio-insight"><div class="portfolio-result" role="status"><strong>${local('{count} из {total}',{
+      count:formatNumber(scenario.feasibleCount),total:formatNumber(portfolio.total),
+    })}</strong>
+      <span>${local('программ в этом сценарии')}</span></div>
+      <p>${description}</p>
+      <details><summary>${local('Результаты по программам')}</summary>
+        <ul class="portfolio-programs">${scenario.programs.map(item=>`<li><span><strong>${local(item.subtitle)}</strong><small>${esc(programName(item.title))}</small></span>
+          <div>${status(item.before,'Сейчас')}<span aria-hidden="true">→</span>${status(item.after,'В сценарии')}</div></li>`).join('')}</ul></details>
+    </div></div><p class="portfolio-note">${local('Расчёт отражает выполнимость наблюдаемых программ при указанных условиях. Наличие мест и запуск поездки подтверждает специалист.')}</p>`;
+}
+
+function mountPortfolio(container, initialData, city, restored) {
+  let data = initialData;
+  const view = {scenario:'split',scenarioScope:initialData.portfolioVerified?.total?'verified':'training',...restored};
+  const back = '#overview?'+new URLSearchParams({city:/^\d{1,12}$/u.test(city ?? '')?city:'473247',focus:'programmes'});
+  const paint = (open = false) => {
+    container.innerHTML = `<header class="atlas-heading portfolio-page-head"><div><h1>${local('Эффект улучшений')}</h1>
+      <p class="caption">${local(data.region)}</p></div><a class="portfolio-back" href="${esc(back)}">${local('К мониторингу')}</a></header>
+      ${portfolioScope(view.scenarioScope,true)}<section class="portfolio portfolio-main" id="atlas-portfolio" aria-labelledby="portfolio-title">
+      ${portfolioPanel(data,view,true)}</section>`;
+    if (open) container.querySelector('.portfolio-insight details')?.setAttribute('open','');
+  };
+  function onClick(event) {
+    const button = event.target.closest('[data-atlas]');
+    if (!button) return;
+    const {atlas:action,value} = button.dataset;
+    const isScope = action==='scenarioScope';
+    if (!isScope && action!=='scenario') return;
+    if (button.getAttribute('aria-pressed')==='true') return;
+    view[action]=value;
+    if (isScope) view.scenario=value==='verified'?'replacement':'split';
+    paint(!isScope && container.querySelector('.portfolio-insight details')?.open);
+    container.querySelector(`[data-atlas="${action}"][data-value="${CSS.escape(value)}"]`)?.focus({preventScroll:true});
+  }
+  container.addEventListener('click',onClick);
+  paint();
+  return {
+    context() { return {...view}; },
+    update(next) { data=next; paint(container.querySelector('.portfolio-insight details')?.open); },
+    destroy() { container.removeEventListener('click',onClick); },
+  };
+}
+
+export function mountAtlas(container, initialData, geodata, { programId, placeId, initialLayer, pilot, analysis, analysisCity, restored, onOpenRoute, onOpenPlace }) {
+  if (analysis) return mountPortfolio(container,initialData,analysisCity,restored);
   const activeProgram = initialData.affected.find(record=>record.id===programId);
   const workingPilot = pilot && {id:'working-pilot',settings:pilot.settings};
   const view = {
@@ -292,31 +412,6 @@ export function mountAtlas(container, initialData, geodata, { programId, placeId
         '<button type="button" class="button-quiet" data-atlas="open">Открыть программу <span aria-hidden="true">→</span></button>'}</div>`;
   }
 
-  function portfolioPanel() {
-    const haveVerified = data.portfolioVerified?.total > 0;
-    const verified = haveVerified && view.scenarioScope === 'verified';
-    const portfolio = verified ? data.portfolioVerified : data.portfolio;
-    const scenario = portfolio?.scenarios.find(item=>item.id===view.scenario) ?? portfolio?.scenarios[0];
-    if (!portfolio || !scenario) return '';
-    const sign = value=>value>0 ? '+'+value : String(value);
-    const status = (feasible, group)=>`<span class="portfolio-state ${feasible ? 'portfolio-state--feasible' : ''}">
-      <span class="sr-only">${esc(t(group))}: </span><i aria-hidden="true"></i>${esc(t(feasible?'Выполнима':'Требует проверки'))}</span>`;
-    return `<header class="portfolio-head"><div><h2 id="portfolio-title">Какие улучшения помогут</h2>
-      <p>${esc(t(verified ? 'Рабочие программы' : 'Учебные программы'))} · ${esc(t('Сравниваем один и тот же набор дат и групп.'))}</p></div>
-      <div class="portfolio-count"><strong>${portfolio.currentCount}<small> / ${portfolio.total}</small></strong><span>выполнимы сейчас</span></div></header>
-      ${haveVerified ? `<div class="portfolio-scope" role="group" aria-label="Набор сравниваемых программ">
-        ${option('Учебные','scenarioScope','demo',!verified)}${option('Рабочие','scenarioScope','verified',verified)}</div>` : ''}
-      <div class="portfolio-grid"><div class="portfolio-options" role="group" aria-label="Варианты улучшения">${portfolio.scenarios.map(item=>
-        `<button type="button" data-atlas="scenario" data-value="${esc(item.id)}" aria-pressed="${item.id===scenario.id}">
-          <span>${esc(item.title)}</span><strong><span class="sr-only">${esc(t('Изменение'))}: </span>${sign(item.delta)}</strong></button>`).join('')}</div>
-      <div class="portfolio-insight"><div class="portfolio-result"><strong>${scenario.feasibleCount} из ${portfolio.total}</strong><span>программ в этом сценарии</span></div>
-        <p>${esc(scenario.description)}</p>
-        <details><summary>Результаты по программам</summary>
-          <ul class="portfolio-programs">${scenario.programs.map(item=>`<li><span><strong>${esc(item.subtitle)}</strong><small>${esc(item.title)}</small></span>
-            <div>${status(item.before,'Сейчас')}<span aria-hidden="true">→</span>${status(item.after,'В сценарии')}</div></li>`).join('')}</ul></details>
-      </div></div><p class="portfolio-note">Расчёт отражает выполнимость наблюдаемых программ при указанных условиях. Наличие мест и запуск поездки подтверждает специалист.</p>`;
-  }
-
   function paint(frame) {
     const selected = record();
     const working = Boolean(selected && selected===workingPilot);
@@ -368,7 +463,7 @@ export function mountAtlas(container, initialData, geodata, { programId, placeId
     }
     const panel = find('#atlas-portfolio');
     const expanded = panel.querySelector('details')?.open;
-    panel.innerHTML = selected && !working ? portfolioPanel() : '';
+    panel.innerHTML = selected && !working ? portfolioPanel(data,view) : '';
     panel.hidden = !panel.firstElementChild;
     if (expanded && panel.querySelector('details')) panel.querySelector('details').open = true;
     find('[data-atlas=portfolio]').hidden = panel.hidden;

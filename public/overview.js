@@ -64,7 +64,7 @@ function recordList(records) {
       </div></li>`).join('')+'</ul>';
 }
 
-export function renderMonitoredProgrammes(data, view) {
+export function renderMonitoredProgrammes(data, view, cityId) {
   const programmes = data.affected ?? [];
   const scope = programmes.filter(record=>!record.settings.demo);
   const training = programmes.filter(record=>record.settings.demo);
@@ -76,8 +76,10 @@ export function renderMonitoredProgrammes(data, view) {
   const sortOrder = visible.slice().sort((left,right)=>Number(Boolean(right.programmes.length))-Number(Boolean(left.programmes.length)));
   const publishedCount = data.publishedConditions?.objectCount ?? 0;
   const verifiedCount = data.auditFeed?.objectCount ?? 0;
+  const comparisonLink = linkTo('impact',{analysis:'1',...(cityId ? {city:cityId} : {})});
   return `
-    <header class="ops-head"><h2>${local('Мониторинг программ · Владимирская область')}</h2></header>
+    <header class="ops-head"><h2>${local('Мониторинг программ · Владимирская область')}</h2>
+      ${action('Сравнить улучшения',comparisonLink,'button')}</header>
     <div class="ops-board">
       <section class="panel ops-log" aria-labelledby="ops-changes">
         <header class="section-head"><h2 id="ops-changes">${local('Изменения')}</h2><a href="#sources">${local('Журнал источников')}</a></header>

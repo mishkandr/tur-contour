@@ -54,3 +54,41 @@ test('city overview separates listed places, local forecast, regional statistics
   await assert.rejects(()=>overview('../'),{status:400});
   await assert.rejects(()=>overview('999999999999'),{status:404});
 });
+
+test('city identity, projects and forecast load while the national catalogue is waiting on providers',{timeout:5000},async()=>{
+  const {promise:started,resolve:markStarted}=Promise.withResolvers();
+  const {promise:providerWait,resolve:releaseProvider}=Promise.withResolvers();
+  const project={id:'sample-culture-project',coordinates:[55.8,49.1],url:'https://example.com/permit'};
+  const overview=createCityOverview({
+    local:{places:[]},
+    now:()=>Date.parse('2026-11-18T22:00:00Z'),
+    getCityProjects:async()=>({status:'published',records:[project]}),
+    weatherForecast:async({points})=>({days:points}),
+    fetchImpl:async()=>{
+      markStarted();
+      await providerWait;
+      return new Response(null,{status:503});
+    },
+  });
+  const catalogTask=overview('551487',{includeWeather:false,includeProjects:false});
+  try {
+    await started;
+    const [core,forecast]=await Promise.all([
+      overview('551487',{includeCatalog:false,includeWeather:false}),
+      overview('551487',{includeCatalog:false,includeProjects:false}),
+    ]);
+    assert.equal(core.city.name,'Казань');
+    assert.equal(core.region.scope,'federal-subject');
+    assert.deepEqual(core.places,[]);
+    assert.deepEqual(core.geodata.places[project.id],{coordinates:project.coordinates,source:project.url});
+    assert.equal(core.weather,null);
+    assert.equal(forecast.weather.days.length,3);
+    assert.equal(forecast.projects.status,'disabled');
+    assert.deepEqual(forecast.places,[]);
+  } finally {
+    releaseProvider();
+  }
+  const catalog=await catalogTask;
+  assert.ok(catalog.places.some(place=>place.id==='kazan-tatar-estate'));
+  assert.ok(catalog.catalogSources.some(source=>source.status==='snapshot'));
+});

@@ -1032,7 +1032,9 @@ function render(scroll=false) {
   const current = page();
   const query = params();
   const isRoutePilot = current==='route' && query.get('scope')==='pilot';
+  const isImprovementAnalysis = current==='impact' && query.get('analysis')==='1';
   const priorForm = isRoutePilot && pilotRouteHash===location.hash && review.dirty ? $('#route-form') : null;
+  const sourceLogOpen = current==='sources' && !scroll && $('.source-legacy')?.open;
   if (!isRoutePilot) cancelRouteAnalysis(true);
   if (isRoutePilot && pilotRouteHash!==location.hash) {
     const pilot = readPilotParameters(query);
@@ -1043,9 +1045,9 @@ function render(scroll=false) {
     }
   }
   pilotRouteHash=isRoutePilot ? location.hash : null;
-  document.title = t(labels[current])+' — ТурКонтур';
+  document.title = t(isImprovementAnalysis ? 'Эффект улучшений' : labels[current])+' — ТурКонтур';
   document.querySelectorAll('.top nav a').forEach(a=>{
-    if (a.hash==='#'+current) a.setAttribute('aria-current','page');
+    if (a.hash==='#'+(isImprovementAnalysis ? 'overview' : current)) a.setAttribute('aria-current','page');
     else a.removeAttribute('aria-current');
   });
   document.body.classList.toggle('atlas-page',current==='impact');
@@ -1062,6 +1064,8 @@ function render(scroll=false) {
         programId:query.get('program'),
         placeId:query.get('place'),
         initialLayer:query.get('layer'),
+        analysis:isImprovementAnalysis,
+        analysisCity:query.get('city'),
         pilot,
         restored:pilot && scroll && saved?.group!=='working-pilot' ? undefined : saved,
         onOpenRoute(settings,program,context) {
@@ -1076,13 +1080,16 @@ function render(scroll=false) {
   } else {
     if (atlas) saveMapContext();
     if (current==='overview') cityOverview=mountCityOverview(screen,api,{initialCity:query.get('city'),
-      renderChart:statisticChart,renderMonitoring:()=>renderMonitoredProgrammes(data,overview)});
+      renderChart:statisticChart,renderMonitoring:cityId=>renderMonitoredProgrammes(data,overview,cityId)});
     else if (current==='ask') knowledge=mountKnowledge(screen,api,options,query.get('region'),query.get('city'));
     else if (current==='route' && !isRoutePilot) composer=mountComposer(screen,api,query,{restoreWorkspace:!scroll});
     else {
       const plan = current==='route' ? currentRoutePlan() : null;
       screen.innerHTML = {catalog,route:()=>routeView(plan),stats,sources}[current]();
-      if (current==='sources') mountSourceConsole($('#source-console'),api);
+      if (current==='sources') {
+        if (sourceLogOpen) $('.source-legacy').open=true;
+        mountSourceConsole($('#source-console'),api);
+      }
       if (current==='stats') void loadStatRegions();
       if (plan) {
         if (priorForm) for (const field of $('#route-form').elements) {

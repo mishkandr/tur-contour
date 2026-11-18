@@ -385,8 +385,15 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .knowledge-items dd+dt{margin-top:.5rem}
 }
 
-.draft-logistics{border-block-start:1px solid var(--line);margin-block-start:12px}
-.draft-logistics>summary{min-height:44px;align-content:center;cursor:pointer;font-weight:680}
+.draft-logistics,.draft-date-review{border-block-start:1px solid var(--line);margin-block-start:12px}
+.draft-logistics>summary,.draft-date-review>summary{min-height:44px;align-content:center;cursor:pointer;font-weight:680}
+.draft-date-review[open]{padding-block-end:8px}
+.draft-date-review .composer-swap-status:empty{display:none}
+.draft-date-list{margin:8px 0;padding:0;list-style:none;border-block-start:1px solid var(--line)}
+.draft-date-list>li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;justify-content:space-between;padding:9px 0;border-block-end:1px solid var(--line)}
+.draft-date-list>li>div{min-width:0;flex:1 1 14rem;overflow-wrap:anywhere}
+.draft-date-list p{margin:3px 0;font-size:.84rem}
+.draft-date-list p strong{font-weight:650}
 .draft-logistics h4{margin:0;font-size:.95rem;line-height:1.4}
 .draft-logistics-day{margin-block-start:8px;min-width:0;overflow-wrap:anywhere}
 .draft-logistics-day+.draft-logistics-day{border-block-start:1px solid var(--line);margin-block-start:12px;padding-block-start:10px}

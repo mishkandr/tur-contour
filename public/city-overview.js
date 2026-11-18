@@ -12,9 +12,12 @@ addLocaleMessages([
   ['Города по этому запросу не найдены.','No cities match your search.','未找到符合搜索条件的城市。'],
   ['Поиск городов сейчас недоступен.','City search is currently unavailable.','目前无法查找城市。'],
   ['Загружаем данные города…','Loading city data…','正在加载城市数据…'],
+  ['Загружаем объекты города…','Loading city places…','正在加载城市地点…'],
+  ['Загружаем прогноз…','Loading the forecast…','正在加载天气预报…'],
   ['Не удалось загрузить данные города.','Could not load the city data.','无法加载城市数据。'],
   ['Повторить','Try again','重试'],
   ['Достопримечательности','Attractions','景点'],
+  ['Что посмотреть','Attractions','景点'],
   ['Рестораны','Restaurants','餐厅'],
   ['Отели','Hotels','酒店'],
   ['Планы и стройки','Projects and works','规划与建设'],
@@ -49,6 +52,8 @@ addLocaleMessages([
 const filters = {all:'Все места',visit:'Достопримечательности',food:'Рестораны',stay:'Отели',project:'Планы и стройки'};
 const stages={permit:'Разрешение на строительство',works:'Идут работы',planned:'Проект опубликован'};
 const cityCache=new Map();
+const catalogCache=new Map();
+const weatherCache=new Map();
 const seriesCache=new Map();
 const dataTtl=180_000;
 let lastChosenCity;
@@ -93,13 +98,13 @@ function cityChoicesMarkup(cities,short) {
     (!short && regionName(city)?'<small data-source-text>'+escape(regionName(city))+'</small>':'')+'</button></li>').join('')+'</ul>';
 }
 
-function weatherMarkup(weather) {
+function weatherMarkup(weather,{loading=false}={}) {
   const days=weather?.days??[];
-  return '<section class="panel city-weather"><h3>'+msg('Погода на три дня')+'</h3>'+
+  return '<section class="panel city-weather" id="city-overview-weather"><h3>'+msg('Погода на три дня')+'</h3>'+
     (days.length ? '<ul>'+days.map(day=>'<li><time datetime="'+escape(day.date)+'">'+
       escape(dateLabel(day.date,{weekday:'short',day:'numeric',month:'short'}))+'</time>'+
       '<span>'+escape(weatherSummary(day,weather.horizonDays,true))+'</span></li>').join('')+'</ul>' :
-      '<p class="caption">'+msg('Прогноз сейчас недоступен.')+'</p>')+
+      '<p class="caption" role="status">'+msg(loading?'Загружаем прогноз…':'Прогноз сейчас недоступен.')+'</p>')+
     (days.some(day=>day.status==='forecast')?'<p class="caption">'+sourceLink(weather.source?.url,'Open-Meteo')+'</p>':'')+'</section>';
 }
 
@@ -130,20 +135,17 @@ function placeInfoMarkup(place,cityId) {
     (route||source?'<div class="city-place-actions">'+route+source+'</div>':'')+'</div>';
 }
 
-function catalogUnavailable(data,sources) {
-  return sources.catalog && data.catalogSources.every(source=>source.status==='unavailable');
+function hasCatalog(data) {
+  return data.catalogSources.some(source=>source.status!=='unavailable');
 }
 
 function reportMarkup(data,places,sources,placeQuery) {
-  const {city,region,counts}=data;
+  const {city,region}=data;
   const regionLabel=region && (region.name===city.name?translated(city):translated(region));
-  const projectCount=data.projects?.status==='published' ? data.projects.records.length : '–';
-  const unavailable=catalogUnavailable(data,sources);
-  const totals={all:unavailable && !places.length ? '–' : places.length,...(unavailable?{}:counts),project:projectCount};
   const ask=new URLSearchParams({city:city.id,...(region?.id?{region:region.id}:{})});
   const entries=Object.entries(filters).filter(([key])=>key==='all' || (key==='project'?sources.projects:sources.catalog)).map(([key,label])=>'<button type="button" data-overview-filter="'+key+
     '" aria-pressed="'+(key==='all')+'">'+(key==='project'?'<span class="city-project-symbol" aria-hidden="true">◇</span> ':'')+
-    msg(label)+' <span>'+escape(Number.isFinite(totals[key])?formatNumber(totals[key]):'–')+'</span></button>');
+    msg(key==='visit'?'Что посмотреть':label)+' <span data-overview-count>–</span></button>');
   return '<section class="city-overview-report" aria-labelledby="overview-city-title">'+
     '<header class="city-summary"><div><h2 id="overview-city-title" tabindex="-1" data-source-text>'+escape(translated(city))+'</h2>'+
     (regionLabel && regionLabel!==translated(city)?'<p class="caption" data-source-text>'+escape(regionLabel)+'</p>':'')+'</div>'+
@@ -151,20 +153,19 @@ function reportMarkup(data,places,sources,placeQuery) {
     '" class="button" id="city-overview-route">'+msg('Собрать маршрут')+'</a>'+
     '<a class="button-quiet" href="#ask?'+escape(ask)+'">'+msg('Вопрос по городу')+'</a></div></header>'+
     (sources.catalog || sources.projects ? '<section class="city-overview-inventory" aria-label="'+msg('Места и проекты')+'">'+
-    (unavailable?'<div class="city-catalog-unavailable"><p class="caption" role="status">'+msg('Каталог города временно недоступен.')+'</p>'+
-    '<button type="button" class="button-quiet" data-overview-retry>'+msg('Повторить')+'</button></div>':'')+
+    (sources.catalog?'<div id="city-overview-catalog-status" hidden></div>':'')+
     '<div class="city-inventory-filters" role="group" aria-label="'+msg('Места и проекты')+'">'+entries.join('')+'</div>'+
-    (places.length?'<label class="field city-place-search"><span class="sr-only">'+msg('Найти место по названию')+'</span>'+
+    (sources.catalog || places.length?'<label class="field city-place-search"><span class="sr-only">'+msg('Найти место по названию')+'</span>'+
     '<input id="overview-place-query" type="search" maxlength="120" autocomplete="off" value="'+escape(placeQuery)+
     '" placeholder="'+msg('Найти место по названию')+'" aria-controls="city-overview-rows"></label>':'')+
     '<div class="city-inventory-layout"><div id="city-overview-map" role="region" aria-label="'+msg('Карта города')+'"></div>'+
     '<div id="city-overview-objects"><div id="city-overview-place" aria-live="polite"></div><div id="city-overview-rows"></div></div></div>'+
-    (sources.catalog ? '<p class="caption city-inventory-scope">'+msg('Объекты в городе и окрестностях')+'</p>'+catalogSourcesMarkup(data.catalogSources):'')+'</section>':'')+
+    (sources.catalog ? '<p class="caption city-inventory-scope">'+msg('Объекты в городе и окрестностях')+'</p><div id="city-overview-catalog-sources"></div>':'')+'</section>':'')+
     '<div class="city-conditions">'+(sources.statistics?'<section class="panel city-demand"><div class="city-demand-head"><h3>'+msg('Размещение в регионе')+
     '</h3><label class="field"><span class="sr-only">'+msg('Показатель')+'</span><select id="overview-city-metric">'+
     '<option value="people">'+msg('Размещённые лица')+'</option><option value="nights">'+msg('Ночёвки')+'</option></select></label></div>'+
     (regionLabel?'<p class="caption">'+msg('Показатели по всему региону')+' · <span data-source-text>'+escape(regionLabel)+'</span></p>':'')+
-    '<div id="city-overview-demand"></div></section>':'')+(sources.weather?weatherMarkup(data.weather):'')+'</div></section>';
+    '<div id="city-overview-demand"></div></section>':'')+(sources.weather?weatherMarkup(null,{loading:true}):'')+'</div></section>';
 }
 
 function demandMarkup(series,renderChart) {
@@ -207,6 +208,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   let limit=placeLimit();
   let cityId;
   let metric='people';
+  let catalogPending=false;
 
   function updateOverviewLink() {
     const params=new URLSearchParams(location.hash.split('?')[1]);
@@ -244,6 +246,31 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       [place.name,place.en,place.cn,...(place.aliases ?? [])].some(label=>searchText(label).includes(needle))));
   }
 
+  function collectPlaces() {
+    places=[...data.places,...data.projects.records.map(place=>({...place,kind:'project',city:data.city.name}))];
+  }
+
+  function paintInventory() {
+    const available=hasCatalog(data);
+    const totals={
+      all:catalogPending || (sources.catalog && !available && !places.length) ? null : places.length,
+      ...(available ? data.counts : {}),
+      project:data.projects.status==='published' ? data.projects.records.length : null,
+    };
+    for (const count of container.querySelectorAll('[data-overview-count]')) {
+      const value=totals[count.parentElement.dataset.overviewFilter];
+      count.textContent=Number.isFinite(value)?formatNumber(value):'–';
+    }
+    if (!sources.catalog) return;
+    const status=find('#city-overview-catalog-status');
+    status.hidden=available && !catalogPending;
+    status.className=catalogPending?'city-place-search':'city-catalog-unavailable';
+    status.innerHTML=status.hidden?'':'<p class="caption" role="status">'+
+      msg(catalogPending?'Загружаем объекты города…':'Каталог города временно недоступен.')+'</p>'+
+      (catalogPending?'':'<button type="button" class="button-quiet" data-overview-catalog-retry>'+msg('Повторить')+'</button>');
+    find('#city-overview-catalog-sources').innerHTML=catalogSourcesMarkup(data.catalogSources);
+  }
+
   function paintPlaces(frame=false) {
     const visible=visiblePlaces();
     const hits=visible.slice(0,limit);
@@ -255,7 +282,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       msg(place.kind==='project'?stages[place.stage]??stages.planned:filters[place.kind])+'</small></button></li>').join('')+'</ul>'+
       (visible.length>hits.length?'<button type="button" class="button-quiet" data-overview-next>'+
         msg('Показать ещё {count}',{count:formatNumber(Math.min(8,visible.length-hits.length))})+'</button>':'') :
-      filter!=='project' && catalogUnavailable(data,sources) ? '' :
+      filter!=='project' && sources.catalog && !hasCatalog(data) ? '' :
       '<p class="caption" role="status">'+msg(placeQuery.trim()?'По этому названию ничего не найдено.' :
         filter==='project' && data.projects?.status!=='published' ?
         'По этому городу пока нет записей из подключённых источников проектов.' :
@@ -302,6 +329,50 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     }
   }
 
+  async function requestCityPart(id,parts,cache,signal,cacheable=()=>true) {
+    const query=new URLSearchParams({cityId:id,...parts});
+    const key=query.toString();
+    const cached=getCached(cache,key);
+    if (cached) return cached;
+    try {
+      const result=await api('city-overview?'+query,undefined,'GET',{signal});
+      if (!signal.aborted && cacheable(result)) addCached(cache,key,result);
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
+  function loadCatalog(id,signal) {
+    return requestCityPart(id,{projects:'0',weather:'0'},catalogCache,signal,hasCatalog);
+  }
+
+  function revealPlace(id,placeId) {
+    if (!placeId) return;
+    requestAnimationFrame(()=>{
+      if (mounted && cityId===id && selected===placeId) find('.city-place-info')?.scrollIntoView({block:'nearest'});
+    });
+  }
+
+  async function fillCatalog(request,id,signal) {
+    const result=await request;
+    if (!mounted || signal.aborted) return;
+    const hadPlace=Boolean(find('.city-place-info'));
+    catalogPending=false;
+    if (result) {
+      data.places=result.places;
+      data.counts=result.counts;
+      data.catalogSources=result.catalogSources;
+      data.geodata={...result.geodata,places:{...data.geodata.places,...result.geodata.places}};
+    }
+    collectPlaces();
+    if (hasCatalog(data) && selected && !visiblePlaces().some(place=>place.id===selected)) selected=null;
+    updateOverviewLink();
+    paintInventory();
+    paintPlaces(!hadPlace);
+    if (!hadPlace) revealPlace(id,selected);
+  }
+
   async function selectCity(id,{focus=false,reveal=false,category,placeId,nameQuery}={}) {
     if (!/^\d{1,12}$/u.test(id)) return;
     clearTimeout(queryTimer);
@@ -312,9 +383,10 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     map=null;
     data=null;
     cityId=id;
-    filter='all';
+    filter=Object.hasOwn(filters,category) && (category==='project'?sources.projects:sources.catalog) ? category : 'all';
     placeQuery=nameQuery?.slice(0,120) ?? '';
-    selected=null;
+    selected=placeId;
+    catalogPending=sources.catalog;
     limit=placeLimit();
     monitor.hidden=true;
     monitor.replaceChildren();
@@ -323,52 +395,51 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     report.innerHTML='<p class="caption" role="status">'+msg('Загружаем данные города…')+'</p>';
     const controller=new AbortController();
     cityRequest=controller;
-    try {
-      const query=new URLSearchParams({cityId:id});
-      for (const name of ['catalog','projects','weather']) if (!sources[name]) query.set(name,'0');
-      const cacheKey=query.toString();
-      const cached=getCached(cityCache,cacheKey);
-      const response=cached??await api('city-overview?'+query,undefined,'GET',{signal:controller.signal});
-      if (!mounted || controller.signal.aborted) return;
-      data=response;
-      if (!cached && !catalogUnavailable(data,sources)) addCached(cityCache,cacheKey,data);
-      const {city,geodata,projects}=data;
-      lastChosenCity=id;
-      places=[...(sources.catalog?data.places??[]:[]),...(sources.projects?projects?.records??[]:[])
-        .map(place=>({...place,kind:'project',city:city.name}))];
-      input.value=translated(city);
-      const params=new URLSearchParams(location.hash.split('?')[1]);
-      if (Object.hasOwn(filters,category) && (category==='project'?sources.projects:sources.catalog)) filter=category;
-      if (visiblePlaces().some(place=>place.id===placeId)) selected=placeId;
-      updateOverviewLink();
-      report.innerHTML=reportMarkup(data,places,sources,placeQuery);
-      const mapElement=find('#city-overview-map');
-      if (mapElement && geodata) {
-        map=createRouteMap(mapElement,{locale:getLocale(),minZoom:0,zoomPosition:'topright',
-          onSelect(placeId,place,{keyboard}){
-            inspectPlace(placeId,{keyboard});
-          }});
-      } else if (mapElement) mapElement.hidden=true;
-      if (mapElement) paintPlaces(true);
-      const metricPicker=find('#overview-city-metric');
-      if (metricPicker) metricPicker.value=metric;
-      if (data.region?.id==='83') {
-        monitor.innerHTML=renderMonitoring();
-        monitor.hidden=false;
-        if (params.get('focus')==='programmes') find('#ops-programmes')?.focus();
-      }
-      const title=find('#overview-city-title');
-      if (focus) title.focus();
-      if (reveal && window.matchMedia('(max-width: 520px)').matches) title.scrollIntoView({block:'start'});
-      if (selected) requestAnimationFrame(()=>{
-        if (mounted && cityId===id && selected===placeId) find('.city-place-info')?.scrollIntoView({block:'nearest'});
-      });
-      void loadStatistic();
-    } catch {
-      if (!mounted || controller.signal.aborted) return;
+    const {signal}=controller;
+    const coreRequest=requestCityPart(id,{catalog:'0',weather:'0',...(sources.projects?{}:{projects:'0'})},cityCache,signal);
+    const catalogRequest=sources.catalog ? loadCatalog(id,signal) : null;
+    const weatherRequest=sources.weather ? requestCityPart(id,{catalog:'0',projects:'0'},weatherCache,signal,
+      result=>result.weather?.days?.some(day=>day.status==='forecast')) : null;
+    const core=await coreRequest;
+    if (!mounted || signal.aborted) return;
+    if (!core) {
+      controller.abort();
       report.innerHTML='<p class="caption" role="status">'+msg('Не удалось загрузить данные города.')+
         '</p><button type="button" class="button-quiet" data-overview-retry>'+msg('Повторить')+'</button>';
+      return;
     }
+    data={...core};
+    collectPlaces();
+    const loadedPlace=visiblePlaces().some(place=>place.id===selected);
+    if (!catalogPending && !loadedPlace) selected=null;
+    lastChosenCity=id;
+    input.value=translated(data.city);
+    const params=new URLSearchParams(location.hash.split('?')[1]);
+    updateOverviewLink();
+    report.innerHTML=reportMarkup(data,places,sources,placeQuery);
+    const mapElement=find('#city-overview-map');
+    if (mapElement) {
+      map=createRouteMap(mapElement,{locale:getLocale(),minZoom:0,zoomPosition:'topright',
+        onSelect(placeId,place,{keyboard}){inspectPlace(placeId,{keyboard});}});
+      paintInventory();
+      paintPlaces(true);
+    }
+    const metricPicker=find('#overview-city-metric');
+    if (metricPicker) metricPicker.value=metric;
+    if (data.region?.id==='83') {
+      monitor.innerHTML=renderMonitoring(id);
+      monitor.hidden=false;
+      if (params.get('focus')==='programmes') find('#ops-programmes')?.focus();
+    }
+    const title=find('#overview-city-title');
+    if (focus) title.focus();
+    if (reveal && window.matchMedia('(max-width: 520px)').matches) title.scrollIntoView({block:'start'});
+    if (loadedPlace) revealPlace(id,selected);
+    void loadStatistic();
+    if (catalogRequest) void fillCatalog(catalogRequest,id,signal);
+    if (weatherRequest) void weatherRequest.then(result=>{
+      if (mounted && !signal.aborted) find('#city-overview-weather').outerHTML=weatherMarkup(result?.weather);
+    });
   }
 
   function onInput(event) {
@@ -412,6 +483,10 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       container.querySelectorAll('[data-overview-place]')[previous]?.focus();
     } else if (Object.hasOwn(button.dataset,'overviewRetry')) {
       void selectCity(cityId,{focus:true,category:filter,placeId:selected,nameQuery:placeQuery});
+    } else if (Object.hasOwn(button.dataset,'overviewCatalogRetry')) {
+      catalogPending=true;
+      paintInventory();
+      void fillCatalog(loadCatalog(cityId,cityRequest.signal),cityId,cityRequest.signal);
     }
   }
 
@@ -441,7 +516,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   else void search('');
 
   return {refreshMonitoring(){
-    if (!monitor.hidden) monitor.innerHTML=renderMonitoring();
+    if (!monitor.hidden) monitor.innerHTML=renderMonitoring(cityId);
   },destroy(){
     mounted=false;
     clearTimeout(queryTimer);

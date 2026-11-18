@@ -36,6 +36,9 @@ test('the request flow updates evidence, checks routes and persists analyst deci
 
   const initial = (await request('/api/state')).payload;
   assert.equal(initial.portfolio.currentCount,2);
+  assert.equal(initial.portfolioTraining.baselineCount,2);
+  assert.equal(initial.portfolioTraining.currentCount,1);
+  assert.equal(initial.portfolioTraining.scenarios.find(item=>item.id==='split').delta,1);
   assert.equal(initial.auditFeed.state,'pending');
   assert.equal(initial.places.length,30);
   assert.equal(initial.publishedConditions.objectCount,28);
@@ -71,6 +74,7 @@ test('the request flow updates evidence, checks routes and persists analyst deci
   assert.equal(tracked.id,'group-cn');
   assert.equal(first.payload.data.affected.length,2);
   assert.equal(first.payload.data.portfolio.currentCount,2);
+  assert.deepEqual(first.payload.data.portfolioTraining,initial.portfolioTraining);
   assert.deepEqual(tracked.currentPlan,replacement.plan);
   const stored = JSON.parse(await readFile(join(directory,'state.json'),'utf8'));
   assert.equal(stored.decisions.length,1);

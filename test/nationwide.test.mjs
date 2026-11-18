@@ -426,6 +426,23 @@ test('provider aliases can satisfy a canonical required name without duplicate s
   assert.ok(result.places.find(place=>place.id==='osm-node-301').aliases.includes('Казанский кремль'));
 });
 
+test('a nearby exact alias of the curated Tambov embankment merges without conflating other places',async()=>{
+  const fetchImpl=async url=>{
+    if (!String(url).includes('wikipedia.org')) throw new Error('Overpass unavailable');
+    return Response.json({query:{geosearch:[
+      {pageid:820,title:'Набережная улица (Тамбов)',lat:52.713456,lon:41.471525},
+      {pageid:821,title:'Набережная улица Центральная',lat:52.713456,lon:41.471525},
+    ]}});
+  };
+  const [city]=await detectCities('Два дня в Тамбове');
+  const result=await draftItinerary({...request,cityId:city.id},{fetchImpl});
+  const merged=result.places.find(place=>place.id==='ruwiki-820');
+  assert.ok(merged.sourceIds.includes('tambov-tsna'));
+  assert.ok(merged.aliases.includes('Набережная Цны'));
+  assert.equal(result.places.some(place=>place.id==='tambov-tsna'),false);
+  assert.ok(result.places.some(place=>place.id==='ruwiki-821'));
+});
+
 test('fallback labels add crafts and pilgrimage only when site names are explicit',async()=>{
   const {cities}=await listCities('Иркутск');
   const fetchImpl=async url=>{
@@ -546,6 +563,39 @@ test('Hermitage hours apply to the selected day and retain the mandatory museum 
   const hermitage=result.plan.days[1].stops.find(stop=>stop.id==='Q132783');
   assert.ok(hermitage.start>='11:00');
   assert.equal(hermitage.status,'unknown');
+  assert.deepEqual(hermitage.openingHours,{opens:'11:00',closes:'20:00'});
+});
+
+test('a two-day walking itinerary can pair the Tambov centre and a second local area with suitable lunch stops',async()=>{
+  const [city]=(await listCities('Тамбов')).cities;
+  const [latitude,longitude]=city.coordinates;
+  const point=(id,name,latOffset,lonOffset,tags)=>({
+    type:'node',id,lat:latitude+latOffset,lon:longitude+lonOffset,tags:{name,...tags},
+  });
+  const records=[
+    ...Array.from({length:7},(_,i)=>point(100+i,'Исторический объект '+(i+1),
+      0.0005+i*.00016,i*.0001,{historic:'monument'})),
+    ...Array.from({length:3},(_,i)=>point(200+i,'Парк '+(i+1),0.013+i*.001,
+      0.002+i*.0004,{leisure:'park'})),
+    point(301,'Гостиница',0.0009,0.0004,{tourism:'hotel'}),
+    point(302,'Ресторан центра',0.0008,0.0004,{amenity:'restaurant'}),
+    point(303,'Ресторан рядом с парком',0.0136,0.0024,{amenity:'restaurant'}),
+  ];
+  const result=await draftItinerary({...request,cityId:city.id,days:2,date:'2026-11-21',transport:'walking',
+    theme:'heritage',interests:['nature'],size:8,required:['Исторический объект 1']},
+    {fetchImpl:async()=>Response.json({elements:records})});
+  const [first,second]=result.plan.days;
+  assert.equal(first.focus.theme,'heritage');
+  assert.equal(second.focus.theme,'nature');
+  assert.ok(first.stops.some(stop=>stop.id==='osm-node-100' && stop.required));
+  assert.ok(first.stops.filter(stop=>stop.type==='visit').every(stop=>stop.coordinates[0]-latitude<0.002));
+  assert.ok(second.stops.filter(stop=>stop.type==='visit' && stop.coordinates[0]-latitude>0.01).length>=2);
+  assert.equal(second.logistics.lunch.id,'osm-node-303');
+  for (const day of [first,second]) {
+    assert.ok(day.focus.placeIds.every(id=>day.stops.some(stop=>stop.id===id)));
+    assert.ok(day.stops.every(stop=>stop.leg.mode==='walking' && stop.leg.distanceKm<=2.6 &&
+      stop.status==='unknown' && !stop.openingHours));
+  }
 });
 
 test('a hotel with an official catalog listing keeps the same selection with or without live venue results',async()=>{

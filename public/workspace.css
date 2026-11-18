@@ -162,7 +162,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .planner-switch button{min-height:46px;padding:8px 12px;border:0;border-bottom:3px solid transparent;background:none;
   color:var(--muted);text-align:start;font-size:.9rem;font-weight:650;line-height:1.25}
 .planner-switch button:hover{color:var(--ink);background:var(--bg)}
-.planner-switch button[aria-pressed=true]{border-color:var(--accent);color:var(--strong);background:var(--light);font-weight:740}
+.planner-switch button[aria-pressed=true]{border-bottom-color:var(--accent);color:var(--strong);background:var(--light);font-weight:740}
 .planner-workarea{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px;margin-block-start:14px}
 .planner-workarea>*{min-width:0}
 .planner-workarea:not([data-view=schedule]) .planner-schedule,
@@ -193,6 +193,9 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-map-frame .atlas-map-top button{min-height:44px}
 .composer-map-scene{height:clamp(295px,57svh,580px);position:relative;isolation:isolate;background:#e7ebdf}
 #draft-map{position:absolute;inset:0;background:#e7ebdf}
+@media(pointer:coarse){
+  #draft-map .leaflet-control-zoom a{width:44px;height:44px;line-height:44px}
+}
 .composer-day+.composer-day{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
 .composer-day h3{font-size:1rem;line-height:1.35}
 .day-weather{display:grid;gap:3px;margin:6px 0 9px;line-height:1.5}
@@ -201,6 +204,8 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .day-weather-risk{border-inline-start:2px solid var(--accent);padding-inline-start:9px;margin:3px 0}
 .day-weather-alternative{min-height:40px;text-align:start;white-space:normal}
 .day-weather-source{font-size:.76rem}
+.day-weather[data-weather-compact] summary{cursor:pointer;min-height:36px;align-content:center}
+.day-weather[data-weather-compact] details>p{margin-inline-start:1rem}
 .composer-output[data-dirty=true] .day-weather,
 .composer-output[data-dirty=true] .composer-alternatives{display:none}
 .composer-services h3{margin-block-end:10px}
@@ -224,8 +229,11 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-day-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .composer-day-head #draft-days{gap:6px}
 .composer-day-head #draft-days button{min-height:44px}
-.composer-logistics{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;padding:0;list-style:none}
-.composer-logistics li{margin:0}
+.composer-day-focus{color:var(--muted);font-size:.86rem;margin:4px 0}
+.composer-missing-services{min-height:44px;text-align:start}
+#draft-map-stop{display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:space-between;align-items:center;
+  padding:4px 12px;font-size:.88rem}
+#draft-map-stop button{min-height:44px;text-align:start}
 .composer-transfer{margin-block:7px 10px;padding:7px 10px;border-inline-start:2px solid var(--line);font-size:.8rem}
 .composer-transfer p{margin:0}
 .composer-transfer p+p{margin-block-start:3px}
@@ -263,12 +271,23 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .planner-workarea[data-view=schedule] .composer-map-frame{display:block}
 }
 @media(max-width:520px){
-  .planner-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:0;gap:0}
-  .planner-switch button:nth-child(n+3){border-top:1px solid var(--line)}
-  .planner-switch button:nth-child(even){border-inline-start:1px solid var(--line)}
-  .planner-heading .itinerary-tabs{flex-wrap:wrap;gap:0}
-  .composer-form [name=brief]{font-size:max(1rem,16px)}
-  .planner-toolbar-actions button{flex:1 1 auto}
+  .planner-heading{gap:4px;margin-block-end:10px}
+  .planner-heading .itinerary-tabs{display:grid;grid-template-columns:max-content minmax(0,1fr);align-items:stretch;width:100%}
+  .planner-heading .itinerary-tabs a{display:flex;align-items:center;min-height:44px;padding-inline:8px}
+  .composer-form{gap:10px;padding:12px}
+  .planner-brief-entry{gap:6px}
+  .planner-editor-head{min-height:44px;padding:6px 12px}
+  .planner-editor-actions{padding-block-start:8px}
+  .composer-form [name=brief]{height:98px;font-size:max(1rem,16px)}
+  .composer-title{padding:12px;gap:8px}
+  .composer-title .caption{margin-block-start:4px}
+  .planner-toolbar-actions{width:100%;gap:6px}
+  .planner-toolbar-actions button{flex:1 1 0;min-width:0;min-height:44px;padding-inline:6px;text-align:center;line-height:1.2}
+  .planner-switch{display:grid;grid-template-columns:1.12fr .87fr 1fr 1fr;padding:0;gap:0}
+  .planner-switch button{min-width:0;min-height:44px;padding:5px 2px;text-align:center;font-size:.8rem;line-height:1.2}
+  .planner-switch button+button{border-inline-start:1px solid var(--line)}
+  .planner-workarea{gap:8px;margin-block-start:8px}
+  .composer-map-scene{height:clamp(235px,47svh,385px)}
 }
 .atlas-search{margin-top:12px}
 .atlas-inspect-fields{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;margin-top:.7rem}
@@ -356,7 +375,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .composer-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
   .composer-fields .field:nth-child(3){grid-column:1/-1}
   .composer-title{align-items:start;flex-direction:column}
-  .composer-stops li>button{grid-template-columns:8ch minmax(0,1fr)}
+  .composer-stops li>button{grid-template-columns:8ch minmax(0,1fr);align-items:baseline;row-gap:3px}
   .composer-stops button small{grid-column:2}
   .composer-stop-actions{padding-inline-start:8px}
   .knowledge-items{grid-template-columns:1fr;gap:.2rem}

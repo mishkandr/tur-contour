@@ -2,6 +2,7 @@ import { addLocaleMessages, formatDate, formatNumber, t } from '/locale.js';
 
 addLocaleMessages([
   ['Погода','Weather','天气'],
+  ['Прогноза пока нет','No forecast yet','暂无天气预报'],
   ['Загружаем прогноз погоды…','Loading the weather forecast…','正在加载天气预报…'],
   ['На эту дату прогноз ещё недоступен. Сервис показывает ближайшие {days} дней.',
     'The forecast is not available for this date yet. The service shows the next {days} days.','该日期暂无预报。系统提供未来 {days} 天的天气预报。'],
@@ -44,23 +45,23 @@ const checkedTime = day => Number.isFinite(Date.parse(day.checkedAt)) ? t('Пр�
 }) : '';
 const sourceUrl = source => source?.url==='https://open-meteo.com/' ? source.url : '';
 
-export function weatherSlot(index) {
-  return '<div class="day-weather caption" data-weather-day="'+index+'"></div>';
+export function weatherSlot(index,{compact=false}={}) {
+  return '<div class="day-weather caption" data-weather-day="'+index+'"'+(compact?' data-weather-compact':'')+'></div>';
 }
 
 function temperature(value) {
   return formatNumber(value,{style:'unit',unit:'celsius',maximumFractionDigits:0});
 }
 
-function weatherSummary(day, horizonDays) {
+function weatherSummary(day, horizonDays, compact=false) {
   if (day?.status==='past') return t('Дата уже прошла.');
   if (day?.status==='out-of-range') return t('На эту дату прогноз ещё недоступен. Сервис показывает ближайшие {days} дней.',{days:formatNumber(horizonDays)});
   if (day?.status!=='forecast') return t('Прогноз сейчас недоступен.');
   const spread = [day.lowC,day.highC].filter(Number.isFinite);
   const temperatures = spread.length===2 && spread[0]!==spread[1] ? spread.map(temperature).join(' – ') : spread.map(temperature)[0];
   return [conditions[day.condition] && t(conditions[day.condition]),temperatures,
-    Number.isFinite(day.precipitationChance) && t('Вероятность осадков до {percent}',{percent:formatNumber(day.precipitationChance/100,{style:'percent'})}),
-    Number.isFinite(day.gustKmh) && t('Порывы до {speed} км/ч',{speed:formatNumber(day.gustKmh,{maximumFractionDigits:0})}),
+    !compact && Number.isFinite(day.precipitationChance) && t('Вероятность осадков до {percent}',{percent:formatNumber(day.precipitationChance/100,{style:'percent'})}),
+    !compact && Number.isFinite(day.gustKmh) && t('Порывы до {speed} км/ч',{speed:formatNumber(day.gustKmh,{maximumFractionDigits:0})}),
   ].filter(Boolean).join(' · ') || t('Прогноз сейчас недоступен.');
 }
 
@@ -89,7 +90,11 @@ function weatherView(element, day, source, horizonDays, context, index) {
   const status = day?.status ?? 'unavailable';
   element.dataset.weatherStatus = status;
   const summary = '<p><strong>'+t('Погода')+'</strong> · '+escapeHtml(weatherSummary(day,horizonDays))+'</p>';
-  if (status!=='forecast') {element.innerHTML=summary;return;}
+  const compact = element.hasAttribute('data-weather-compact');
+  if (status!=='forecast') {
+    element.innerHTML=compact ? '<p>'+t('Погода')+' · '+t('Прогноза пока нет')+'</p>' : summary;
+    return;
+  }
   const attribution = sourceUrl(source) ? '<a target="_blank" rel="noopener noreferrer" href="'+sourceUrl(source)+'">Open-Meteo</a>' : '';
   const detail = [attribution,escapeHtml(checkedTime(day))].filter(Boolean).join(' · ');
   const risk = weatherRisk(day,context.outdoors);
@@ -98,9 +103,13 @@ function weatherView(element, day, source, horizonDays, context, index) {
     ' data-composer="weather-alternatives" data-value="'+escapeHtml(suggestion.stop.id)+'" data-day="'+index+'">'+
       escapeHtml(t('Посмотреть замены для «{place}»',{place:suggestion.name})) :
     ' data-action="select-variant" data-variant="'+escapeHtml(suggestion.variant)+'">'+t('Посмотреть другой вариант программы'))+'</button>' : '';
-  element.innerHTML = summary+(risk ? '<div class="day-weather-risk"><p><strong>'+risk.label+
+  const riskMarkup=(risk ? '<div class="day-weather-risk"><p><strong>'+risk.label+
     '</strong>'+(risk.issues?' · '+escapeHtml(risk.issues):'')+'</p><p>'+risk.action+'</p>'+alternative+'</div>' : '')+
     (detail?'<p class="day-weather-source">'+detail+'</p>':'');
+  if (compact) {
+    const shortSummary = [t('Погода'),weatherSummary(day,horizonDays,true),risk?.label].filter(Boolean).join(' · ');
+    element.innerHTML='<details><summary>'+escapeHtml(shortSummary)+'</summary>'+summary+riskMarkup+'</details>';
+  } else element.innerHTML=summary+riskMarkup;
 }
 
 export function loadPlanWeather(container, days, api) {
@@ -130,7 +139,7 @@ export function loadPlanWeather(container, days, api) {
     }
   };
   if (entry.pending) {
-    for (const element of slots) element.textContent=t('Загружаем прогноз погоды…');
+    for (const element of slots) element.textContent=t(element.hasAttribute('data-weather-compact')?'Погода':'Загружаем прогноз погоды…');
     void entry.result.then(render);
   } else render(entry.value);
 }

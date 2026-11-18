@@ -166,8 +166,14 @@ h1, .atlas-heading h1 {
 }
 
 @media (max-width: 760px) {
-  .top nav { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-  .top nav a { grid-column: span 3; padding-inline: 4px; line-height: 1.15; font-size: .86rem; overflow-wrap: anywhere; }
+  .top-inner { gap: 2px 8px; padding: 4px clamp(10px, 2.4vw, 18px) 6px; }
+  .top nav { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+  .top nav a, .top nav a[href="#ask"] {
+    grid-column: span 3;
+    padding-inline: 2px;
+    line-height: 1.2;
+    font-size: .8rem;
+  }
   .top nav a:nth-child(n+5) { grid-column: span 4; }
 }
 
@@ -175,28 +181,26 @@ h1, .atlas-heading h1 {
   .top nav svg { display: none; }
 }
 
-.ops-head { align-items: end; margin-block-end: 19px; }
-.ops-head .ops-kicker { color: var(--muted); margin-block-end: 6px; }
-.ops-head-actions { gap: 8px; }
+.ops-head { align-items: center; margin-block-end: 16px; }
 .ops-head-actions .button { background: var(--accent); }
 .ops-head-actions .button:hover { background: var(--strong); }
-.ops-head-actions .button-quiet { color: var(--strong); background: var(--white); border-color: var(--line); }
 .ops-head-actions a { white-space: normal; }
 
-.ops-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  background: var(--white);
-  border-color: var(--line);
-  margin-block-end: 16px;
+.ops-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  margin-top: 16px;
+  padding-block: 4px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .85rem;
 }
 
-.ops-metrics a { align-content: start; gap: 4px; padding: 11px 16px 12px; overflow-wrap: anywhere; }
-.ops-metrics a + a { border-color: var(--line); }
-.ops-metrics a:hover { background: var(--light); }
-.ops-metrics a span { color: var(--muted); }
-.ops-metrics strong { font-size: 1.6rem; font-weight: 750; letter-spacing: -.045em; }
-.ops-metrics .ops-check { font-size: clamp(.94rem, 1.3vw, 1.2rem); margin: 0; min-height: 1.6em; }
-.ops-metrics small { font-size: .79rem; }
+.ops-conditions a { display: inline-flex; flex-wrap: wrap; column-gap: 4px; align-items: center; min-height: 44px; }
+.ops-source-check, .ops-monitor-count { margin-block: 0 12px; }
+.ops-empty { margin-block: 12px 4px; color: var(--muted); }
 
 .ops-board {
   grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);
@@ -211,8 +215,9 @@ h1, .atlas-heading h1 {
 .ops-board .ops-readout { grid-area: readout; }
 .ops-board .ops-monitor { grid-area: monitor; margin: 0; }
 .ops-board .panel { background: var(--white); min-height: 0; padding: clamp(13px, 1.45vw, 20px); }
-.ops-board .section-head { align-items: baseline; margin-bottom: 12px; }
+.ops-board .section-head { align-items: center; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .ops-board .section-head h2, .ops-readout h2 { font-size: 1.13rem; font-weight: 730; }
+.ops-board .section-head a { display: inline-flex; align-items: center; min-height: 44px; white-space: normal; }
 .ops-readout h2 { font-family: var(--display); margin: 2px 0 12px; letter-spacing: -.025em; }
 .ops-readout h3, .ops-monitor h3 { font-size: .91rem; }
 .ops-board .ops-readout { border-inline-start: 3px solid var(--accent); }
@@ -223,24 +228,12 @@ h1, .atlas-heading h1 {
 .ops-change { padding-inline: 6px; }
 .ops-change:hover, .ops-change[aria-pressed=true] { background: var(--light); border-color: #bed6d1; }
 .ops-linked li a, .ops-program-actions a { display: inline-flex; min-height: 44px; align-items: center; }
+.ops-training { margin-top: 12px; padding: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
 .ops-training summary { min-height: 44px; align-content: center; }
 
 @media (max-width: 760px) {
   .ops-head { align-items: stretch; gap: 12px; margin-block-end: 12px; }
-  .ops-head-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
-  .ops-head-actions a { text-align: center; padding-inline: 7px; }
-  .ops-metrics a { padding: 10px 9px; }
-  .ops-metrics small { font-size: .73rem; }
   .ops-board, .ops-board:not(:has(.ops-readout)) { grid-template-columns: minmax(0, 1fr); }
   .ops-board { grid-template-areas: "log" "readout" "monitor"; }
   .ops-board:not(:has(.ops-readout)) { grid-template-areas: "log" "monitor"; }
-}
-
-@media (max-width: 430px) {
-  .ops-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ops-metrics a:last-child {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    border-color: var(--line);
-  }
 }

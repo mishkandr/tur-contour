@@ -3,6 +3,7 @@ import { createRouteMap } from '/map.js';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, localizeDom, t } from '/locale.js';
 
 addLocaleMessages([
+  ['Карта объектов Владимирской области','Map of places in Vladimir Oblast','弗拉基米尔州地点地图'],
   ['Объекты и условия','Places and conditions','地点与参观条件'],
   ['Программа на карте','Itinerary shown on map','地图上的行程'],
   ['Все объекты региона','All places in the region','本地区所有地点'],
@@ -103,7 +104,7 @@ export function mountAtlas(container, initialData, geodata, { programId, placeId
   const pilotLink = pilot ? '#route?'+pilotParameters(pilot.settings,pilot.variantId) : null;
   container.innerHTML = `
     <div class="atlas-heading">
-      <div><p class="ops-kicker">Владимирская область</p><h1>Карта объектов</h1></div>
+      <h1>${esc(t('Карта объектов Владимирской области'))}</h1>
       <div class="atlas-heading-actions">
       <button class="button-quiet" type="button" data-atlas="portfolio" hidden>Сравнить условия <span aria-hidden="true">↓</span></button>
       <a class="button" href="${esc(pilotLink ?? '#route')}">${esc(t(pilotLink?'Вернуться к проверке':'Собрать маршрут'))} <span aria-hidden="true">↗</span></a></div>

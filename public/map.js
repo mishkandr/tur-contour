@@ -151,7 +151,7 @@ function segmentKey(points) {
   return direct < reversed ? direct : reversed;
 }
 
-export function createRouteMap(element, { onSelect, onStatus, locale: initialLocale, minZoom = 6 } = {}) {
+export function createRouteMap(element, { onSelect, onStatus, locale: initialLocale, minZoom = 6, zoomPosition = 'bottomright' } = {}) {
   const L = globalThis.L;
   if (!element || !L) return null;
 
@@ -166,7 +166,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   labelPane.style.zIndex = 380;
   map.createPane('routeTraffic').style.zIndex = 390;
   const attribution = L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(map);
-  const zoom = L.control.zoom({ position: 'bottomright' }).addTo(map);
+  const zoom = L.control.zoom({ position: zoomPosition }).addTo(map);
   L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 90 }).addTo(map);
   const baseLayer = L.layerGroup().addTo(map);
   const labels = L.layerGroup().addTo(map);
@@ -196,6 +196,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   const markersByPlace = new Map();
   const markerElements = new Map();
   let showPlaces = true;
+  let groupByCity = true;
   let inactive = false;
   let locale;
   let copy;
@@ -528,7 +529,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     const visible = [...entries.values()].filter(place =>
       showPlaces || current.stops.has(place.id) || alternative.stops.has(place.id) || changedIds.has(place.id) || place.id === selectedId);
     drawUnscheduledCities(visible);
-    const cluster = map.getZoom() < 13;
+    const cluster = groupByCity && map.getZoom() < 13;
     if (!cluster) {
       drawStreetMarkers(visible);
       if (key || focusId) (markerElements.get(key) ?? markersByPlace.get(focusId) ?? element).focus({preventScroll:true});
@@ -581,7 +582,13 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     }
     const focus = allPlaces ? [...entries.values()].map(place=>place.point) : routeOnly ? activePoints : [];
     const bounds = L.latLngBounds(focus.length ? focus : geodata?.bounds ?? pilotBounds);
-    if (bounds.isValid()) map.fitBounds(bounds, current.transferCities.size ? transferFitOptions : fitOptions);
+    if (!bounds.isValid()) return;
+    const options=current.transferCities.size ? transferFitOptions : fitOptions;
+    if (zoomPosition==='topright') {
+      const [x,y]=options.padding;
+      const creditHeight=attribution.getContainer().offsetHeight;
+      map.fitBounds(bounds,{...options,paddingTopLeft:[x,y],paddingBottomRight:[Math.max(x,48),Math.max(y,creditHeight+20)]});
+    } else map.fitBounds(bounds,options);
   }
 
   function focusCity(city) {
@@ -594,7 +601,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
   function update({
     places, geodata: mapData, route, alternative: comparison,
     selectedId: selected, changedIds: changed, showPlaces: show = true, base: nextBase = 'scheme', frame = false, dayIndex = 0,
-    locale: nextLocale = locale,
+    locale: nextLocale = locale, groupByCity: groupCities = true,
   } = {}) {
     if (inactive) return;
     if (mapData !== geodata) {
@@ -607,6 +614,7 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     current = routeGeometry(route,entries,geodata,dayIndex);
     alternative = routeGeometry(comparison,entries,geodata,dayIndex);
     showPlaces = show;
+    groupByCity = groupCities;
     setLocale(nextLocale);
     setBase(nextBase);
     if (initialFrame || frame) {

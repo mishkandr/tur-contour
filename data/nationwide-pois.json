@@ -7,6 +7,172 @@
     "provider": "Опубликованные координаты"
   },
   "cities": {
+    "484646": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "tambov-regional-museum",
+          "name": "Тамбовский областной краеведческий музей",
+          "en": "Tambov Regional Museum of Local History",
+          "cn": "坦波夫州地方志博物馆",
+          "aliases": ["Краеведческий музей", "Tambov Local History Museum"],
+          "coordinates": [52.725064, 41.453801],
+          "category": "museum",
+          "weeklyWindows": [[600, 1080], null, [600, 1080], [600, 1080], [600, 1080], [600, 1080], [600, 1080]],
+          "url": "https://tmbmuseum.ru/"
+        },
+        {
+          "id": "tambov-art-gallery",
+          "name": "Тамбовская областная картинная галерея",
+          "en": "Tambov Regional Art Gallery",
+          "cn": "坦波夫州美术馆",
+          "aliases": ["Картинная галерея", "Tambov Art Gallery"],
+          "coordinates": [52.724639, 41.455975],
+          "category": "museum",
+          "weeklyWindows": [[600, 1080], [600, 1260], null, [600, 1080], [600, 1080], [600, 1080], [600, 1080]],
+          "url": "https://visit-tambov.ru/places/kartinnaya-galereya"
+        },
+        {
+          "id": "tambov-cathedral-square",
+          "name": "Соборная площадь Тамбова",
+          "en": "Tambov Cathedral Square",
+          "cn": "坦波夫主教座堂广场",
+          "aliases": ["Соборная площадь", "Cathedral Square"],
+          "coordinates": [52.727235, 41.457646],
+          "category": "heritage",
+          "url": "https://visit-tambov.ru/places/sobornaya_ploschad"
+        },
+        {
+          "id": "tambov-arbat",
+          "name": "Тамбовский Арбат",
+          "en": "Tambov Arbat",
+          "cn": "坦波夫阿尔巴特步行街",
+          "aliases": ["Тамбовский арбат", "Коммунальная улица", "Kommunalnaya Street"],
+          "coordinates": [52.721977, 41.441108],
+          "category": "heritage",
+          "url": "https://visit-tambov.ru/places/kommunalnaya"
+        },
+        {
+          "id": "tambov-chicherin",
+          "name": "Дом-музей Г. В. Чичерина",
+          "en": "Georgy Chicherin House Museum",
+          "cn": "格奥尔基·契切林故居博物馆",
+          "aliases": ["Дом Чичерина", "Музей Чичерина", "Chicherin House"],
+          "coordinates": [52.715248, 41.460724],
+          "category": "museum",
+          "weeklyWindows": [[600, 1080], null, [600, 1080], [600, 1080], [600, 1080], [600, 1080], [600, 1080]],
+          "url": "https://visit-tambov.ru/places/dmchicherina"
+        },
+        {
+          "id": "tambov-catholic-church",
+          "name": "Римско-католическая церковь в Тамбове",
+          "en": "Roman Catholic Church in Tambov",
+          "cn": "坦波夫罗马天主教堂",
+          "aliases": ["Костёл", "Храм Воздвижения Святого Креста", "Roman Catholic Church"],
+          "coordinates": [52.71408, 41.45846],
+          "category": "pilgrimage",
+          "dailyWindow": [600, 1080],
+          "url": "https://visit-tambov.ru/places/katolicheskaya-cerkov"
+        },
+        {
+          "id": "tambov-tsna",
+          "name": "Набережная реки Цны",
+          "en": "Tsna River Embankment",
+          "cn": "茨纳河滨水步道",
+          "aliases": ["Набережная Цны", "Набережная улица", "Набережная улица (Тамбов)", "Tsna Embankment", "Naberezhnaya Street"],
+          "coordinates": [52.711356, 41.471525],
+          "category": "park",
+          "url": "https://visit-tambov.ru/places/naberejnaya"
+        },
+        {
+          "id": "tambov-aseyev",
+          "name": "Музейный комплекс «Усадьба Асеевых»",
+          "en": "Aseyev Estate Museum",
+          "cn": "阿谢耶夫庄园博物馆",
+          "aliases": ["Усадьба Асеевых", "Асеевский дворец", "Aseyev Estate"],
+          "coordinates": [52.707157, 41.477798],
+          "category": "museum",
+          "url": "https://mk-aseeva.ru/?action=user_excursions",
+          "geoUrl": "https://visit-tambov.ru/places/usadba_aseeva"
+        },
+        {
+          "id": "tambov-druzhba",
+          "name": "Лесопарк «Дружба»",
+          "en": "Druzhba Forest Park",
+          "cn": "友谊森林公园",
+          "aliases": ["Парк Дружба", "Лыжероллерная трасса", "Druzhba Park"],
+          "coordinates": [52.713139, 41.483831],
+          "category": "park",
+          "url": "https://5verst.ru/tambov/course/"
+        },
+        {
+          "id": "tambov-akhlebinovskaya-grove",
+          "name": "Южный парк «Ахлебиновская роща»",
+          "en": "Akhlebinovskaya Grove",
+          "cn": "阿赫列比诺夫斯卡亚树林",
+          "aliases": ["Ахлебиновская роща", "Южный парк Тамбова"],
+          "coordinates": [52.688005, 41.458562],
+          "category": "park",
+          "url": "https://t.me/s/mintur68/3411"
+        },
+        {
+          "id": "tambov-puppet-theatre",
+          "name": "Тамбовский государственный театр кукол",
+          "en": "Tambov State Puppet Theatre",
+          "cn": "坦波夫国立木偶剧院",
+          "aliases": ["Театр кукол", "Puppet Theatre"],
+          "coordinates": [52.721771, 41.453411],
+          "category": "family",
+          "url": "https://www.culture.ru/institutes/21630/tambovskii-gosudarstvennyi-teatr-kukol",
+          "geoUrl": "https://tambov.vibirai.ru/teatry/teatr_kukol-897082"
+        },
+        {
+          "id": "tambov-azimut",
+          "name": "AZIMUT Отель Тамбов",
+          "en": "AZIMUT Hotel Tambov",
+          "cn": "坦波夫阿兹穆特酒店",
+          "aliases": ["Азимут", "Гостиница Галерея", "Azimut Hotel"],
+          "coordinates": [52.719579, 41.453514],
+          "category": "stay",
+          "url": "https://azimuthotels.com/ru/tambov/azimut-hotel-tambov"
+        },
+        {
+          "id": "tambov-derzhavinskaya",
+          "name": "Гостиница «Державинская»",
+          "en": "Derzhavinskaya Hotel",
+          "cn": "杰尔扎温斯卡亚酒店",
+          "aliases": ["Державинская", "Derzhavinskaya"],
+          "coordinates": [52.7353, 41.450881],
+          "category": "stay",
+          "url": "https://tambov-hotel.ru/contacts.html"
+        },
+        {
+          "id": "tambov-debut",
+          "name": "Ресторан «Дебют» на Советской",
+          "en": "Debut Restaurant on Sovetskaya Street",
+          "cn": "苏维埃街德比尤特餐厅",
+          "aliases": ["Дебют", "Debut Restaurant"],
+          "coordinates": [52.718044, 41.459002],
+          "category": "food",
+          "gastro": true,
+          "dailyWindow": [660, 1440],
+          "url": "https://debut68.ru/",
+          "geoUrl": "https://www.zr.ru/content/articles/954625-v-gosti-k-volku-i-nevalyashkam/"
+        },
+        {
+          "id": "tambov-marfa",
+          "name": "Ресторан-сыроварня Marfa",
+          "en": "Marfa Restaurant and Cheese Dairy",
+          "cn": "玛尔法奶酪工坊餐厅",
+          "aliases": ["Марфа", "Marfa", "Сыроварня Марфа"],
+          "coordinates": [52.709773, 41.512459],
+          "category": "food",
+          "gastro": true,
+          "url": "https://plestambov.ru/restaurant",
+          "geoUrl": "https://www.zr.ru/content/articles/954625-v-gosti-k-volku-i-nevalyashkam/"
+        }
+      ]
+    },
     "498817": {
       "checkedAt": "2026-11-18",
       "places": [

@@ -366,7 +366,9 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       data.geodata={...result.geodata,places:{...data.geodata.places,...result.geodata.places}};
     }
     collectPlaces();
-    if (hasCatalog(data) && selected && !visiblePlaces().some(place=>place.id===selected)) selected=null;
+    if (hasCatalog(data) && selected) {
+      selected=visiblePlaces().find(place=>place.id===selected || place.sourceIds?.includes(selected))?.id ?? null;
+    }
     updateOverviewLink();
     paintInventory();
     paintPlaces(!hadPlace);

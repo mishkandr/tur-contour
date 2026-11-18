@@ -48,15 +48,17 @@ test('compares departures on one catalog and shows the required museum gained on
   const officialCatalog=new Map(places.map(place=>[place.id,place]));
   const {cities}=await listCities('Суздаль');
   const suzdal=cities.find(city=>city.name==='Суздаль');
+  const name='Здание Присутственных мест. "Палаты"';
+  const elements=[{type:'relation',id:7209239,center:{lat:56.1283933,lon:40.4102325},tags:{name,tourism:'museum'}}];
   const result=await draftItinerary({cityId:'473247',additionalCityIds:[suzdal.id],date:'2026-11-23',size:8,days:2,
-    requiredPlaceIds:['palaty']},{local,officialCatalog,compareDates:true,
-    fetchImpl:async()=>Response.json({elements:[],query:{geosearch:[]}})});
+    requiredPlaceIds:['osm-relation-7209239']},{local,officialCatalog,compareDates:true,
+    fetchImpl:async()=>Response.json({elements,query:{geosearch:[]}})});
   assert.equal(result.current.required,0);
   assert.equal(result.current.totalRequired,1);
   assert.equal(result.datesChecked,7);
   assert.equal(result.options.length,3);
   assert.equal(result.options[0].required,1);
-  assert.deepEqual(result.options[0].gained,['Музейный центр «Палаты»']);
+  assert.deepEqual(result.options[0].gained,[name]);
 });
 
 test('published preview is actionable without becoming approved supplier evidence',()=>{

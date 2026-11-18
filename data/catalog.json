@@ -1,6 +1,6 @@
 [
   {"id":"dmitrovsky","name":"Дмитриевский собор","en":"Cathedral of St Demetrius","cn":"德米特里大教堂","city":"Владимир","kind":"visit","theme":"heritage","url":"https://collection.vladmuseum.ru/entity/WHITP/3273","qid":"Q550346"},
-  {"id":"palaty","name":"Музейный центр «Палаты»","en":"Palaty Museum Centre","cn":"宫殿博物馆中心","city":"Владимир","kind":"visit","theme":"museum","url":"https://tickets.vladmuseum.ru/"},
+  {"id":"palaty","name":"Музейный центр «Палаты»","en":"Palaty Museum Centre","cn":"宫殿博物馆中心","aliases":["Здание Присутственных мест. «Палаты»"],"city":"Владимир","kind":"visit","theme":"museum","url":"https://vladmuseum.ru/ru/geografiya-muzeya/vladimir/muzeynyy-tsentr-palaty/"},
   {"id":"history","name":"Исторический музей","en":"Vladimir History Museum","cn":"弗拉基米尔历史博物馆","city":"Владимир","kind":"visit","theme":"museum","url":"https://tickets.vladmuseum.ru/"},
   {"id":"assumption","name":"Успенский собор","en":"Assumption Cathedral","cn":"圣母升天大教堂","city":"Владимир","kind":"visit","theme":"heritage","url":"https://tickets.vladmuseum.ru/event/D8BE0920E700AC8E1FCEC6AC2EFE0ABD8264C626/"},
   {"id":"golden-gate","name":"Золотые ворота — внешний осмотр","en":"Golden Gate — exterior view","cn":"金门（外观参观）","city":"Владимир","kind":"visit","theme":"heritage","url":"https://tickets.vladmuseum.ru/event/D8BE0920E700AC8E1FCEC6AC2EFE0ABD8264C626/","qid":"Q775020"},

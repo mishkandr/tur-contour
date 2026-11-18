@@ -22,6 +22,7 @@ export function createLocalPlaceCatalog(catalog,mapData) {
       const tags=[place.theme,...(place.formats ?? [])].filter(Boolean);
       return [{id:place.id,name:place.name,en:place.en,cn:place.cn,city:place.city,kind:place.kind,
         ...(place.aliases ? {aliases:place.aliases} : {}),
+        ...(place.galleryUrl ? {galleryUrl:place.galleryUrl} : {}),
         coordinates:location.coordinates,geoUrl:location.source,url:place.url,officialUrl:place.url,
         status:'unknown',geoStatus:'mapped',tags}];
     }),

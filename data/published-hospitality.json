@@ -38,6 +38,10 @@
           "text": "Ресторан на втором этаже отеля работает с 06:30 до 24:00. В ресторане 200 посадочных мест."
         },
         {
+          "url": "https://vladimir.amaks-hotels.ru/events/restaurant/images/kompl.pdf",
+          "text": "АМАКС предлагает комплексное меню для групп. Число мест в зале относится ко всему ресторану."
+        },
+        {
           "url": "https://vladimir.amaks-hotels.ru/events/restaurant/",
           "text": "Завтрак 06:30–10:00, обед 12:30–15:00, ужин 18:30–21:00."
         }
@@ -48,6 +52,15 @@
       ]
     },
     "ogurec": {
+      "groupServices": [
+        {
+          "title": {"ru": "Дегустационный обед", "en": "Tasting lunch", "zh": "品鉴午餐"},
+          "url": "https://suzdalogurec.ru/kulinarnaja_studija",
+          "size": [5, 16],
+          "minutes": [60, 90],
+          "checkedAt": "2026-11-18"
+        }
+      ],
       "schedule": {
         "url": "https://suzdalogurec.ru/contacts/",
         "label": "Ресторан",

@@ -33,13 +33,18 @@ function isSchedule(schedule) {
 }
 
 function validate(id, entry) {
-  const { schedule, booking, limits = [], notes = [], clarify } = entry;
+  const { schedule, booking, limits = [], notes = [], clarify, groupServices = [] } = entry;
   const isFact = fact => fact && isUrl(fact.url) && hasText(fact.text);
+  const isRange = (value,upper) => Array.isArray(value) && value.length===2 &&
+    value.every(item=>Number.isInteger(item) && item>=1 && item<=upper) && value[0]<=value[1];
+  const isService = service=>service && isUrl(service.url) && isDate(service.checkedAt) &&
+    ['ru','en','zh'].every(locale=>hasText(service.title?.[locale])) && isRange(service.size,1000) && isRange(service.minutes,1440);
   const isBooking = fact=>isFact(fact) && (fact.advanceDays===undefined || Number.isInteger(fact.advanceDays) &&
     fact.advanceDays>0 && isDate(fact.validFrom) && isDate(fact.validUntil) && fact.validFrom<=fact.validUntil && isUrl(fact.termsUrl));
   if ((schedule && !isSchedule(schedule)) || (booking && !isBooking(booking)) ||
     !Array.isArray(limits) || !limits.every(item => isFact(item) && (item.max === undefined || Number.isInteger(item.max) && item.max > 0)) ||
-    !Array.isArray(notes) || !notes.every(isFact) || !Array.isArray(clarify) || !clarify.every(hasText)) {
+    !Array.isArray(notes) || !notes.every(isFact) || !Array.isArray(clarify) || !clarify.every(hasText) ||
+    !Array.isArray(groupServices) || !groupServices.every(isService)) {
     throw new Error('Проверьте опубликованные условия объекта ' + id);
   }
 }

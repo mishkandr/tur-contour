@@ -3,6 +3,7 @@ import { createRouteMap } from '/map.js';
 import { weatherSummary } from '/weather.js';
 import { statSummary } from '/engine.mjs';
 import { sourceEnabled } from '/source-preferences.js';
+import { hideBrokenVenuePhoto, venueMedia } from '/venue-media.js';
 
 addLocaleMessages([
   ['Выберите город, чтобы посмотреть объекты, погоду и данные о размещении.','Choose a city to see places, weather and accommodation figures.','选择城市，查看地点、天气与住宿数据。'],
@@ -49,7 +50,7 @@ addLocaleMessages([
   ['Объекты в городе и окрестностях','Places in and around the city','城市及周边地点'],
 ]);
 
-const filters = {all:'Все места',visit:'Достопримечательности',food:'Рестораны',stay:'Отели',project:'Планы и стройки'};
+const filters = {all:'Все места',visit:'Достопримечательности',food:'Кафе и рестораны',stay:'Отели',project:'Планы и стройки'};
 const stages={permit:'Разрешение на строительство',works:'Идут работы',planned:'Проект опубликован'};
 const cityCache=new Map();
 const catalogCache=new Map();
@@ -71,7 +72,7 @@ const translated=(item,key='name')=>getLocale()==='zh' ? item[key==='name'?'cn':
 const regionName=city=>getLocale()==='zh' ? city.regionCn || city.region : getLocale()==='en' ? city.regionEn || city.region : city.region;
 const validDate=value=>typeof value==='string' && Number.isFinite(Date.parse(value));
 const dateLabel=(value,options)=>validDate(value) ? formatDate(value,options) : '';
-const searchText=value=>String(value??'').normalize('NFKC').toLowerCase().replaceAll('ё','е').trim();
+const searchText=value=>String(value??'').normalize('NFKC').toLowerCase().replaceAll('ё','е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 
 function getCached(cache,key) {
   const entry=cache.get(key);
@@ -121,6 +122,7 @@ function placeInfoMarkup(place,cityId) {
   const address=translated(place,'address');
   const stage=place.kind==='project' ? stages[place.stage] ?? stages.planned : filters[place.kind];
   const title=translated(place);
+  const media=venueMedia(place,title);
   const source=sourceLink(place.officialUrl??place.url,place.source?.name??place.source?.title??
     (typeof place.source==='string'?translated(place,'source'):t('Открыть источник')));
   const canPlan=['visit','food','stay'].includes(place.kind) && /^\d{1,12}$/u.test(cityId) &&
@@ -132,7 +134,8 @@ function placeInfoMarkup(place,cityId) {
     [stage && msg(stage),address && escape(address),validDate(place.publishedAt)&&msg('Опубликовано {date}',{
       date:dateLabel(place.publishedAt,{day:'numeric',month:'short',year:'numeric'})})].filter(Boolean).join(' · ')+'</p>'+
     (detail?'<p data-source-text>'+escape(detail)+'</p>':'')+
-    (route||source?'<div class="city-place-actions">'+route+source+'</div>':'')+'</div>';
+    (media.image?'<figure class="city-place-photo">'+media.image+'<figcaption class="caption">'+media.credit+'</figcaption></figure>':'')+
+    (route||source||media.gallery?'<div class="city-place-actions">'+route+source+(media.gallery||'')+'</div>':'')+'</div>';
 }
 
 function hasCatalog(data) {
@@ -510,6 +513,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   container.addEventListener('click',onClick);
   container.addEventListener('change',onChange);
   container.addEventListener('keydown',onKey);
+  container.addEventListener('error',hideBrokenVenuePhoto,true);
   if (initialCity && /^\d{1,12}$/u.test(initialCity)) {
     const params=new URLSearchParams(location.hash.split('?')[1]);
     void selectCity(initialCity,{category:params.get('category'),placeId:params.get('place'),nameQuery:params.get('q')});
@@ -530,5 +534,6 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     container.removeEventListener('click',onClick);
     container.removeEventListener('change',onChange);
     container.removeEventListener('keydown',onKey);
+    container.removeEventListener('error',hideBrokenVenuePhoto,true);
   }};
 }

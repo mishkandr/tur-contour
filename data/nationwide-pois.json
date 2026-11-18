@@ -7,6 +7,83 @@
     "provider": "Опубликованные координаты"
   },
   "cities": {
+    "473247": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "vladimir-hotel-vladimir",
+          "name": "Гостиница «Владимир»",
+          "en": "Vladimir Hotel",
+          "cn": "弗拉基米尔酒店",
+          "aliases": ["Владимир", "Отель Владимир", "Hotel Vladimir", "ГТК Владимир"],
+          "coordinates": [56.132007, 40.416139],
+          "address": "Большая Московская улица, 74",
+          "category": "stay",
+          "url": "https://hotel-vladimir.ru/",
+          "officialUrl": "https://hotel-vladimir.ru/",
+          "geoUrl": "https://hotel-vladimir.ru/contacts/",
+          "galleryUrl": "https://hotel-vladimir.ru/gallery/",
+          "photo": {
+            "src": "/assets/venue-vladimir-hotel.webp",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Владимир._Гостиница_«Владимир»_corrected.jpg",
+            "credit": "Sergey Sebelev",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "view": {"ru":"Фасад, 2022 год","en":"Facade, 2022","zh":"外观，2022年"}
+          }
+        }
+      ]
+    },
+    "485824": {
+      "checkedAt": "2026-11-18",
+      "places": [
+        {
+          "id": "suzdal-gostiny-dvor",
+          "name": "Ресторан «Гостиный двор»",
+          "en": "Gostiny Dvor Restaurant",
+          "cn": "戈斯季内商场餐厅",
+          "aliases": ["Гостиный двор", "Гостиный дворъ", "Gostiny Dvor"],
+          "coordinates": [56.418941, 40.447970],
+          "address": "улица Ленина, 63А",
+          "category": "food",
+          "gastro": true,
+          "url": "https://dymov-suzdal.ru/gostinyj-dvor",
+          "officialUrl": "https://dymov-suzdal.ru/gostinyj-dvor",
+          "geoUrl": "https://commons.wikimedia.org/wiki/File:Trading_Rows_in_Suzdal_-_Southern_part_-_Gostiny_Dvor_restaraunt.jpg",
+          "galleryUrl": "https://dymov-suzdal.ru/gostinyj-dvor/galereya",
+          "photo": {
+            "src": "/assets/venue-gostiny-dvor.webp",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gostiny_Dvor_restaraunt_in_Trading_Rows_of_Suzdal.jpg",
+            "credit": "Dmitry Ivanov",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "view": {"ru":"Фасад в Торговых рядах, 2018 год","en":"Trading Rows facade, 2018","zh":"商贸长廊中的外观，2018年"}
+          }
+        },
+        {
+          "id": "suzdal-gtk-hotel",
+          "name": "Гостиница ГТК «Суздаль»",
+          "en": "Suzdal Tourist Complex Hotel",
+          "cn": "苏兹达尔旅游综合体酒店",
+          "aliases": ["ГТК Суздаль", "Турцентр", "Турцентр Суздаль", "Гостиница Суздаль"],
+          "coordinates": [56.430556, 40.427778],
+          "address": "улица Коровники, 45",
+          "category": "stay",
+          "url": "https://gtksuzdal.ru/",
+          "officialUrl": "https://gtksuzdal.ru/",
+          "geoUrl": "https://ru.wikipedia.org/wiki/Суздаль_(главный_туристический_комплекс)",
+          "galleryUrl": "https://gtksuzdal.ru/gallery/",
+          "photo": {
+            "src": "/assets/venue-gtk-suzdal.webp",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Турцентр,_Суздаль_-_panoramio.jpg",
+            "credit": "Anton Nikiforov",
+            "license": "CC BY 3.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+            "view": {"ru":"Фасад комплекса, архивный снимок 2013 года","en":"Complex exterior, archive photo from 2013","zh":"综合体外观，2013年存档照片"}
+          }
+        }
+      ]
+    },
     "484646": {
       "checkedAt": "2026-11-18",
       "places": [

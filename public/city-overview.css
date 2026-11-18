@@ -207,6 +207,17 @@
 }
 
 .city-place-info p { overflow-wrap: anywhere; }
+.city-place-photo { margin: 9px 0 0; }
+.city-place-photo .venue-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  max-height: 250px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.city-place-photo figcaption { margin-top: 3px; overflow-wrap: anywhere; }
 .city-place-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; }
 .city-place-actions a { min-height: 44px; display: inline-flex; align-items: center; overflow-wrap: anywhere; }
 .city-place-actions a[href^="#route"] { border-color: var(--accent); background: var(--accent); color: var(--white); }

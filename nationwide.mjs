@@ -494,6 +494,8 @@ function mergeCatalogPlaces(places,catalog,curated=false) {
         ...(sourceIds.length ? {sourceIds} : {}),
         ...(exposure ? {exposure} : {}),
         ...(archived.smallMemorial ? {smallMemorial:true} : {}),
+        ...(archived.photo ? {photo:archived.photo} : {}),
+        ...(archived.galleryUrl ? {galleryUrl:archived.galleryUrl} : {}),
         ...(archived.gastro===true ? {gastro:true} : {}),
         ...(archived.geoUrl || (curated && archived.kind!=='visit' && !catalog.source.provider?.includes('Overpass')) ?
           {officialUrl:archived.officialUrl ?? archived.url,geoUrl:place.geoUrl ?? place.url} : {}),

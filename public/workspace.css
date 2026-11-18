@@ -193,6 +193,10 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-service-list{margin:5px 0;padding:0;list-style:none}
 .composer-service-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-block:8px;border-top:1px solid var(--line)}
 .composer-service-list li>div{min-width:0;overflow-wrap:anywhere}
+.composer-service-card{display:flex;align-items:flex-start;gap:10px;flex:1 1 15rem}
+.composer-service-card .venue-photo{flex:none;width:76px;height:57px;border-radius:6px;object-fit:cover}
+.composer-service-copy{flex:1;min-width:0}
+.composer-media-links a{overflow-wrap:anywhere}
 .composer-services .button-quiet{min-height:44px;white-space:normal;text-align:start}
 .composer-services :is(summary,button,a,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .composer-service-feedback .composer-swap-status:empty{margin:0}
@@ -381,6 +385,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .composer-stops li>button{grid-template-columns:8ch minmax(0,1fr);align-items:baseline;row-gap:3px}
   .composer-stops button small{grid-column:2}
   .composer-stop-actions{padding-inline-start:8px}
+  .composer-service-fields{grid-template-columns:minmax(0,1fr)}
   .knowledge-items{grid-template-columns:1fr;gap:.2rem}
   .knowledge-items dd+dt{margin-top:.5rem}
 }
@@ -394,6 +399,12 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .draft-date-list>li>div{min-width:0;flex:1 1 14rem;overflow-wrap:anywhere}
 .draft-date-list p{margin:3px 0;font-size:.84rem}
 .draft-date-list p strong{font-weight:650}
+.draft-group-services{margin-block-start:12px;border-block-start:1px solid var(--line)}
+.draft-group-services summary{min-height:44px;align-content:center;cursor:pointer;font-weight:680}
+.draft-group-services section{border:1px solid var(--line);border-radius:8px;padding:12px;margin-block:5px 10px}
+.draft-group-services h4,.draft-group-services p{margin:0 0 6px}
+.draft-group-services ul{display:grid;gap:6px;list-style:none;margin:8px 0;padding:0}
+.draft-group-services li{display:grid;gap:2px;border-block-start:1px solid var(--line);padding-block-start:6px}
 .draft-logistics h4{margin:0;font-size:.95rem;line-height:1.4}
 .draft-logistics-day{margin-block-start:8px;min-width:0;overflow-wrap:anywhere}
 .draft-logistics-day+.draft-logistics-day{border-block-start:1px solid var(--line);margin-block-start:12px;padding-block-start:10px}

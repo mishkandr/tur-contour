@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { defaultRoute, groupApplicationDeadline, objectsFrom, planRoute, previewPublishedRoute, publishedHours, routeAlternatives, verifyDraftStops } from '../engine.mjs';
+import { comparePublishedGroupServices, defaultRoute, groupApplicationDeadline, objectsFrom, planRoute, previewPublishedRoute, publishedHours, routeAlternatives, verifyDraftStops } from '../engine.mjs';
 import { mergePublishedConditions } from '../published-conditions.mjs';
 import { chineseItinerary, chineseItineraryText } from '../public/chinese-itinerary.mjs';
 import { createLocalPlaceCatalog } from '../city-overview.mjs';
@@ -13,6 +13,21 @@ const feeds=['published-vladimir','published-suzdal','published-hospitality','pu
 const places=objectsFrom(catalog,{publishedConditions:mergePublishedConditions(catalog,feeds)});
 const working={...defaultRoute,demo:false};
 const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3));
+
+test('published tasting constraints stay scoped to that service and calculate sequential sessions',()=>{
+  const officialCatalog=new Map(places.map(place=>[place.id,place]));
+  const draft={settings:{...working,date:'2026-11-28',size:18},places:[],plan:{days:[
+    {date:'2026-11-28',city:'Суздаль',stops:[{id:'ogurec',type:'food',start:'12:30',end:'13:20'}]},
+  ]}};
+  const [comparison]=comparePublishedGroupServices(draft,officialCatalog);
+  assert.equal(comparison.slotMinutes,50);
+  assert.equal(comparison.singleFits,false);
+  assert.deepEqual(comparison.split,{groups:[9,9],minutes:[120,180]});
+  assert.equal(verifyDraftStops(draft,officialCatalog)[0][0].status,'unknown');
+  const [smaller]=comparePublishedGroupServices({...draft,settings:{...draft.settings,size:12}},officialCatalog);
+  assert.equal(smaller.singleFits,true);
+  assert.equal(smaller.split,null);
+});
 
 test('draft verification checks the exact day and time, including aliases from the map catalog',()=>{
   const stops=[{id:'osm-cathedral',start:'10:15',end:'10:50'}, {id:'golden-gate',start:'14:00',end:'14:30'},

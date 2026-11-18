@@ -32,7 +32,8 @@ test('city overview separates listed places, local forecast, regional statistics
   assert.ok(result.places.some(place=>place.id==='amaks-food' && place.status==='unknown'));
   assert.ok(result.places.every(place=>place.city===result.city.name));
   assert.equal(result.counts.food,1);
-  assert.equal(result.counts.stay,1);
+  assert.equal(result.counts.stay,2);
+  assert.equal(result.places.find(place=>place.id==='vladimir-hotel-vladimir').photo.src,'/assets/venue-vladimir-hotel.webp');
   assert.equal(Object.values(result.counts).reduce((a,b)=>a+b,0),result.places.length);
   assert.deepEqual(result.weather.days.map(({date})=>date),['2026-11-19','2026-11-20','2026-11-21']);
   assert.deepEqual(result.geodata.places[project.id],{coordinates:project.coordinates,source:project.url});

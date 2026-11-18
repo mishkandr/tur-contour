@@ -3,6 +3,8 @@ import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/loca
 import { aiWaitingMarkup, updateAiWait } from '/knowledge.js';
 import { loadPlanWeather, weatherExport, weatherSlot } from '/weather.js';
 import { clockTime, routeDirections } from '/engine.mjs';
+import { groupServiceMarkup } from '/group-services.js';
+import { hideBrokenVenuePhoto, venueMedia } from '/venue-media.js';
 
 addLocaleMessages([
   ['Маршруты','Itineraries','行程'],
@@ -524,7 +526,7 @@ function serviceSearchMarkup(result,view) {
     '<div class="composer-service-fields"><label class="field">'+tr('Название места')+
     '<input type="search" id="draft-service-query" value="'+safe(view.query)+'" maxlength="100"></label>'+
     '<label class="field composer-service-select">'+tr('Что ищем')+'<select id="draft-service-kind">'+
-    options({all:'Все варианты',visit:'Достопримечательности',stay:'Отели',food:'Рестораны'},view.kind)+'</select></label>'+
+    options({all:'Все варианты',visit:'Достопримечательности',stay:'Отели',food:'Кафе и рестораны'},view.kind)+'</select></label>'+
     (locations.length>1?'<label class="field composer-service-select">'+tr('Город поиска')+'<select id="draft-service-city">'+
       '<option value="">'+tr('Все города маршрута')+'</option>'+locations.map(city=>
         '<option value="'+safe(city.name)+'"'+(view.city===city.name?' selected':'')+' data-source-text>'+safe(name(city))+'</option>').join('')+
@@ -577,9 +579,10 @@ function publishedCheck(result) {
 const draftCheckLabels={blocked:'Не подходит по условиям',unknown:'Нужно уточнить',ready:'Условия подтверждены'};
 
 function draftStopChecks(result) {
-  const {verification,plan}=result;
+  const {verification,plan,places}=result;
   if (!verification) return '<p class="caption">'+tr('Пересчитайте сохранённый маршрут для проверки остановок.')+'</p>';
   if (!verification.some(day=>day.length)) return '';
+  const venues=new Map(places.map(place=>[place.id,place]));
   const link=(url,label)=>'<a href="'+safe(url)+'" target="_blank" rel="noopener noreferrer">'+tr(label)+'</a>';
   const fact=item=>'<li><p lang="ru" data-source-text>'+safe(item.text)+'</p>'+link(item.url,'Источник')+'</li>';
   return '<section class="draft-check-ledger" aria-labelledby="draft-check-title"><header><h4 id="draft-check-title">'+
@@ -603,6 +606,7 @@ function draftStopChecks(result) {
           return '<li>'+(max ? tr('Опубликованный лимит для этого посещения — {limit} чел.',{limit:formatNumber(Number(max[1]))}) : tr(reason))+'</li>';
         }).join('');
         const booking=check.booking;
+        const media=venueMedia(venues.get(stop.id),name(stop));
         return '<li class="draft-check-stop" data-status="'+check.status+'"><div class="draft-check-heading"><time>'+safe(stop.start)+'–'+safe(stop.end)+
           '</time><strong data-source-text>'+safe(name(stop))+'</strong><span class="chip '+(check.status==='blocked'?'error':check.status==='unknown'?'warn':'')+'">'+
           tr(draftCheckLabels[check.status])+'</span></div>'+(check.status==='blocked' && reasons ? '<ul class="draft-check-alerts">'+reasons+'</ul>' : '')+
@@ -613,7 +617,7 @@ function draftStopChecks(result) {
           (booking ? '<p lang="ru" data-source-text>'+safe(booking.text)+'</p><p>'+link(booking.url,'Правила записи')+'</p>' : '')+
           (check.deadline ? '<p>'+tr('Предельная дата заявки · {date}',{date:formatDate(check.deadline.date)})+' · '+link(check.deadline.url,'Оферта музея')+'</p>' : '')+
           (limits?'<ul>'+limits+'</ul>':'')+(notes?'<ul>'+notes+'</ul>':'')+
-          '<p>'+link(stop.url,'Страница объекта')+'</p>'+
+          '<p>'+link(stop.url,'Страница объекта')+(media.detail?' · '+media.detail:'')+'</p>'+
           (check.checkedAt ? '<p class="caption">'+tr('Сведения сверены {date}',{date:formatDate(check.checkedAt)})+'</p>' : '')+
           '</div></details></li>';
     }).join('')+'</ol></details>';
@@ -689,7 +693,7 @@ function draftMarkup(result,serviceView,state) {
     (plan.required.length?'<p class="planner-check-summary">'+tr('{count} из {total} обязательных точек в расписании',{
       count:formatNumber(requiredCount),total:formatNumber(plan.required.length)})+'</p>':'')+'<ul>'+
     plan.required.filter(item=>!item.scheduled).map(item=>'<li><span data-source-text>'+safe(requirementName(item,state.requiredServices))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
-    '</ul>'+draftDateReview(state.dirty)+draftDayRisks(result)+draftStopChecks(result)+publishedCheck(result)+'</section>'+
+    '</ul>'+draftDateReview(state.dirty)+groupServiceMarkup(result.groupServices)+draftDayRisks(result)+draftStopChecks(result)+publishedCheck(result)+'</section>'+
     '<div class="planner-sources">'+coverageMarkup(plan.interestCoverage)+'<h3>'+tr('Источники маршрута')+'</h3>'+
     '<ul class="composer-source">'+sources+'<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul></div>'+
     '</div></section>';
@@ -900,9 +904,14 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       const infoId='draft-venue-info-'+index;
       const venueId='draft-venue-name-'+index;
       const link=place.officialUrl??place.url;
-      return '<li><div>'+(link?'<a id="'+venueId+'" target="_blank" rel="noopener noreferrer" href="'+safe(link)+'" data-source-text>'+safe(name(place))+
-        '</a>':'<strong id="'+venueId+'" data-source-text>'+safe(name(place))+'</strong>')+'<p class="caption" id="'+infoId+'">'+safe(info.join(' · '))+
-        '</p></div><button type="button" class="button-quiet" aria-describedby="'+venueId+' '+infoId+'" data-composer="'+
+      const title=name(place);
+      const media=venueMedia(place,title);
+      const mediaLinks=[media.credit,media.gallery].filter(Boolean).join(' · ');
+      return '<li><div class="composer-service-card">'+(media.image||'')+'<div class="composer-service-copy">'+
+        (link?'<a id="'+venueId+'" target="_blank" rel="noopener noreferrer" href="'+safe(link)+'" data-source-text>'+safe(title)+
+        '</a>':'<strong id="'+venueId+'" data-source-text>'+safe(title)+'</strong>')+'<p class="caption" id="'+infoId+'">'+safe(info.join(' · '))+
+        '</p>'+(mediaLinks?'<p class="caption composer-media-links">'+mediaLinks+'</p>':'')+
+        '</div></div><button type="button" class="button-quiet" aria-describedby="'+venueId+' '+infoId+'" data-composer="'+
         (mandatory?'service-release':'service-include')+'" data-value="'+safe(place.id)+'"'+(pending || state.dirty?' disabled':'')+'>'+
         tr(mandatory?'Убрать из обязательных':'Включить в маршрут')+'</button></li>';
     }).join('')+'</ul>'+(places.length>visible.length?'<button type="button" class="button-quiet" data-composer="service-more">'+
@@ -1555,6 +1564,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   container.addEventListener('submit',submit);
   container.addEventListener('input',input);
   container.addEventListener('click',click);
+  container.addEventListener('error',hideBrokenVenuePhoto,true);
   mapVisibility.addEventListener('change',syncMapLayout);
   cityOptions();
   showDefaults();
@@ -1594,5 +1604,6 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     container.removeEventListener('submit',submit);
     container.removeEventListener('input',input);
     container.removeEventListener('click',click);
+    container.removeEventListener('error',hideBrokenVenuePhoto,true);
   }};
 }

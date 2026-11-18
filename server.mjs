@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import {
   region, metricInfo, normalizeStatistics, statSummary, number, routeSettings, defaultRoute, trackedRoutes, objectsFrom,
-  planRoute, routeAlternatives, portfolioImpact, impacts, attributeChanges, recommendations, fieldNames, assess, verifyDraftStops,
+  planRoute, routeAlternatives, portfolioImpact, impacts, attributeChanges, recommendations, fieldNames, assess, verifyDraftStops, comparePublishedGroupServices,
 } from './engine.mjs';
 import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
@@ -506,11 +506,15 @@ const assets = {
   '/app-shell.css':['app-shell.css','text/css'],
   '/locale.js':['locale.js','text/javascript'], '/map-workspace.css':['map-workspace.css','text/css'],
   '/composer.js':['composer.js','text/javascript'], '/knowledge.js':['knowledge.js','text/javascript'],
+  '/group-services.js':['group-services.js','text/javascript'], '/venue-media.js':['venue-media.js','text/javascript'],
   '/source-console.js':['source-console.js','text/javascript'],
   '/weather.js':['weather.js','text/javascript'],
   '/chinese-itinerary.mjs':['chinese-itinerary.mjs','text/javascript'],
   '/vendor/leaflet.js':['vendor/leaflet.js','text/javascript'], '/vendor/leaflet.css':['vendor/leaflet.css','text/css'],
   '/assets/suzdal.jpg':['assets/suzdal.jpg','image/jpeg'],
+  '/assets/venue-vladimir-hotel.webp':['assets/venue-vladimir-hotel.webp','image/webp'],
+  '/assets/venue-gostiny-dvor.webp':['assets/venue-gostiny-dvor.webp','image/webp'],
+  '/assets/venue-gtk-suzdal.webp':['assets/venue-gtk-suzdal.webp','image/webp'],
   '/assets/inter-cyrillic.woff2':['assets/inter-cyrillic.woff2','font/woff2'],
   '/assets/inter-latin.woff2':['assets/inter-latin.woff2','font/woff2'],
   '/assets/pt-serif-cyrillic.woff2':['assets/pt-serif-cyrillic.woff2','font/woff2'],
@@ -558,7 +562,8 @@ export async function handleRequest(request,response) {
       const compareDates = path==='/api/draft-dates';
       const signal = compareDates ? clientSignal(response) : undefined;
       const draft = await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog,officialCatalog,compareDates,signal});
-      return respond(response,200,compareDates ? draft : {...draft,verification:verifyDraftStops(draft,officialCatalog)});
+      return respond(response,200,compareDates ? draft : {...draft,verification:verifyDraftStops(draft,officialCatalog),
+        groupServices:comparePublishedGroupServices(draft,officialCatalog)});
     }
     if (request.method==='POST' && path==='/api/weather') return respond(response,200,await weatherForecast(await readBody(request)));
     if (request.method==='POST' && path==='/api/knowledge') {

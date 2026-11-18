@@ -194,6 +194,27 @@ export function verifyDraftStops(draft, catalog) {
   }));
 }
 
+export function comparePublishedGroupServices(draft, catalog) {
+  const size = draft.settings.size;
+  const services = [...catalog.values()].filter(place=>place.publishedConditions?.groupServices?.length);
+  return draft.plan.days.flatMap(day=>{
+    const lunch = day.stops.find(stop=>stop.type==='food');
+    const slotMinutes = lunch ? clockMinutes(lunch.end)-clockMinutes(lunch.start) : null;
+    return services.filter(place=>place.city===day.city).flatMap(place=>place.publishedConditions.groupServices.map(service=>{
+      const [min,max] = service.size;
+      const sessions = Math.ceil(size/max);
+      const smaller = Math.floor(size/sessions);
+      const extra = size % sessions;
+      const split = sessions>1 && smaller>=min ? {
+        groups:Array.from({length:sessions},(_,index)=>smaller+Number(index<extra)),
+        minutes:service.minutes.map(value=>value*sessions),
+      } : null;
+      return {date:day.date,slotMinutes,venue:{name:place.name,en:place.en,cn:place.cn},service,
+        size,singleFits:size>=min && size<=max,split};
+    }));
+  });
+}
+
 function themeFit(place, theme) {
   if (place.kind !== 'visit') return 0;
   if (place.formats?.includes(theme)) return 2;

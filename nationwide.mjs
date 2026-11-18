@@ -395,6 +395,7 @@ function categoryOfWikiPage(page) {
   if (/(?:^| )(?:ресторан|кафе|столовая|отель|гостиница|гостиничный)(?: |$)/u.test(title)) return null;
   if (culinarySite.test(title)) return 'gastro';
   if (/(^| )(музей|галерея)( |$)/.test(title)) return 'museum';
+  if (/^(жилой|доходный) дом(?: |$)/u.test(title)) return null;
   if (/(?:^| )(?:станция|вокзал|метро|остановка|платформа|переход|жилой комплекс|торговый центр|администрация|здание администрации)(?: |$)/u.test(title)) return null;
   if (/(^| )(океанариум|зоопарк|зооботанический|дельфинарий)( |$)/.test(title)) return 'family';
   if (/(^| )(парк|сад|набережная|сквер|дендрарий|мыс|озеро|сопка|водопад)( |$)/.test(title)) return 'park';
@@ -455,7 +456,9 @@ function mergeCatalogPlaces(places,catalog,curated=false) {
 
 async function retainedCatalogs(city) {
   const records=await Promise.all([osm,wiki].map(provider=>readCatalog(city.id,provider)));
-  return records.filter(Boolean).sort((a,b)=>b.source.fetchedAt.localeCompare(a.source.fetchedAt));
+  return records.filter(Boolean).map(record=>record.source.id===wiki.id
+    ? {...record,places:record.places.filter(place=>categoryOfWikiPage({title:place.name}))}
+    : record).filter(record=>record.places.length).sort((a,b)=>b.source.fetchedAt.localeCompare(a.source.fetchedAt));
 }
 
 async function combineCatalogs(city,live,retained,reason) {
@@ -699,6 +702,7 @@ function pickStops(context) {
       next.push(path);
       if (slot.kind==='visit' && path.visitCount>=pace.visits) continue;
       const visitAnchor=path.stops.find(stop=>stop.place.kind==='visit')?.place;
+      const focusCount=focus ? path.stops.filter(({place})=>matchesFocus(place,focus)).length : 0;
       const candidates=grouped.get(slot.kind).flatMap(place=>{
         if (slot.kind==='visit' && (allScheduled.has(place.id) || path.stops.some(stop=>stop.place.id===place.id))) return [];
         const leg=estimateLeg(path.place,place,settings);
@@ -720,7 +724,7 @@ function pickStops(context) {
           distance(visitAnchor.coordinates,place.coordinates)<=areaRadius(settings.transport);
         const score=Number(mandatory)*1000+(slot.kind==='visit' ? 35 : 115)+
           (baseScores.get(place.id) ?? 0)+covered*11+(dedicatedFocus?(newAreaVisit?12:6):0)+(newFormat?8:0)+
-          (newAreaVisit?12:0)+(localVisit?8:0)+
+          (dedicatedFocus && focusCount===1 ? 13 : 0)+(newAreaVisit?12:0)+(localVisit?8:0)+
           Number(overnight)*32-Number(repeatedLunch)*22+(firstMorningVisit ? 18 : 0)-leg.minutes/(slot.kind==='food' ? 4 : 6);
         return [{place,start,end,leg,score,...(slot.kind==='stay' ? {action:overnight ? 'return' : 'check-in'} : {})}];
       }).sort((a,b)=>b.score-a.score || a.end-b.end || a.place.id.localeCompare(b.place.id));

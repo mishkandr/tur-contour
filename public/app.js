@@ -3,7 +3,7 @@ import { assess, clockTime, defaultRoute, groupApplicationDeadline, kindNames, m
 import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, localizeDom, setLocale, t } from '/locale.js';
 import { renderOverview } from '/overview.js';
-import { itineraryTabs, mountComposer } from '/composer.js';
+import { mountComposer } from '/composer.js';
 import { aiWaitingMarkup, mountKnowledge, updateAiWait } from '/knowledge.js';
 import { loadPlanWeather, weatherSlot } from '/weather.js';
 
@@ -699,7 +699,7 @@ function routeView(plan) {
   const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
   const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
   const mapLink = !plan.settings.demo ? '<a class="button-quiet" id="pilot-map-link"></a>' : '';
-  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'),mapLink)+itineraryTabs(true)+
+  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'),mapLink)+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
     '<label class="field">Направление<select name="direction">'+routeDirections.map(item=>selectOption(item.id,localizedDirection(item).title,direction.id)).join('')+
     '</select><small class="caption">'+safe(localizedDirection(direction).description)+'</small></label>'+

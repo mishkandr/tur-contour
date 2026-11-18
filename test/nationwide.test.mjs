@@ -462,7 +462,7 @@ test('fallback labels add crafts and pilgrimage only when site names are explici
   assert.ok(!result.places.find(place=>place.name==='Городской собор').tags.includes('pilgrimage'));
 });
 
-test('Wikipedia transport and civic records do not become stops, while a named metro museum remains a visit',async()=>{
+test('Wikipedia buildings with no visitor function are excluded while a named metro museum remains a visit',async()=>{
   const {cities}=await listCities('Иркутск');
   const [lat,lon]=cities[0].coordinates;
   const fetchImpl=async url=>{
@@ -471,6 +471,8 @@ test('Wikipedia transport and civic records do not become stops, while a named m
       {pageid:810,title:'Площадь Тукая (станция метро)',lat,lon},
       {pageid:811,title:'Здание администрации',lat:lat+0.001,lon},
       {pageid:812,title:'Музей истории метро',lat:lat+0.002,lon},
+      {pageid:813,title:'Жилой дом И. И. Сатина',lat:lat+0.003,lon},
+      {pageid:814,title:'Доходный дом страхового общества «Саламандра»',lat:lat+0.004,lon},
     ]}});
   };
   const result=await draftItinerary({...request,cityId:cities[0].id},{fetchImpl});

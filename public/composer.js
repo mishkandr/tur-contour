@@ -5,8 +5,6 @@ import { loadPlanWeather, weatherExport, weatherSlot } from '/weather.js';
 
 addLocaleMessages([
   ['Конструктор маршрутов','Itinerary builder','行程编制'],
-  ['По России','Across Russia','俄罗斯全境'],
-  ['Владимирская область · проверка','Vladimir Oblast · verification','弗拉基米尔州 · 核查'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
   ['Собрать маршрут','Build itinerary','编制行程'],
   ['Пересчитать маршрут','Rebuild itinerary','重新计算行程'],
@@ -292,11 +290,6 @@ function retainDraft() {
 const options = (choices,current)=>Object.entries(choices).map(([value,label])=>'<option value="'+safe(value)+'"'+
   (String(current)===value?' selected':'')+'>'+tr(label)+'</option>').join('');
 
-export function itineraryTabs(pilot) {
-  return '<nav class="itinerary-tabs" aria-label="'+tr('Конструктор маршрутов')+'"><a href="#route"'+(!pilot?' aria-current="page"':'')+'>'+
-    tr('По России')+'</a><a href="#route?scope=pilot"'+(pilot?' aria-current="page"':'')+'>'+tr('Владимирская область · проверка')+'</a></nav>';
-}
-
 function formMarkup() {
   const settings = state.settings;
   return '<section class="composer-inputs" id="planner-editor" aria-label="'+tr('Параметры')+'">'+
@@ -574,8 +567,8 @@ export function mountComposer(container, api) {
   let mounted=true;
   let workView='schedule';
   const serviceView={query:'',kind:'all',city:'',limit:8};
-  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Конструктор маршрутов')+'</h1>'+
-    itineraryTabs(false)+'</header><div class="composer-layout">'+formMarkup()+
+  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Конструктор маршрутов')+'</h1></header>'+
+    '<div class="composer-layout">'+formMarkup()+
     '<div class="composer-result" id="composer-result"></div></div>';
   const mapVisibility=window.matchMedia('(min-width: 1050px)');
   function setEditor(open) {

@@ -60,7 +60,7 @@
 .atlas-map-top > label { min-width: 0; max-width: 100%; }
 .atlas-map-top select {
   width: 100%;
-  min-height: 44px;
+  height: 44px;
   padding: 6px 8px;
   border: 1px solid var(--control-line);
   border-radius: 6px;

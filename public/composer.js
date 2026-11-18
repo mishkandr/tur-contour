@@ -23,6 +23,7 @@ addLocaleMessages([
     'The stop falls outside opening hours or after last admission.','停留时段超出开放时间或晚于最晚入场时间。'],
   ['Условия и источники','Conditions and sources','条件与来源'],
   ['Предельная дата заявки · {date}','Application deadline · {date}','申请截止日期 · {date}'],
+  ['Сведения сверены {date}','Sources checked on {date}','资料核对日期 {date}'],
   ['Пересчитайте сохранённый маршрут для проверки остановок.','Rebuild the saved itinerary to check its stops.','请重新编制已保存的行程以核查各站。'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
   ['Пожелания к маршруту','Itinerary preferences','行程偏好'],
@@ -580,6 +581,8 @@ function draftStopChecks(result) {
         const hours=check.hours;
         const hoursLabel=hours?.windows?.length ? hours.windows.map(([start,end])=>clockTime(start)+'–'+clockTime(end)).join(', ') :
           hours?.windows ? t('Закрыто по графику') : t('График не покрывает дату');
+        const lastEntry=hours?.lastEntryMinutes && hours.windows?.length ?
+          hours.windows.map(([,end])=>clockTime(end-hours.lastEntryMinutes)).join(', ') : null;
         const limits=check.limits.map(fact).join('');
         const notes=check.notes.map(fact).join('');
         const reasons=check.reasons.map(reason=>{
@@ -593,10 +596,13 @@ function draftStopChecks(result) {
           '<details><summary>'+tr('Условия и источники')+'</summary><div class="draft-check-facts">'+
           (check.status==='unknown' && reasons ? '<ul class="draft-check-alerts">'+reasons+'</ul>' : '')+
           (hours ? '<p><strong>'+safe(hoursLabel)+'</strong> · '+link(hours.url,'Опубликованный график')+'</p>' : '')+
+          (lastEntry ? '<p>'+tr('Последний вход {time}',{time:lastEntry})+'</p>' : '')+
           (booking ? '<p lang="ru" data-source-text>'+safe(booking.text)+'</p><p>'+link(booking.url,'Правила записи')+'</p>' : '')+
           (check.deadline ? '<p>'+tr('Предельная дата заявки · {date}',{date:formatDate(check.deadline.date)})+' · '+link(check.deadline.url,'Оферта музея')+'</p>' : '')+
           (limits?'<ul>'+limits+'</ul>':'')+(notes?'<ul>'+notes+'</ul>':'')+
-          '<p>'+link(stop.url,'Страница объекта')+'</p></div></details></li>';
+          '<p>'+link(stop.url,'Страница объекта')+'</p>'+
+          (check.checkedAt ? '<p class="caption">'+tr('Сведения сверены {date}',{date:formatDate(check.checkedAt)})+'</p>' : '')+
+          '</div></details></li>';
     }).join('')+'</ol></details>';
   }).join('')+'</section>';
 }

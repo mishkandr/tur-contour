@@ -287,14 +287,27 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .atlas-inspect-fields label{font-size:.78rem}
 .map-list-status{display:block;color:var(--muted);font-size:.74rem;font-weight:480}
 .atlas-list-box{margin-top:6px}
-.knowledge-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(225px,1fr);gap:16px;align-items:start}
+.knowledge-layout{max-width:880px}
 .knowledge-feed{min-width:0}
 #knowledge-form{display:grid;gap:9px}
 .knowledge-feed:has(.knowledge-message) #knowledge-form{padding-top:18px;border-top:1px solid var(--line)}
-.knowledge-samples{background:#e9eee2}
-.knowledge-samples ul,.knowledge-references ul{padding:0;margin:10px 0 0;list-style:none}
-.knowledge-samples ul{display:grid;gap:6px}
-.knowledge-samples button{width:100%;justify-content:start;white-space:normal;text-align:start}
+.knowledge-actions{display:flex;flex-wrap:wrap;gap:6px}
+.knowledge-actions button{min-height:44px;white-space:normal}
+.connector-groups{display:grid;gap:0 24px;grid-template-columns:repeat(auto-fit,minmax(min(100%,295px),1fr))}
+.connector-group>header,.connector-rows li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px}
+.connector-group>header{border-bottom:1px solid var(--line);margin-top:10px}
+.connector-group h3{font-size:.98rem}
+.connector-group .check{font-size:.83rem;min-height:44px}
+.connector-rows{list-style:none;margin:0;padding:0}
+.connector-rows li{padding-block:6px;border-bottom:1px solid var(--line)}
+.connector-rows strong{font-size:.9rem}
+.connector-rows p{margin:2px 0}
+.connector-rows button{min-height:44px;white-space:normal}
+.connector-rows [data-status=error]{color:#843330}
+.connector-errors h2{margin-bottom:6px}
+.source-legacy{margin-block-start:14px}
+.source-legacy>summary{cursor:pointer;min-height:44px;align-content:center;font-weight:700}
+.knowledge-references ul{padding:0;margin:10px 0 0;list-style:none}
 .knowledge-message{display:grid;gap:10px;margin:0 0 16px}
 .knowledge-question{background:#e8eee4;border-radius:7px 7px 2px 7px;padding:9px 12px;justify-self:end;max-width:min(85%,62ch);overflow-wrap:anywhere}
 .knowledge-answer{border-inline-start:3px solid #b8caba;padding:0 0 0 13px;min-width:0;overflow-wrap:anywhere}
@@ -337,8 +350,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .ops-metrics .ops-check{font-size:.89rem}
   .atlas-map-scene{min-height:360px}
   .atlas-inspector{scroll-margin-top:9px}
-  .composer-layout,.knowledge-layout{grid-template-columns:minmax(0,1fr)}
-  .knowledge-samples ul{grid-template-columns:1fr 1fr}
+  .composer-layout{grid-template-columns:minmax(0,1fr)}
   .route-review{grid-template-areas:"program" "assistant"}
 }
 @media(max-width:620px){

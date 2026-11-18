@@ -2,9 +2,12 @@ import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/loca
 
 addLocaleMessages([
   ['Вопрос по данным','Ask the data','询问数据'],
-  ['Вопрос ИИ','Question for AI','向人工智能提问'],
-  ['Задайте вопрос по данным','Ask about connected data','询问已连接的数据'],
-  ['Например: работает ли Суздальский кремль 21 ноября для группы из 18 человек?','For example: is the Suzdal Kremlin open on 21 November for a group of 18?','例如：11月21日苏兹达尔克里姆林宫可接待18人的团队吗？'],
+  ['Ваш вопрос','Your question','您的问题'],
+  ['Например: какие музеи есть в каталоге?','For example: which museums are in the catalogue?','例如：目录中有哪些博物馆？'],
+  ['Музеи','Museums','博物馆'],
+  ['Рестораны','Restaurants','餐厅'],
+  ['Ночёвки по региону','Overnight stays in the region','地区住宿夜数'],
+  ['К обзору города','Back to city overview','返回城市概览'],
   ['Спросить','Ask','提问'],
   ['Проверяем источники…','Checking sources…','正在核查数据源…'],
   ['Отменить запрос','Cancel request','取消请求'],
@@ -14,7 +17,6 @@ addLocaleMessages([
   ['Ответ готов.','Answer ready.','回答已就绪。'],
   ['Прошло {seconds} с','{seconds}s elapsed','已用 {seconds} 秒'],
   ['Источники ответа','Sources for this answer','答案来源'],
-  ['ИИ распознал тему','AI identified the topic','人工智能识别了主题'],
   ['Условия для группы','Group visit conditions','团队参观条件'],
   ['Сезонность размещения','Accommodation seasonality','住宿季节性'],
   ['Какие программы затронуты','Affected itineraries','受影响的行程'],
@@ -26,15 +28,13 @@ const safe = value=>String(value ?? '').replace(/[&<>"']/gu,char=>({'&':'&amp;',
 const tr = value=>safe(t(value));
 const safeUrl = value=>typeof value==='string' && /^(?:https:\/\/|\/(?:api\/)|#(?:overview|impact|stats|catalog|sources|route)\b)/u.test(value) ? value : '';
 const labelMap = [
-  ['Условия для группы','Работает ли Суздальский кремль 21 ноября 2026 для группы из 18 человек?',
-    'Is the Suzdal Kremlin open on 21 November 2026 for a group of 18 people?','苏兹达尔克里姆林宫2026年11月21日开放吗？18人团队。'],
-  ['Сезонность размещения','Какие месяцы за последние три года во Владимирской области были с минимумом размещённых лиц?',
-    'Which months had the fewest guests in Vladimir Oblast over the last three years?','过去三年弗拉基米尔州哪些月份的住宿人数最少？'],
-  ['Какие программы затронуты','Какие программы затронуты изменениями?', 'Which itineraries are affected by changes?', '哪些行程受变更影响？'],
+  ['Музеи','Какие музеи есть в каталоге?','Which museums are in the catalogue?','目录中有哪些博物馆？'],
+  ['Рестораны','Какие рестораны есть в каталоге?','Which restaurants are in the catalogue?','目录中有哪些餐厅？'],
+  ['Ночёвки по региону','Сколько ночёвок было в регионе за 2025 год?',
+    'How many overnight stays were recorded in the region in 2025?','2025 年该地区共有多少住宿夜数？'],
   ['Какие данные подключены','Какие данные и источники подключены?', 'Which sources are connected?', '连接了哪些数据源？'],
 ];
-const thread=[];
-let draft='';
+const workspaces=new Map();
 
 function elapsedLabel(startedAt) {
   return t('Прошло {seconds} с',{seconds:formatNumber(Math.floor(Math.max(0,Date.now()-startedAt)/1000))});
@@ -65,7 +65,6 @@ function responseMarkup(answer) {
   const sources = Array.isArray(answer.sources) ? answer.sources : [];
   const actions = Array.isArray(answer.actions) ? answer.actions : [];
   return '<div class="knowledge-answer"><h2>'+safe(answer.title)+'</h2><p>'+safe(answer.text)+'</p>'+
-    (answer.mode==='classified'?'<p class="caption">'+tr('ИИ распознал тему')+'</p>':'')+
     (items.length?'<dl class="knowledge-items">'+items.map(item=>'<dt>'+(item.href?external(item.href,item.title):safe(item.title))+'</dt><dd>'+
       '<span'+(item.lang==='ru'?' lang="ru"':'')+'>'+safe(item.text)+'</span>'+
       (item.status?'<small class="caption knowledge-item-status">'+safe(item.status)+'</small>':'')+
@@ -77,19 +76,34 @@ function responseMarkup(answer) {
     (actions.length?'<div class="actions">'+actions.map(action=>external(action.href,action.title,'button-quiet')).join('')+'</div>':'')+'</div>';
 }
 
-export function mountKnowledge(container, api, settings, regionId) {
+export function mountKnowledge(container, api, settings, regionId, cityId) {
   const find = selector=>container.querySelector(selector);
   const lang=()=>({ru:1,en:2,zh:3})[getLocale()];
   let active=true;
   let pending;
-  container.innerHTML='<header class="page-head"><h1>'+tr('Вопрос по данным')+'</h1></header><div class="knowledge-layout">'+
+  const key=cityId ?? regionId ?? '';
+  if (!workspaces.has(key)) {
+    if (workspaces.size>=12) workspaces.delete(workspaces.keys().next().value);
+    workspaces.set(key,{thread:[],draft:''});
+  }
+  const workspace=workspaces.get(key);
+  const {thread}=workspace;
+  const examples=cityId ? labelMap : labelMap.slice(2);
+  container.innerHTML='<header class="page-head"><div><h1>'+tr('Вопрос по данным')+'</h1><p id="knowledge-city" class="caption" hidden></p></div>'+
+    (cityId?external('#overview?city='+encodeURIComponent(cityId),t('К обзору города'),'button-quiet'):'')+'</header><div class="knowledge-layout">'+
     '<section class="panel knowledge-feed" aria-label="'+tr('Вопрос по данным')+'"><div id="knowledge-thread"></div>'+
     '<p id="knowledge-announcement" class="sr-only" role="status"></p>'+
-    '<form id="knowledge-form"><label class="field"><span>'+tr('Вопрос ИИ')+'</span><textarea name="question" required minlength="3" maxlength="600" rows="3" placeholder="'+
-    tr('Например: работает ли Суздальский кремль 21 ноября для группы из 18 человек?')+'">'+safe(draft)+'</textarea></label>'+
-    '<button class="button" type="submit">'+tr('Спросить')+'</button></form></section><aside class="panel knowledge-samples"><h2>'+
-    tr('Задайте вопрос по данным')+'</h2><ul>'+labelMap.map((entry,i)=>'<li><button type="button" class="button-quiet" data-knowledge-example="'+i+'">'+
-    tr(entry[0])+'</button></li>').join('')+'</ul></aside></div>';
+    '<form id="knowledge-form"><label class="field"><span class="sr-only">'+tr('Ваш вопрос')+'</span><textarea name="question" required minlength="3" maxlength="600" rows="3" placeholder="'+
+    tr('Например: какие музеи есть в каталоге?')+'">'+safe(workspace.draft)+'</textarea></label>'+
+    '<div class="knowledge-actions"><button class="button" type="submit">'+tr('Спросить')+'</button>'+
+    examples.map((entry,i)=>'<button type="button" class="button-quiet" data-knowledge-example="'+i+'">'+tr(entry[0])+'</button>').join('')+
+    '</div></form></section></div>';
+  if (/^\d{1,12}$/u.test(cityId ?? '')) void api('cities?id='+cityId).then(({cities:[city]})=>{
+    if (!active || !city) return;
+    const label=find('#knowledge-city');
+    label.textContent=city[getLocale()==='zh' ? 'cn' : 'en'] && getLocale()!=='ru' ? city[getLocale()==='zh' ? 'cn' : 'en'] : city.name;
+    label.hidden=false;
+  }).catch(()=>{});
   const form=find('#knowledge-form');
   const history=find('#knowledge-thread');
   const submit=form.querySelector('[type=submit]');
@@ -154,10 +168,10 @@ export function mountKnowledge(container, api, settings, regionId) {
     event.preventDefault();
     const question=form.elements.question.value.trim();
     if (question.length<3 || pending) return;
-    const entry={question,query:{question,settings,regionId},answer:null};
+    const entry={question,query:{question,settings,regionId,cityId},answer:null};
     thread.push(entry);
     if (thread.length>16) thread.shift();
-    draft='';
+    workspace.draft='';
     form.elements.question.value='';
     void ask(entry);
   }
@@ -172,12 +186,10 @@ export function mountKnowledge(container, api, settings, regionId) {
     const button=event.target.closest('[data-knowledge-example]');
     if (!button) return;
     const index=Number(button.dataset.knowledgeExample);
-    const regional=['Какие месяцы за последние три года были с минимумом размещённых лиц?',
-      'Which months had the fewest guests over the last three years?','过去三年哪些月份的住宿人数最少？'];
-    draft=form.elements.question.value=regionId && index===1 ? regional[lang()-1] : labelMap[index][lang()];
-    form.elements.question.focus();
+    form.elements.question.value=examples[index][lang()];
+    form.requestSubmit();
   }
-  const input=()=>{draft=form.elements.question.value;};
+  const input=()=>{workspace.draft=form.elements.question.value;};
   form.addEventListener('submit',send);
   form.addEventListener('input',input);
   container.addEventListener('click',actions);

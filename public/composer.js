@@ -2,9 +2,13 @@ import { createRouteMap } from '/map.js';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/locale.js';
 import { aiWaitingMarkup, updateAiWait } from '/knowledge.js';
 import { loadPlanWeather, weatherExport, weatherSlot } from '/weather.js';
+import { routeDirections } from '/engine.mjs';
 
 addLocaleMessages([
-  ['Конструктор маршрутов','Itinerary builder','行程编制'],
+  ['Маршруты','Itineraries','行程'],
+  ['Сверить опубликованные условия','Check published conditions','核查已公布条件'],
+  ['Точки для проверки подбираются по опубликованным условиям направления.',
+    'The verification uses venues with published conditions for this destination.','核查会选取该线路上已公布到访条件的地点。'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
   ['Собрать маршрут','Build itinerary','编制行程'],
   ['Пересчитать маршрут','Rebuild itinerary','重新计算行程'],
@@ -480,6 +484,18 @@ function serviceSearchMarkup(result,view) {
     '<div id="draft-service-list"></div></section>';
 }
 
+function publishedCheck(result) {
+  const cities=result.locations?.map(city=>city.name) ?? [];
+  const settings=result.settings;
+  const direction=routeDirections.find(item=>cities.length>=2 && cities.every((city,index)=>item.centres[index]===city));
+  if (!direction) return '';
+  const theme=direction.themes.includes(settings.theme) ? settings.theme : 'any';
+  const query=new URLSearchParams({scope:'pilot',direction:direction.id,date:settings.date,days:settings.days,size:settings.size,
+    market:settings.market,theme,access:settings.access?'1':'0'});
+  return '<p><a href="#route?'+safe(query.toString())+'">'+tr('Сверить опубликованные условия')+'</a></p>'+
+    '<p class="caption">'+tr('Точки для проверки подбираются по опубликованным условиям направления.')+'</p>';
+}
+
 function draftMarkup(result,serviceView) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
@@ -520,7 +536,7 @@ function draftMarkup(result,serviceView) {
     (plan.required.length?'<p class="planner-check-summary">'+tr('{count} из {total} обязательных точек в расписании',{
       count:formatNumber(requiredCount),total:formatNumber(plan.required.length)})+'</p>':'')+'<ul>'+
     plan.required.map(item=>'<li><span data-source-text>'+safe(requirementName(item))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
-    result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul></section>'+
+    result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul>'+publishedCheck(result)+'</section>'+
     '<div class="planner-sources">'+coverageMarkup(plan.interestCoverage)+'<h3>'+tr('Источники маршрута')+'</h3>'+
     '<ul class="composer-source">'+sources+'<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul></div>'+
     '</div></section>';
@@ -555,7 +571,7 @@ function download(result) {
   setTimeout(()=>URL.revokeObjectURL(file),1000);
 }
 
-export function mountComposer(container, api) {
+export function mountComposer(container, api, requestedCityId) {
   const find = selector=>container.querySelector(selector);
   let map;
   let localizedGeodata;
@@ -567,7 +583,7 @@ export function mountComposer(container, api) {
   let mounted=true;
   let workView='schedule';
   const serviceView={query:'',kind:'all',city:'',limit:8};
-  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Конструктор маршрутов')+'</h1></header>'+
+  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Маршруты')+'</h1></header>'+
     '<div class="composer-layout">'+formMarkup()+
     '<div class="composer-result" id="composer-result"></div></div>';
   const mapVisibility=window.matchMedia('(min-width: 1050px)');
@@ -887,7 +903,7 @@ export function mountComposer(container, api) {
     state.unsupportedDays=parsed.requestedDays!=null && !parsed.days && !state.overrideFields.includes('days') ? parsed.requestedDays : null;
     state.invalidDate=state.overrideFields.includes('date') ? null : parsed.invalidDate ?? null;
     state.invalidSize=state.overrideFields.includes('size') ? null : parsed.invalidSize ?? null;
-    if (!state.overrideFields.includes('city')) {
+    if (!state.overrideFields.includes('city') && (cities.length || !state.selectedCity)) {
       const previousIds=[state.selectedCity,...state.extraCities].filter(Boolean).map(city=>city.id).join(',');
       if (previousIds!==cities.map(city=>city.id).join(',')) {
         state.omitted=[];
@@ -1310,6 +1326,22 @@ export function mountComposer(container, api) {
   showDefaults();
   syncActions();
   resultMarkup();
+  if (/^\d{1,12}$/u.test(requestedCityId ?? '') && requestedCityId!==state.selectedCity?.id) {
+    const revision=state.revision;
+    void api('cities?id='+requestedCityId).then(({cities:[city]})=>{
+      if (!mounted || !city || state.revision!==revision) return;
+      Object.assign(state,{brief:'',lastAppliedBrief:'',query:name(city),cities:[city],selectedCity:city,extraCities:[],
+        settings:initialRequirements(currentDate()),overrideFields:[],result:null,dirty:false,mapDay:'all',point:null,pointDay:null,
+        omitted:[],requiredServices:[],replacements:[],unsupportedDays:null,invalidDate:null,invalidSize:null,note:'',noteValues:null});
+      map?.destroy();
+      map=null;
+      find('#composer-result').replaceChildren();
+      find('#draft-input [name=brief]').value='';
+      setEditor(true);
+      updateExtraction();
+      syncActions();
+    }).catch(()=>{});
+  }
   return {destroy(){
     mounted=false;
     if (pending) {pending.controller.abort();finish(pending);}

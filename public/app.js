@@ -2,16 +2,18 @@ import { mountAtlas, pilotParameters, readPilotParameters } from '/atlas.js';
 import { assess, clockTime, defaultRoute, groupApplicationDeadline, kindNames, months, number, planRoute, previewPublishedRoute, publishedHours, routeSettings, routeDirections, statSummary } from '/engine.mjs';
 import { chineseItinerary, chineseItineraryText } from '/chinese-itinerary.mjs';
 import { addLocaleMessages, formatDate, formatNumber, getLocale, localeTag, localizeDom, setLocale, t } from '/locale.js';
-import { renderOverview } from '/overview.js';
+import { renderMonitoredProgrammes } from '/overview.js';
+import { mountCityOverview } from '/city-overview.js';
 import { mountComposer } from '/composer.js';
 import { aiWaitingMarkup, mountKnowledge, updateAiWait } from '/knowledge.js';
 import { loadPlanWeather, weatherSlot } from '/weather.js';
+import { mountSourceConsole } from '/source-console.js';
 
 const $ = selector => document.querySelector(selector);
 const screen = $('#screen');
 const dialog = $('#place-dialog');
-const labels = { overview:'Обзор региона', impact:'Карта объектов', catalog:'Каталог', route:'Маршруты', stats:'Статистика',
-  ask:'Вопрос по данным', sources:'Данные и методика' };
+const labels = { overview:'Обзор', impact:'Карта объектов', catalog:'Каталог', route:'Маршруты', stats:'Статистика',
+  ask:'Вопрос по данным', sources:'Источники' };
 const statusText = { ready:'Подходит по условиям', blocked:'Ограничение', unknown:'Требует проверки' };
 const routeThemes = {
   heritage:'История и архитектура', museum:'Музеи', romantic:'Романтическая поездка', family:'Семейная поездка',
@@ -144,6 +146,7 @@ let geodata = {};
 let atlas;
 let composer;
 let knowledge;
+let cityOverview;
 let atlasHash;
 let pilotRouteHash;
 const mapContexts = new Map();
@@ -1012,15 +1015,16 @@ function sources() {
     safe(t('Места и категории OpenStreetMap по запросу; при сбое — геопоиск Wikimedia и сохранённые записи.'))+'</p>'+
     '<p class="caption">'+outbound('https://www.mediawiki.org/wiki/API:Geosearch','MediaWiki GeoSearch')+' · '+
     safe(t('Графики и запись сверяются по паспорту поставщика.'))+'</p></li></ul></section>';
-  return head(t('Источники и изменения'),t('Автоматическая проверка при запуске и раз в 6 часов работы приложения.'),button(t('Обновить источники'),'refresh',true))+
-    '<div class="grid"><section class="panel"><div class="section-head"><h2>'+safe(t('Журнал изменений'))+'</h2></div>'+
+  return head(t('Источники'))+'<div id="source-console" class="stack"></div>'+
+    '<details class="panel source-legacy"><summary>'+safe(t('Журнал изменений'))+'</summary>'+
+    '<div class="grid"><section class="panel"><div class="section-head">'+button(t('Обновить источники'),'refresh',true)+'</div>'+
     (changes ? '<ul class="rows">'+changes+'</ul>' : '<p class="empty">'+safe(t('Изменений не зафиксировано.'))+'</p>')+'</section>'+
     '<div class="stack"><section class="panel"><div class="section-head"><h2>'+safe(t('Автоматические подключения'))+'</h2></div><ul class="rows">'+sourceRows.join('')+
     (feed ? '<li><div class="row"><div><h3>'+safe(t('Выгрузка условий визита'))+'</h3><p class="caption">'+safe(feedValue)+
       '</p></div>'+chip(t(feed.enabled ? feedLabel[feed.state] : 'Не подключена'),feed.state==='live'?'':feed.state==='error'?'warn':'plain')+'</div></li>' : '')+
     '</ul></section>'+(published?.objectCount ? '<section class="panel"><h2>'+safe(t('Опубликованные условия посещения'))+'</h2><p class="detail">'+
     safe(t('Сверены сведения по {count} объектам · {date}.',{count:formatNumber(published.objectCount),date:date(published.checkedAt)}))+'</p>'+
-    '<a href="#catalog">'+safe(t('Открыть каталог объектов'))+'</a></section>' : '')+mapping+'</div></div>'+practice+offerPanel();
+    '<a href="#catalog">'+safe(t('Открыть каталог объектов'))+'</a></section>' : '')+mapping+'</div></div>'+practice+offerPanel()+'</details>';
 }
 
 function render(scroll=false) {
@@ -1047,6 +1051,7 @@ function render(scroll=false) {
   document.body.classList.toggle('atlas-page',current==='impact');
   if (composer) { composer.destroy(); composer=null; }
   if (knowledge) { knowledge.destroy(); knowledge=null; }
+  if (cityOverview) { cityOverview.destroy(); cityOverview=null; }
   if (current==='impact') {
     if (atlas && atlasHash!==location.hash) saveMapContext();
     if (atlas) atlas.update(data);
@@ -1070,11 +1075,14 @@ function render(scroll=false) {
     atlasHash=location.hash;
   } else {
     if (atlas) saveMapContext();
-    if (current==='ask') knowledge=mountKnowledge(screen,api,options,params().get('region'));
-    else if (current==='route' && params().get('scope')!=='pilot') composer=mountComposer(screen,api);
+    if (current==='overview') cityOverview=mountCityOverview(screen,api,{initialCity:query.get('city'),
+      renderChart:statisticChart,renderMonitoring:()=>renderMonitoredProgrammes(data,overview)});
+    else if (current==='ask') knowledge=mountKnowledge(screen,api,options,query.get('region'),query.get('city'));
+    else if (current==='route' && params().get('scope')!=='pilot') composer=mountComposer(screen,api,query.get('city'));
     else {
       const plan = current==='route' ? currentRoutePlan() : null;
-      screen.innerHTML = {overview:()=>renderOverview(data,overview),catalog,route:()=>routeView(plan),stats,sources}[current]();
+      screen.innerHTML = {catalog,route:()=>routeView(plan),stats,sources}[current]();
+      if (current==='sources') mountSourceConsole($('#source-console'),api);
       if (current==='stats') void loadStatRegions();
       if (plan) {
         if (priorForm) for (const field of $('#route-form').elements) {
@@ -1178,7 +1186,7 @@ screen.addEventListener('click',event=>{
   if (target.dataset.action==='overview-filter' || target.dataset.action==='overview-change') {
     const key = target.dataset.action==='overview-filter' ? 'filter' : 'selected';
     overview[key] = target.dataset.value;
-    render();
+    cityOverview?.refreshMonitoring();
     [...screen.querySelectorAll('[data-action="'+target.dataset.action+'"]')]
       .find(button=>button.dataset.value===target.dataset.value)?.focus({preventScroll:true});
   }

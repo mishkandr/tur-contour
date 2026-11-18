@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as wait } from 'node:timers/promises';
-import { catalogRefreshMs, readCatalog, saveCatalog } from './national-catalog.mjs';
+import { catalogRefreshMs, catalogVersion, maxCatalogPlaces, readCatalog, saveCatalog } from './national-catalog.mjs';
 
 const loadJson = file => readFile(new URL('./data/'+file,import.meta.url),'utf8').then(JSON.parse);
 const geonames = 'https://www.geonames.org/';
@@ -10,6 +10,7 @@ const osm = {
 };
 const wiki = {id:'wikimedia',name:'Википедия',url:'https://www.mediawiki.org/wiki/API:Geosearch',license:'CC BY-SA 4.0',provider:'MediaWiki GeoSearch'};
 const fallbackUrl = 'https://overpass.private.coffee/api/interpreter';
+const wikiLimit = 250;
 const cache = new Map();
 const pending = new Map();
 const citySearchCache = new Map();
@@ -257,21 +258,22 @@ function queryAround(city) {
   const [lat,lon] = city.coordinates;
   const around = kilometres=>'(around:'+kilometres+','+lat.toFixed(5)+','+lon.toFixed(5)+')[name]';
   const visit = around(11_000);
-  const infrastructure = around(8500);
+  const infrastructure = around(10_500);
   return '[out:json][timeout:10];'+
-    'nwr'+visit+'[tourism~"^(museum|gallery|zoo|aquarium|theme_park)$"];out center 55;'+
-    'nwr'+visit+'[historic~"^(castle|fort|monument|memorial|archaeological_site)$"];out center 40;'+
-    'nwr'+visit+'[tourism~"^(attraction|viewpoint)$"];out center 45;'+
-    'nwr'+visit+'[leisure~"^(park|garden)$"];out center 34;'+
+    'nwr'+visit+'[tourism~"^(museum|gallery|zoo|aquarium|theme_park)$"];out center 70;'+
+    'nwr'+visit+'[historic~"^(castle|fort|monument|memorial|archaeological_site)$"];out center 50;'+
+    'nwr'+visit+'[tourism~"^(attraction|viewpoint)$"];out center 55;'+
+    'nwr'+visit+'[leisure~"^(park|garden)$"];out center 42;'+
     'nwr'+visit+'[craft~"^('+traditionalCrafts.join('|')+')$"];out center 24;'+
     '(nwr'+visit+'[amenity=monastery];nwr'+visit+'[historic=monastery];nwr'+visit+'[building=monastery];nwr'+visit+'[pilgrimage=yes];);out center 24;'+
-    'nwr'+infrastructure+'[amenity=restaurant];out center 42;'+
+    'nwr'+infrastructure+'[amenity=restaurant];out center 65;'+
+    'nwr'+infrastructure+'[amenity=cafe];out center 30;'+
     'nwr'+visit+'[amenity=marketplace];out center 20;'+
-    'nwr'+infrastructure+'[tourism~"^(hotel|hostel|guest_house)$"];out center 30;';
+    'nwr'+infrastructure+'[tourism~"^(hotel|hostel|guest_house)$"];out center 50;';
 }
 
 function classify(tags) {
-  if (tags.amenity==='restaurant') {
+  if (['restaurant','cafe'].includes(tags.amenity)) {
     const cuisineHint=clean(tags.cuisine,100);
     const culinary=cuisineHint.toLowerCase().split(';').some(value=>regionalCuisine.has(value.trim()));
     return {kind:'food',tags:culinary?['dining','gastro']:['dining'],...(culinary?{cuisineHint}:{})};
@@ -307,7 +309,7 @@ function pointOf(element) {
 function fromOsm(elements,city) {
   const seen = new Map();
   const objects = [];
-  for (const element of elements.slice(0,320)) {
+  for (const element of elements.slice(0,maxCatalogPlaces)) {
     if (!element || !['node','way','relation'].includes(element.type) || !Number.isSafeInteger(element.id) || element.id<1) continue;
     const coordinates = pointOf(element);
     const tags = element.tags ?? {};
@@ -320,9 +322,12 @@ function fromOsm(elements,city) {
     seen.set(key,[...nearby,coordinates]);
     const exposure = category.kind==='visit' ? exposureOf(name,
       category.tags.includes('nature') ? 'park' : category.tags.includes('museum') ? 'museum' : null,tags) : null;
+    const street=clean(tags['addr:street:ru'] ?? tags['addr:street'],120);
+    const address=clean(tags['addr:full'],160) || (street ? [street,clean(tags['addr:housenumber'],25)].filter(Boolean).join(', ') : null);
     objects.push({ id:'osm-'+element.type+'-'+element.id,name,en:clean(tags['name:en']) || null,
       cn:clean(tags['name:zh-Hans'] ?? tags['name:zh']) || null,city:city.name,coordinates,...category,status:'unknown',geoStatus:'mapped',
       ...(exposure ? {exposure} : {}),
+      ...(address ? {address} : {}),
       url:'https://www.openstreetmap.org/'+element.type+'/'+element.id,officialUrl:webAddress(tags.website ?? tags['contact:website']),
       hoursHint:clean(tags.opening_hours,200) || null,wheelchairHint:clean(tags.wheelchair,15) || null });
   }
@@ -407,13 +412,13 @@ async function fetchWikiPois(city,fetchImpl) {
   try {
     const endpoint = new URL('https://ru.wikipedia.org/w/api.php');
     endpoint.search=new URLSearchParams({action:'query',list:'geosearch',gscoord:city.coordinates.join('|'),
-      gsradius:'9500',gslimit:'100',gsnamespace:'0',format:'json',formatversion:'2'});
+      gsradius:'10000',gslimit:String(wikiLimit),gsnamespace:'0',format:'json',formatversion:'2'});
     const response=await fetchImpl(endpoint,{headers:{'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)','Accept':'application/json'},
       signal:AbortSignal.timeout(5500),redirect:'error'});
     if (!response.ok) return null;
     const result=await response.json();
     if (!Array.isArray(result.query?.geosearch)) return null;
-    const places=result.query.geosearch.slice(0,100).flatMap(page=>{
+    const places=result.query.geosearch.slice(0,wikiLimit).flatMap(page=>{
       const point=pointOf(page);
       const category=categoryOfWikiPage(page);
       const name=clean(page.title);
@@ -440,6 +445,7 @@ function mergeCatalogPlaces(places,catalog,curated=false) {
       const sources=[...new Set([...(place.sources ?? [place.url]),archived.url])];
       const exposure = place.exposure ?? archived.exposure;
       places[index]={...place,id,en:place.en ?? archived.en,cn:place.cn ?? archived.cn,aliases,sources,
+        ...(place.address || archived.address ? {address:place.address || archived.address} : {}),
         ...(sourceIds.length ? {sourceIds} : {}),
         ...(exposure ? {exposure} : {}),
         ...(archived.gastro===true ? {gastro:true} : {}),
@@ -496,7 +502,7 @@ function sameSite(place,archived,curated) {
 
 async function lookupPois(city,fetchImpl) {
   const retained=await retainedCatalogs(city);
-  if (retained.some(({source})=>Date.now()-Date.parse(source.fetchedAt)<catalogRefreshMs)) {
+  if (retained.some(({source,version})=>version===catalogVersion && Date.now()-Date.parse(source.fetchedAt)<catalogRefreshMs)) {
     return combineCatalogs(city,null,retained,'recent');
   }
   if (blockedUntil>Date.now() || requestInProgress) return combineCatalogs(city,null,retained,'busy');
@@ -951,6 +957,27 @@ function mapData(locations,places,sources) {
     attribution:[{label:'GeoNames',url:'https://www.geonames.org/export/'},{label:'OpenStreetMap contributors',url:osm.url},
       ...credits.values()],
   };
+}
+
+export async function getCity(cityId) {
+  if (!/^\d{1,12}$/u.test(cityId ?? '')) throw error('Выберите город из списка.');
+  const {byId,regions}=await cityData();
+  const row=byId.get(String(cityId));
+  if (!row) throw Object.assign(new Error('Населённый пункт не найден в GeoNames.'),{status:404});
+  return formatCity(row,regions);
+}
+
+export async function cityCatalog(city,{fetchImpl=globalThis.fetch,local,include=true}={}) {
+  const counts={visit:0,food:0,stay:0};
+  if (!include) return {places:[],geodata:mapData([city],[],[]),catalogSources:[],counts};
+  const {places:providerPlaces,source}=await objectsFor(city,fetchImpl);
+  const places=[...providerPlaces];
+  const inArea=local?.places.filter(place=>place.city===city.name && distance(place.coordinates,city.coordinates)<=12) ?? [];
+  if (inArea.length) mergeCatalogPlaces(places,{places:inArea,source:local.source},true);
+  const sources=[source,source.supplemental,...(source.retained ?? []),inArea.length ? local.source : null].filter(Boolean)
+    .map(({supplemental,retained,...evidence})=>evidence);
+  for (const place of places) counts[place.kind]+=1;
+  return {places,geodata:mapData([city],places,sources),catalogSources:sources,counts};
 }
 
 export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} = {}) {

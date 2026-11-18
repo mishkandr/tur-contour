@@ -12,7 +12,25 @@ const metrics = {
   people:{query:'численность размещенных лиц в средствах размещения',prefix:'chislennost-razmeschennyh-lic'},
 };
 const exactNames = {
+  '15':'Чукотский автономный округ',
+  '16':'Чувашская Республика',
+  '19':'Республика Ингушетия',
+  '22':'Кабардино-Балкарская Республика',
+  '27':'Карачаево-Черкесская Республика',
+  '28':'Республика Карелия',
+  '31':'Республика Хакасия',
+  '32':'Ханты-Мансийский автономный округ — Югра',
+  '50':'Ненецкий автономный округ',
+  '51':'Нижегородская область',
+  '64':'Сахалинская область',
+  '68':'Республика Северная Осетия — Алания',
+  '80':'Удмуртская Республика',
+  '87':'Ямало-Ненецкий автономный округ',
   '89':'Еврейская автономная область',
+};
+const workbookAliases = {
+  '48':['г.Москва'],
+  '66':['г.Санкт-Петербург'],
 };
 let registry;
 
@@ -41,10 +59,12 @@ export async function regionForCity(cityId) {
 }
 
 const normalizedName = value => String(value ?? '').normalize('NFKC').toLowerCase().replaceAll('ё','е')
-  .replace(/[–—−]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim();
+  .replace(/[–—−]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ').trim()
+  .replace(/^г\.\s*/u,'г.');
 
 function seriesForRegion(workbook,metric,region,checkedAt) {
-  const exact = workbook.series.filter(row=>normalizedName(row.row)===normalizedName(region.name));
+  const names = new Set([region.name,...(workbookAliases[region.id] ?? [])].map(normalizedName));
+  const exact = workbook.series.filter(row=>names.has(normalizedName(row.row)));
   const rows = new Map(exact.map(row=>[row.col,row.values]));
   if (!exact.length) return null;
   if (exact.length!==12 || rows.size!==12 || monthColumns.some(column=>!Array.isArray(rows.get(column)) ||

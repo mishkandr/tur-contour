@@ -158,6 +158,20 @@ test('does not substitute unrelated venues or Vladimir statistics for other citi
   assert.equal(calls,1);
 });
 
+test('uses the selected city for a short question and links sources from its catalogue',async()=>{
+  const {source,...catalog}=kazanDraft;
+  const result=await answerKnowledge({question:'Какие музеи есть в каталоге?',city:kazan,dashboard},{
+    detectCities:async()=>[],
+    lookupDraft:async input=>{
+      assert.equal(input.cityId,kazan.id);
+      return {...catalog,catalogSources:[{...source,cityId:kazan.id}]};
+    },
+  });
+  assert.equal(result.status,'answered');
+  assert.deepEqual(result.items.map(item=>item.title),['Музей города']);
+  assert.equal(result.sources[0].url,source.url);
+});
+
 test('uses an explicitly selected administrative territory and never borrows Vladimir data if it is unavailable',async()=>{
   const region = {id:'73',name:'Республика Татарстан',en:'Tatarstan Republic'};
   const input = {question:'How many overnight stays in 2025?',locale:'en',dashboard,scope:region.id};

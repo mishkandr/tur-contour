@@ -53,7 +53,7 @@ function temperature(value) {
   return formatNumber(value,{style:'unit',unit:'celsius',maximumFractionDigits:0});
 }
 
-function weatherSummary(day, horizonDays, compact=false) {
+export function weatherSummary(day, horizonDays, compact=false) {
   if (day?.status==='past') return t('Дата уже прошла.');
   if (day?.status==='out-of-range') return t('На эту дату прогноз ещё недоступен. Сервис показывает ближайшие {days} дней.',{days:formatNumber(horizonDays)});
   if (day?.status!=='forecast') return t('Прогноз сейчас недоступен.');

@@ -1,0 +1,138 @@
+{
+  "checkedAt": "2026-11-18",
+  "cities": {
+    "524901": [
+      {
+        "id": "project-moscow-history-museum",
+        "name": "Реконструкция музейно-выставочного комплекса",
+        "en": "Museum and exhibition complex renovation",
+        "cn": "博物馆展览中心改建",
+        "coordinates": [55.7656611, 37.6005085],
+        "address": "Тверская улица, 21, строение 4",
+        "addressEn": "21 Tverskaya Street, Building 4",
+        "addressCn": "特维尔大街21号4栋",
+        "stage": "permit",
+        "publishedAt": "2026-10-06",
+        "url": "https://www.mos.ru/upload/documents/files/4123/OformlennieRS.pdf",
+        "source": "Реестр разрешений Москвы",
+        "sourceEn": "Moscow construction permits",
+        "sourceCn": "莫斯科建设许可名录",
+        "geoUrl": "https://www.openstreetmap.org/way/31251324",
+        "detail": "Разрешение Р001-77305-77/00000158 выдано Музею современной истории России.",
+        "detailEn": "Permit R001-77305-77/00000158 was issued to the Museum of Contemporary History of Russia.",
+        "detailCn": "俄罗斯当代历史博物馆获发建设许可 R001-77305-77/00000158。"
+      },
+      {
+        "id": "project-moscow-krylatskiye-bridges",
+        "name": "Пешеходные переходы в Крылатских холмах",
+        "en": "Pedestrian links in Krylatskiye Hills",
+        "cn": "克雷拉茨科耶山地步行桥",
+        "coordinates": [55.7588978, 37.426447],
+        "coordinatesKind": "area",
+        "address": "Парк «Крылатские холмы»",
+        "addressEn": "Krylatskiye Hills Park",
+        "addressCn": "克雷拉茨科耶山地公园",
+        "stage": "permit",
+        "publishedAt": "2026-10-02",
+        "url": "https://www.mos.ru/upload/documents/files/4123/OformlennieRS.pdf",
+        "source": "Реестр разрешений Москвы",
+        "sourceEn": "Moscow construction permits",
+        "sourceCn": "莫斯科建设许可名录",
+        "geoUrl": "https://www.openstreetmap.org/relation/2081453",
+        "detail": "Разрешение Р001-77305-77/00000147 на мостовое сооружение №9. Метка показывает район парка.",
+        "detailEn": "Permit R001-77305-77/00000147 covers bridge no. 9. The marker locates the park area.",
+        "detailCn": "9号桥获发建设许可 R001-77305-77/00000147。图钉标示公园范围。"
+      }
+    ],
+    "551487": [
+      {
+        "id": "project-kazan-alafuzov-museum",
+        "name": "Музей семьи Алафузовых и библиотека",
+        "en": "Alafuzov family museum and library",
+        "cn": "阿拉富佐夫家族博物馆与图书馆",
+        "coordinates": [55.8095634, 49.0670846],
+        "address": "Улица Гладилова, 53, литер А11",
+        "addressEn": "53 Gladilova Street, Building A11",
+        "addressCn": "格拉季洛瓦街53号A11栋",
+        "stage": "planned",
+        "publishedAt": "2026-04-16",
+        "url": "https://go.kzn.ru/articles/kak-kirovskii-raion-stanovitsia-muzeem-naslediia",
+        "source": "Туристический портал Казани",
+        "sourceEn": "Kazan tourism portal",
+        "sourceCn": "喀山官方旅游门户",
+        "geoUrl": "https://www.openstreetmap.org/way/272736597",
+        "detail": "Музей и библиотеку планируют разместить в особняке Котелова после реконструкции.",
+        "detailEn": "The plan places a museum and library in the Kotelov Mansion after renovation.",
+        "detailCn": "项目拟在科捷洛夫宅邸改建后设立博物馆和图书馆。"
+      }
+    ],
+    "498817": [
+      {
+        "id": "project-petersburg-salon-23",
+        "name": "Реставрация особняка под отель «Салон 23»",
+        "en": "Mansion restoration for Salon 23 hotel",
+        "cn": "23号沙龙酒店历史宅邸修复项目",
+        "coordinates": [59.9344987, 30.3429414],
+        "address": "Набережная реки Фонтанки, 23",
+        "addressEn": "23 Fontanka River Embankment",
+        "addressCn": "丰坦卡河堤街23号",
+        "stage": "planned",
+        "publishedAt": "2026-07-15",
+        "url": "https://www.gov.spb.ru/gov/otrasl/invest/news/318350/",
+        "source": "Комитет по инвестициям Санкт-Петербурга",
+        "sourceEn": "St Petersburg Investment Committee",
+        "sourceCn": "圣彼得堡投资委员会",
+        "geoUrl": "https://www.openstreetmap.org/relation/1484227",
+        "detail": "В историческом особняке планируют гостиницу с рестораном. Инвестор называет 2031 год ориентиром для открытия.",
+        "detailEn": "A hotel and restaurant are planned for the historic mansion. The investor targets 2031 for opening.",
+        "detailCn": "项目拟将历史宅邸改为酒店和餐厅。投资方计划于2031年开业。"
+      }
+    ],
+    "487846": [
+      {
+        "id": "project-stavropol-museum-complex",
+        "name": "Культурно-образовательный и музейный комплекс",
+        "en": "Cultural, education and museum complex",
+        "cn": "文化教育与博物馆综合体",
+        "coordinates": [45.021172, 41.8909737],
+        "coordinatesKind": "area",
+        "address": "Улица Ивана Щипакина, 4",
+        "addressEn": "4 Ivana Shchipakina Street",
+        "addressCn": "伊万·希帕金街4号",
+        "stage": "works",
+        "publishedAt": "2026-07-03",
+        "url": "https://stavregion.ru/news/offcoment/2026/07/03/gubernator-vladimirov-ocenil-hod-stroitelstva-kult/",
+        "source": "Правительство Ставропольского края",
+        "sourceEn": "Stavropol Krai government",
+        "sourceCn": "斯塔夫罗波尔边疆区政府",
+        "geoUrl": "https://www.openstreetmap.org/way/1311762381",
+        "detail": "Край сообщил о ходе строительства залов и музея. Метка показывает район стройки у сквера Героев России.",
+        "detailEn": "The regional government reported construction progress on the halls and museum. The marker locates the construction area near Heroes of Russia Square.",
+        "detailCn": "边疆区政府公布了场馆和博物馆的建设进度。图钉标示俄罗斯英雄广场附近的施工区域。"
+      }
+    ],
+    "2022890": [
+      {
+        "id": "project-khabarovsk-art-museum",
+        "name": "Новое здание Дальневосточного художественного музея",
+        "en": "New Far Eastern Art Museum building",
+        "cn": "远东艺术博物馆新馆",
+        "coordinates": [48.4674755, 135.0663477],
+        "coordinatesKind": "area",
+        "address": "Район площади Славы",
+        "addressEn": "Area near Glory Square",
+        "addressCn": "荣耀广场附近",
+        "stage": "works",
+        "publishedAt": "2026-09-17",
+        "url": "https://khab-vesti.ru/news/stroitelstvo_i_gorodskaya_sreda/vozvedenie_v_khabarovske_novogo_zdaniya_dvkhm_ne_ostanovitsya_dazhe_zimoy/",
+        "source": "Хабаровские вести",
+        "sourceEn": "Khabarovsk municipal news",
+        "sourceCn": "哈巴罗夫斯克市政新闻",
+        "geoUrl": "https://www.openstreetmap.org/node/473473706",
+        "detail": "Подрядчик сообщил о работах на площадке. Метка показывает район площади Славы.",
+        "detailEn": "The contractor reported work on the site. The marker locates the area near Glory Square.",
+        "detailCn": "承包商公布了现场施工进度。图钉标示荣耀广场附近区域。"
+      }
+    ]
+  }
+}

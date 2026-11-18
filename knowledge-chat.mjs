@@ -270,8 +270,9 @@ async function nationwidePlaceAnswer(city,question,query,parameters,lookupDraft,
   }
   const venues = (result?.places ?? []).filter(place=>place.city===city.name && reference(place.name,place.url));
   const matches = nationwideCandidates(venues,query).slice(0,5);
-  const provider = result?.sources?.find(entry=>String(entry.cityId)===String(city.id)) ?? result?.source;
-  const providerSources = [provider,provider?.supplemental].filter(Boolean).map(entry=>reference(
+  const provider = (result?.catalogSources ?? result?.sources)?.find(entry=>String(entry.cityId)===String(city.id)) ??
+    result?.catalogSources?.[0] ?? result?.source;
+  const providerSources = [provider,provider?.supplemental,...(provider?.retained ?? [])].filter(Boolean).map(entry=>reference(
     (entry.status==='snapshot' ? t('nationalSnapshot')+' · ' : '')+entry.name,entry.url,entry.checkedAt));
   const sources = references([...providerSources,...matches.map(place=>reference(placeName(place,locale),place.officialUrl,null)),citySource]);
   const items = matches.map(place=>({title:placeName(place,locale),text:intent==='schedule' ? t('nationalAvailability') : title,href:place.url}));
@@ -453,7 +454,7 @@ export async function classifyKnowledge(question,{model,baseUrl,signal,fetchImpl
   } catch { return null; }
 }
 
-export async function answerKnowledge({question,locale='ru',dashboard,settings,scope,now=new Date()},
+export async function answerKnowledge({question,locale='ru',dashboard,settings,scope,city,now=new Date()},
   {askStats,classify,detectCities,lookupDraft,getRegionalStats}={}) {
   locale = locale==='zh-Hans' ? 'zh' : Object.hasOwn(localeTags,locale) ? locale : 'ru';
   const t = key=>copy[key][Object.keys(localeTags).indexOf(locale)];
@@ -471,7 +472,8 @@ export async function answerKnowledge({question,locale='ru',dashboard,settings,s
   }
   let result;
   const cityScoped = ['statistics','schedule','places'].includes(intent);
-  const cities = cityScoped && detectCities ? await Promise.resolve().then(()=>detectCities(question.slice(0,600))).catch(()=>[]) : [];
+  const namedCities = cityScoped && detectCities ? await Promise.resolve().then(()=>detectCities(question.slice(0,600))).catch(()=>[]) : [];
+  const cities = namedCities.length || intent==='statistics' || !cityScoped || !city ? namedCities : [city];
   const outsidePilot = cities.filter(city=>!Object.hasOwn(locations,city.name));
   if (intent==='statistics' && outsidePilot.length) {
     result = prepareResponse(locale,intent,t('statistics'),t(getRegionalStats ? 'cityStatisticsUnavailable' : 'unavailableArea'),

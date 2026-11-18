@@ -1,7 +1,7 @@
 import { addLocaleMessages, formatDate, formatNumber, t } from '/locale.js';
 
 addLocaleMessages([
-  ['Обзор Владимирской области','Vladimir Oblast overview','弗拉基米尔州概览'],
+  ['Мониторинг программ · Владимирская область','Itinerary monitoring · Vladimir Oblast','行程监测 · 弗拉基米尔州'],
   ['Программы на контроле','Monitored itineraries','监测中的行程'],
   ['Требуют пересмотра','Need revision','需要复核'],
   ['Условия опубликованы','Published conditions','已公布参观条件'],
@@ -64,7 +64,7 @@ function recordList(records) {
       </div></li>`).join('')+'</ul>';
 }
 
-export function renderOverview(data, view) {
+export function renderMonitoredProgrammes(data, view) {
   const programmes = data.affected ?? [];
   const scope = programmes.filter(record=>!record.settings.demo);
   const training = programmes.filter(record=>record.settings.demo);
@@ -77,10 +77,7 @@ export function renderOverview(data, view) {
   const publishedCount = data.publishedConditions?.objectCount ?? 0;
   const verifiedCount = data.auditFeed?.objectCount ?? 0;
   return `
-    <header class="ops-head">
-      <h1>${local('Обзор Владимирской области')}</h1>
-      <div class="actions ops-head-actions">${action('Маршрут по России','#route','button')}</div>
-    </header>
+    <header class="ops-head"><h2>${local('Мониторинг программ · Владимирская область')}</h2></header>
     <div class="ops-board">
       <section class="panel ops-log" aria-labelledby="ops-changes">
         <header class="section-head"><h2 id="ops-changes">${local('Изменения')}</h2><a href="#sources">${local('Журнал источников')}</a></header>
@@ -108,7 +105,7 @@ export function renderOverview(data, view) {
             data.places.some(place=>place.id===entry.change.id) ? action('Открыть на карте',linkTo('impact',{place:entry.change.id,layer:entry.change.demo?'route':'official'})) : ''}
       </section>` : ''}
       <section class="panel ops-monitor" id="ops-programmes" tabindex="-1" aria-labelledby="ops-monitor">
-        <header class="section-head"><h2 id="ops-monitor">${local('Программы на контроле')}</h2>${action('Проверить программу','#route?scope=pilot')}</header>
+        <header class="section-head"><h2 id="ops-monitor">${local('Программы на контроле')}</h2></header>
         ${scope.length ? (awaiting ? '<p class="caption ops-monitor-count">'+local('Требуют пересмотра')+' · '+formatNumber(awaiting)+'</p>' : '')+recordList(scope) : '<p class="ops-empty">'+local('Нет программ на контроле.')+'</p>'}
         ${training.length ? '<details class="ops-training" '+(training.some(record=>record.affected)?'open':'')+'><summary>'+local('Учебные программы')+' · '+formatNumber(training.length)+'</summary>'+recordList(training)+'</details>':''}
       </section>

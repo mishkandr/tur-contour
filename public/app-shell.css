@@ -44,7 +44,7 @@ h1, .atlas-heading h1 {
 .top .mark i { border-color: #b9ebdb; }
 .top .mark i:nth-child(3) { background: #e1fff5; }
 
-.top nav a, .top nav a[href="#ask"] {
+.top nav a {
   gap: 10px;
   min-height: 44px;
   padding: 8px 12px;
@@ -136,7 +136,6 @@ h1, .atlas-heading h1 {
 
   .top .brand { margin: 0 6px 26px; }
   .top nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
-  .top nav a[href="#stats"] { margin-block-start: 14px; }
   .top nav a[aria-current="page"] { box-shadow: inset 3px 0 #7ac5b6; }
   .top .locale-picker { margin: auto 0 0; padding: 20px 2px 0; }
   .top .locale-picker select { width: 100%; }
@@ -154,7 +153,7 @@ h1, .atlas-heading h1 {
   .top nav {
     grid-area: 2 / 1 / auto / -1;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     width: 100%;
     overflow: visible;
@@ -167,14 +166,12 @@ h1, .atlas-heading h1 {
 
 @media (max-width: 760px) {
   .top-inner { gap: 2px 8px; padding: 4px clamp(10px, 2.4vw, 18px) 6px; }
-  .top nav { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
-  .top nav a, .top nav a[href="#ask"] {
-    grid-column: span 3;
+  .top nav { gap: 2px; }
+  .top nav a {
     padding-inline: 2px;
     line-height: 1.2;
     font-size: .8rem;
   }
-  .top nav a:nth-child(n+5) { grid-column: span 4; }
 }
 
 @media (max-width: 900px) {

@@ -5,7 +5,7 @@ const osmCredit = '© <a href="https://www.openstreetmap.org/copyright">OpenStre
 const samePoint = (a, b) => a[0] === b[0] && a[1] === b[1];
 const mapCopy = {
   ru: {
-    kinds:{visit:'Достопримечательность',food:'Питание',stay:'Размещение'},
+    kinds:{visit:'Достопримечательность',food:'Питание',stay:'Размещение',project:'Проект'},
     statuses:{blocked:'Ограничение',unknown:'Требуется проверка',ready:'Подходит по условиям'},
     zoomIn:'Приблизить',zoomOut:'Отдалить',showPlaces:'Показать объекты',sharedAddress:'Объекты по одному адресу',
     nearby:'Объекты рядом',closePlaces:'Закрыть список объектов',
@@ -13,7 +13,7 @@ const mapCopy = {
     stops:(day,order)=>'День '+day+', точка '+order, alternative:'Другой вариант', changed:'Условия изменились',
   },
   en: {
-    kinds:{visit:'Attraction',food:'Dining',stay:'Accommodation'},
+    kinds:{visit:'Attraction',food:'Dining',stay:'Accommodation',project:'Project'},
     statuses:{blocked:'Restriction',unknown:'Needs confirmation',ready:'Meets the requirements'},
     zoomIn:'Zoom in',zoomOut:'Zoom out',showPlaces:'Show sites',sharedAddress:'Sites at the same address',
     nearby:'Nearby sites',closePlaces:'Close list of sites',
@@ -21,7 +21,7 @@ const mapCopy = {
     stops:(day,order)=>'Day '+day+', stop '+order, alternative:'Alternative', changed:'Conditions changed',
   },
   zh: {
-    kinds:{visit:'景点',food:'餐饮',stay:'住宿'},
+    kinds:{visit:'景点',food:'餐饮',stay:'住宿',project:'项目'},
     statuses:{blocked:'有条件限制',unknown:'需要确认',ready:'满足条件'},
     zoomIn:'放大',zoomOut:'缩小',showPlaces:'查看地点',sharedAddress:'同一地址的地点',
     nearby:'附近地点',closePlaces:'关闭地点列表',
@@ -382,11 +382,12 @@ export function createRouteMap(element, { onSelect, onStatus, locale: initialLoc
     body.className = 'map-pin';
     if (order) body.classList.add('map-pin--route');
     if (candidate) body.classList.add('map-pin--alternative');
+    if (place.kind==='project') body.classList.add('map-pin--project');
     if (isSelected) body.classList.add('map-pin--selected');
     if (changed) body.classList.add('map-pin--changed');
     if (Object.hasOwn(copy.statuses,place.status)) body.classList.add('map-pin--' + place.status);
     const glyph = changed ? '!' : order ? String(order) : candidate ? '+' :
-      place.kind === 'food' ? '•' : place.kind === 'stay' ? '▪' : '·';
+      place.kind === 'food' ? '•' : place.kind === 'stay' ? '▪' : place.kind === 'project' ? '◇' : '·';
     const core = addLandmark(body, glyph);
     core.className = 'map-pin__core';
     core.setAttribute('aria-hidden', 'true');

@@ -19,6 +19,10 @@ test('countrywide gazetteer finds cities in different languages and regions',asy
   assert.equal((await listCities('喀山')).cities[0].id,'551487');
   assert.equal((await listCities('новгород')).cities[0].name,'Нижний Новгород');
   assert.equal((await listCities('Верхоянск')).cities[0].name,'Верхоянск');
+  const st=await listCities('Ставрополь');
+  assert.equal(st.cities[0].id,'487846');
+  assert.equal(st.cities[0].region,'Ставропольский край');
+  assert.equal((await detectCities('Выходные в Ставрополе'))[0].id,'487846');
   assert.deepEqual((await listCities('Нет Такого Места')).cities,[]);
 });
 
@@ -114,7 +118,9 @@ test('Overpass requests receive only fixed coordinate queries and the pace and m
   const records=Array.from({length:10},(_,i)=>({type:'node',id:100+i,lat:55.7520+i*0.0005,lon:37.6178,
     tags:{name:'Музей '+i,tourism:'museum'}}));
   records.push({type:'node',id:120,lat:55.788,lon:37.6178,tags:{name:'Дальний парк',leisure:'park'}});
-  records.push({type:'node',id:121,lat:55.753,lon:37.61765,tags:{name:'Кафе рядом',amenity:'restaurant'}});
+  records.push({type:'node',id:121,lat:55.753,lon:37.61765,tags:{
+    name:'Кафе рядом',amenity:'restaurant','addr:street':'Тверская улица','addr:housenumber':'3',
+  }});
   records.push({type:'way',id:122,center:{lat:55.753,lon:37.61765},tags:{name:'Отель рядом',tourism:'hotel'}});
   const fetchImpl = async url=>{
     endpoints.push(String(url));
@@ -124,6 +130,7 @@ test('Overpass requests receive only fixed coordinate queries and the pace and m
   const relaxed=await draftItinerary({...request,pace:'relaxed',transport:'walking',required},{fetchImpl});
   const dense=await draftItinerary({...request,pace:'dense',transport:'car',required},{fetchImpl});
   assert.equal(dense.source.status,'live');
+  assert.equal(dense.places.find(place=>place.id==='osm-node-121').address,'Тверская улица, 3');
   assert.ok(endpoints.every(url=>!decodeURIComponent(url).includes(required[1]) && url.includes('55.75204')));
   assert.equal(relaxed.plan.required[0].scheduled,false);
   assert.equal(relaxed.plan.required[0].reason,'out-of-range');
@@ -544,7 +551,9 @@ test('a visit-only Saint Petersburg source still offers provisional group dining
     {fetchImpl:async()=>Response.json({elements})});
   assert.equal(result.source.status,'live');
   assert.equal(result.source.supplemental.status,'snapshot');
-  assert.equal(result.places.filter(place=>place.kind==='food').length,3);
+  const restaurants=result.places.filter(place=>place.kind==='food');
+  assert.ok(restaurants.length>=5);
+  assert.ok(restaurants.some(place=>place.id==='spb-palkin' && place.address==='Невский проспект, 47'));
   assert.equal(result.places.filter(place=>place.kind==='stay').length,3);
   assert.ok(result.plan.days.every(day=>day.stops.some(stop=>stop.type==='food')));
   const overnightIds=result.plan.days.slice(0,2).map(day=>day.stops.find(stop=>stop.type==='stay')?.id);

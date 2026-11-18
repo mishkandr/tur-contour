@@ -12,11 +12,14 @@ import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
 import { mergePublishedConditions } from './published-conditions.mjs';
 import { getDemoOffers } from './ota-offers.mjs';
-import { detectCities, draftItinerary, listCities } from './nationwide.mjs';
+import { detectCities, draftItinerary, getCity, listCities } from './nationwide.mjs';
 import { createBriefInterpreter, parseBrief, warmBriefModel } from './planner-brief.mjs';
 import { answerKnowledge, classifyKnowledge } from './knowledge-chat.mjs';
 import { createRegionalStatistics, statisticsRegions } from './regional-statistics.mjs';
 import { createWeatherForecast } from './weather.mjs';
+import { createCityOverview } from './city-overview.mjs';
+import { getCityProjects } from './city-projects.mjs';
+import { createSourceMonitor } from './source-monitor.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const load = name => readFile(join(directory,'data',name),'utf8').then(JSON.parse);
@@ -41,6 +44,8 @@ if (publicDemo && verifiedAuditPath) throw new Error('Публичный пок�
 const statsEdition = process.env.TUR_ROSSTAT_EDITION;
 const regionalStatistics = createRegionalStatistics({edition:statsEdition,apiKey:process.env.ROSCHART_API_KEY});
 const weatherForecast = createWeatherForecast();
+const cityOverview = createCityOverview({catalog,mapData,weatherForecast,getCityProjects});
+const sourceMonitor = createSourceMonitor(stateDir,{statisticsKey:process.env.ROSCHART_API_KEY,overpassUrl:process.env.TUR_OVERPASS_URL});
 const ollamaModel = process.env.TUR_OLLAMA_MODEL || 'qwen3.5:4b';
 const briefModel = process.env.TUR_OLLAMA_DETAIL_MODEL || ollamaModel;
 const briefKeepAlive = process.env.TUR_OLLAMA_BRIEF_KEEP_ALIVE || undefined;
@@ -488,9 +493,12 @@ const assets = {
   '/':['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'],
   '/atlas.js':['atlas.js','text/javascript'], '/atlas.css':['atlas.css','text/css'], '/map.js':['map.js','text/javascript'],
   '/overview.js':['overview.js','text/javascript'], '/workspace.css':['workspace.css','text/css'],
+  '/city-overview.js':['city-overview.js','text/javascript'], '/city-overview.css':['city-overview.css','text/css'],
+  '/source-preferences.js':['source-preferences.js','text/javascript'],
   '/app-shell.css':['app-shell.css','text/css'],
   '/locale.js':['locale.js','text/javascript'], '/map-workspace.css':['map-workspace.css','text/css'],
   '/composer.js':['composer.js','text/javascript'], '/knowledge.js':['knowledge.js','text/javascript'],
+  '/source-console.js':['source-console.js','text/javascript'],
   '/weather.js':['weather.js','text/javascript'],
   '/chinese-itinerary.mjs':['chinese-itinerary.mjs','text/javascript'],
   '/vendor/leaflet.js':['vendor/leaflet.js','text/javascript'], '/vendor/leaflet.css':['vendor/leaflet.css','text/css'],
@@ -516,7 +524,25 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/map') return respond(response,200,mapData);
     if (request.method==='GET' && path==='/api/state') return respond(response,200,dashboard(state));
-    if (request.method==='GET' && path==='/api/cities') return respond(response,200,await listCities(url.searchParams.get('q') ?? ''));
+    if (request.method==='GET' && path==='/api/source-status') return respond(response,200,await sourceMonitor.status());
+    if (request.method==='POST' && path==='/api/source-check') {
+      const {id}=await readBody(request);
+      return respond(response,200,await sourceMonitor.check(id));
+    }
+    if (request.method==='GET' && path==='/api/cities') {
+      if (!url.searchParams.has('id')) return respond(response,200,await listCities(url.searchParams.get('q') ?? ''));
+      const city=await getCity(url.searchParams.get('id')).catch(error=>{
+        if (error.status===404) return null;
+        throw error;
+      });
+      return respond(response,200,{cities:city ? [city] : []});
+    }
+    if (request.method==='GET' && path==='/api/city-overview') {
+      const fields=url.searchParams;
+      return respond(response,200,await cityOverview(fields.get('cityId'),{
+        includeWeather:fields.get('weather')!=='0',includeCatalog:fields.get('catalog')!=='0',includeProjects:fields.get('projects')!=='0',
+      }));
+    }
     if (request.method==='GET' && path==='/api/stat-regions') return respond(response,200,{regions:await statisticsRegions()});
     if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
     if (request.method==='POST' && path==='/api/draft') return respond(response,200,await draftItinerary(await readBody(request)));
@@ -526,9 +552,10 @@ export async function handleRequest(request,response) {
       const input=await readBody(request);
       const question=typeof input.question==='string'?input.question.trim():'';
       if (question.length<3 || question.length>600) return respond(response,400,{error:'Задайте вопрос в пределах 600 символов.'});
+      const city=input.cityId ? await getCity(input.cityId) : null;
       return respond(response,200,await answerKnowledge({question,locale:input.locale,dashboard:dashboard(state),
-        settings:input.settings,scope:input.regionId},{askStats:(text,settings,plan)=>answer(text,settings,plan,signal),
-        detectCities,lookupDraft:draftItinerary,getRegionalStats:regionalStatistics.get,
+        settings:input.settings,scope:input.regionId,city},{askStats:(text,settings,plan)=>answer(text,settings,plan,signal),
+        detectCities,lookupDraft:({cityId})=>cityOverview(cityId,{includeWeather:false}),getRegionalStats:regionalStatistics.get,
         classify:text=>process.env.TUR_NO_LLM==='1' ? null : withModel(()=>classifyKnowledge(text,{model:ollamaModel,baseUrl:ollamaUrl,signal}),null,signal)}));
     }
     if (request.method==='POST' && path==='/api/brief') {

@@ -311,11 +311,40 @@
           "dailyWindow": [720, 1440],
           "url": "https://claretcafe.ru/",
           "geoUrl": "https://otel-gelvetsiya.rt.center/index.php"
+        },
+        {
+          "id": "spb-palkin",
+          "name": "Ресторан «Палкинъ»",
+          "en": "Palkin Restaurant",
+          "cn": "帕尔金餐厅",
+          "aliases": ["Палкин", "Palkin"],
+          "coordinates": [59.9325995, 30.3470924],
+          "address": "Невский проспект, 47",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "russian",
+          "url": "https://www.palkin.ru/",
+          "geoUrl": "https://www.openstreetmap.org/node/1286722626"
+        },
+        {
+          "id": "spb-russian-ryumochnaya",
+          "name": "Ресторан «Русская Рюмочная №1»",
+          "en": "Russian Ryumochnaya No. 1",
+          "cn": "俄罗斯一号餐厅",
+          "aliases": ["Русская Рюмочная", "Russian Vodka Room No. 1"],
+          "coordinates": [59.9325821, 30.2974425],
+          "address": "Конногвардейский бульвар, 4",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "russian",
+          "dailyWindow": [720, 1440],
+          "url": "https://stroganoffgroup.ru/restaurants/russkaya-ryumochnaya-1/?lang=ru",
+          "geoUrl": "https://www.openstreetmap.org/node/487268384"
         }
       ]
     },
     "524901": {
-      "checkedAt": "2026-11-17",
+      "checkedAt": "2026-11-18",
       "places": [
         {
           "id": "Q1140429",
@@ -496,6 +525,44 @@
           ],
           "category": "food",
           "url": "https://www.wikidata.org/wiki/Q15272755"
+        },
+        {
+          "id": "moscow-white-rabbit",
+          "name": "Ресторан White Rabbit",
+          "en": "White Rabbit",
+          "cn": "白兔餐厅",
+          "aliases": ["Белый кролик", "White Rabbit"],
+          "coordinates": [55.7477071, 37.5818814],
+          "address": "Смоленская площадь, 3, 16-й этаж",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "russian",
+          "url": "https://whiterabbitfamily.ru/ru/",
+          "geoUrl": "https://www.openstreetmap.org/node/2463137962"
+        },
+        {
+          "id": "moscow-gorynych-trubnaya",
+          "name": "Ресторан «Горыныч» на Трубной",
+          "en": "Gorynych on Trubnaya",
+          "cn": "特鲁布纳亚广场戈雷内奇餐厅",
+          "aliases": ["Горыныч", "Gorynych"],
+          "coordinates": [55.7667166, 37.6243718],
+          "address": "Рождественский бульвар, 1",
+          "category": "food",
+          "url": "https://msc.gorynich.com/",
+          "geoUrl": "https://www.openstreetmap.org/node/5422226541"
+        },
+        {
+          "id": "moscow-gorynych-zvenigorodskaya",
+          "name": "Ресторан «Горыныч» на 1905 года",
+          "en": "Gorynych at 1905 Street",
+          "cn": "1905年街戈雷内奇餐厅",
+          "aliases": ["Горыныч", "Gorynych"],
+          "coordinates": [55.7623925, 37.5567317],
+          "address": "2-я Звенигородская улица, 12, строение 22",
+          "category": "food",
+          "url": "https://lucky.gorynich.com/",
+          "geoUrl": "https://www.openstreetmap.org/node/13630284051"
         }
       ]
     },
@@ -714,6 +781,66 @@
           "category": "food",
           "url": "https://shalyapin-hotel.ru/restaurants/",
           "geoUrl": "https://www.wikidata.org/wiki/Q130899024"
+        },
+        {
+          "id": "kazan-chirem",
+          "name": "Ресторан «Чирэм»",
+          "en": "Cheerem Restaurant",
+          "cn": "奇列姆餐厅",
+          "aliases": ["Чирэм", "Cheerem", "Chirem"],
+          "coordinates": [55.7983723, 49.1069735],
+          "address": "Казанский Кремль, проезд Шейнкмана, 5",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "tatar",
+          "dailyWindow": [720, 1380],
+          "url": "https://go.kzn.ru/places/restoran-cirem",
+          "geoUrl": "https://visit-tatarstan.com/places/cafes-and-restaurants/chirem/"
+        },
+        {
+          "id": "kazan-umay",
+          "name": "Ресторан «Умай»",
+          "en": "Umay Restaurant",
+          "cn": "乌迈餐厅",
+          "aliases": ["Умай", "Umay", "Umai"],
+          "coordinates": [55.7987858, 49.1102328],
+          "address": "Улица Большая Красная, 6",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "tatar",
+          "dailyWindow": [660, 1380],
+          "url": "https://go.kzn.ru/places/umai",
+          "geoUrl": "https://www.openstreetmap.org/node/12996321880"
+        },
+        {
+          "id": "kazan-eniem",
+          "name": "Ресторан «Энием»",
+          "en": "Eniem Restaurant",
+          "cn": "埃尼耶姆餐厅",
+          "aliases": ["Энием", "Eniem"],
+          "coordinates": [55.7964005, 49.1765647],
+          "address": "Улица Николая Ершова, 62, АРТ Центр, 2-й этаж",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "tatar",
+          "dailyWindow": [600, 1380],
+          "url": "https://go.kzn.ru/places/restoran-eniem",
+          "geoUrl": "https://www.openstreetmap.org/way/1151528859"
+        },
+        {
+          "id": "kazan-tatar-musin",
+          "name": "Ресторан TATAR by Tubatay на Мусина",
+          "en": "TATAR by Tubatay on Musin Street",
+          "cn": "穆辛街图巴泰鞑靼餐厅",
+          "aliases": ["Татар на Мусина", "TATAR by Tubatay"],
+          "coordinates": [55.817048, 49.1199916],
+          "address": "Улица Мусина, 1",
+          "category": "food",
+          "gastro": true,
+          "cuisineHint": "tatar",
+          "weeklyWindows": [[660, 1320], [660, 1320], [660, 1320], [660, 1320], [660, 1320], [660, 1380], [660, 1380]],
+          "url": "https://go.kzn.ru/places/tatar-by-tubatay",
+          "geoUrl": "https://www.openstreetmap.org/way/260318521"
         }
       ]
     },

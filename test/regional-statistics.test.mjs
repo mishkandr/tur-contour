@@ -76,6 +76,15 @@ test('handles truncated workbooks with a bound exact query and preserves gaps in
   assert.equal(requests.length,2);
 });
 
+test('uses exact workbook names for federal cities and subjects with older names in the city index',async()=>{
+  const series=['Московская область','г.Москва (часть)','г.Москва','г. Санкт-Петербург','Нижегородская область']
+    .flatMap((region,index)=>rows(region,Array.from(months,(_,month)=>(month+1)*(index+1)*100)));
+  const {get}=createRegionalStatistics({edition:'09-2026',fetchImpl:async()=>dataset(series)});
+  const info=await Promise.all(['48','66','51'].map(regionId=>get({regionId,metric:'people',years:[2025]})));
+  assert.deepEqual(info.map(result=>result.region.name),['Москва','Санкт-Петербург','Нижегородская область']);
+  assert.deepEqual(info.map(result=>result.summary.years[0].monthly[0]),[300,400,500]);
+});
+
 test('honours provider Retry-After and reports the original date of stale data',async()=>{
   let now=Date.parse('2026-11-17T10:00:00Z');
   let attempts=0;

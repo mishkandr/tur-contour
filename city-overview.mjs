@@ -28,11 +28,11 @@ export function createLocalPlaceCatalog(catalog,mapData) {
 }
 
 export function createCityOverview({catalog,mapData,local=createLocalPlaceCatalog(catalog,mapData),
-  weatherForecast,getCityProjects,now=Date.now,fetchImpl}={}) {
+  weatherForecast,getCityProjects,now=Date.now,fetchImpl,recordCatalog}={}) {
   return async function getCityOverview(cityId,{includeWeather=true,includeCatalog=true,includeProjects=true}={}) {
     const city=await getCity(cityId);
     const [cityPlaces,region,weather,projects]=await Promise.all([
-      cityCatalog(city,{fetchImpl,local,include:includeCatalog}),regionForCity(city.id),
+      cityCatalog(city,{fetchImpl,local,include:includeCatalog,recordCatalog}),regionForCity(city.id),
       includeWeather ? weatherForecast({points:weatherPoints(city,now())}) : null,
       includeProjects ? getCityProjects(city.id) : {status:'disabled',records:[],checkedAt:null},
     ]);

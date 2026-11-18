@@ -11,17 +11,22 @@ addLocaleMessages([
   ['Проекты','Projects','项目'],
   ['Проверить связь','Check connection','检查连接'],
   ['Проверяем…','Checking…','正在检查…'],
-  ['Доступен','Available','可用'],
+  ['Связь доступна','Connection available','连接可用'],
   ['Ошибка связи','Connection error','连接错误'],
   ['Связь ещё не проверяли','Connection not checked yet','尚未检查连接'],
+  ['Каталог ещё не загружали','Catalogue not loaded yet','尚未加载目录'],
+  ['Получено мест · {count}','Places retrieved · {count}','已获取 {count} 个地点'],
+  ['Подходящих мест не найдено','No matching places returned','未返回匹配地点'],
+  ['Ошибка загрузки каталога','Catalogue load failed','目录加载失败'],
   ['Локальная выборка','Local snapshot','本地快照'],
   ['Росстат через Roschart','Rosstat via Roschart','俄罗斯统计局（Roschart）'],
   ['Официальные реестры и публикации','Official registers and notices','官方登记与公告'],
   ['Журнал ошибок','Error log','错误日志'],
-  ['Ошибок проверки пока нет.','No connection errors recorded.','尚无连接错误记录。'],
+  ['Ошибок пока нет.','No errors recorded.','尚无错误记录。'],
   ['Не удалось получить статус.','Unable to read status.','无法获取状态。'],
   ['Нет ответа от источника','No response from the source','数据源未响应'],
   ['Неверный формат ответа','Unexpected response format','响应格式异常'],
+  ['Источник вернул неполный ответ','The source returned an incomplete result','数据源返回的结果不完整'],
   ['Подключение недоступно','Connection unavailable','连接不可用'],
   ['{time} мс','{time} ms','{time} 毫秒'],
 ]);
@@ -44,12 +49,14 @@ const groups=[
   ]},
 ];
 const feedNames=new Map(groups.flatMap(group=>group.feeds.map(([id,name])=>[id,name])));
+const catalogFeeds=new Set(['openstreetmap','openstreetmap-europe','wikipedia']);
 const safe=value=>String(value ?? '').replace(/[&<>"']/gu,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const tr=(message,params)=>safe(t(message,params));
 const timestamp=value=>formatDate(value,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 function message(detail) {
   if (/^HTTP \d{3}$/u.test(detail ?? '')) return detail;
-  return t({timeout:'Нет ответа от источника',format:'Неверный формат ответа',network:'Подключение недоступно'}[detail] ?? 'Ошибка связи');
+  return t({timeout:'Нет ответа от источника',format:'Неверный формат ответа',partial:'Источник вернул неполный ответ',
+    network:'Подключение недоступно'}[detail] ?? 'Ошибка связи');
 }
 
 export function mountSourceConsole(container,api) {
@@ -60,7 +67,8 @@ export function mountSourceConsole(container,api) {
       '<ul class="connector-rows">'+group.feeds.map(([id,title,url,optional])=>'<li'+
         (optional?' data-source-optional="'+id+'" hidden':'')+'><div><strong>'+
         (url?'<a href="'+safe(url)+'" target="_blank" rel="noopener noreferrer">'+tr(title)+'</a>':tr(title))+'</strong>'+
-        '<p class="caption"'+(id?' data-source-state="'+id+'"':'')+'>'+tr(id?'Связь ещё не проверяли':'Локальная выборка')+'</p></div>'+
+        '<p class="caption"'+(id?' data-source-state="'+id+'"':'')+'>'+tr(id?'Связь ещё не проверяли':'Локальная выборка')+'</p>'+
+        (catalogFeeds.has(id)?'<p class="caption" data-source-load="'+id+'">'+tr('Каталог ещё не загружали')+'</p>':'')+'</div>'+
         (id?'<button type="button" class="button-quiet" data-source-check="'+id+'" aria-label="'+tr('Проверить связь')+' · '+
           tr(title)+'">'+tr('Проверить связь')+'</button>':'')+'</li>').join('')+'</ul></section>').join('')+
     '</div></section><section class="panel connector-errors"><h2>'+tr('Журнал ошибок')+'</h2><div id="connector-errors"></div></section>'+
@@ -75,15 +83,25 @@ export function mountSourceConsole(container,api) {
     for (const [id,result] of Object.entries(data.latest ?? {})) {
       const node=container.querySelector('[data-source-state="'+CSS.escape(id)+'"]');
       if (!node) continue;
-      node.textContent=[t(result.status==='ok'?'Доступен':'Ошибка связи'),timestamp(result.checkedAt),
+      node.textContent=[t(result.status==='ok'?'Связь доступна':'Ошибка связи'),timestamp(result.checkedAt),
         result.status==='ok' ? t('{time} мс',{time:formatNumber(result.durationMs)}) : message(result.detail)].join(' · ');
+      node.dataset.status=result.status;
+    }
+    for (const [id,result] of Object.entries(data.loads ?? {})) {
+      const node=container.querySelector('[data-source-load="'+CSS.escape(id)+'"]');
+      if (!node) continue;
+      const summary=result.status==='ok' ? t('Получено мест · {count}',{count:formatNumber(result.count)}) :
+        t(result.status==='empty'?'Подходящих мест не найдено':'Ошибка загрузки каталога');
+      node.textContent=[summary,timestamp(result.checkedAt),
+        result.status==='error'?message(result.detail):''].filter(Boolean).join(' · ');
       node.dataset.status=result.status;
     }
     const log=container.querySelector('#connector-errors');
     log.innerHTML=data.errors?.length ? '<ul class="connector-rows">'+data.errors.map(event=>'<li><div><strong>'+
-      tr(feedNames.get(event.id) ?? event.id)+'</strong><p class="caption">'+safe(message(event.detail))+
+      tr(feedNames.get(event.id) ?? event.id)+'</strong><p class="caption">'+
+      tr(event.operation==='catalog'?'Ошибка загрузки каталога':'Ошибка связи')+' · '+safe(message(event.detail))+
       '</p></div><time class="caption" datetime="'+safe(event.checkedAt)+'">'+safe(timestamp(event.checkedAt))+'</time></li>').join('')+'</ul>' :
-      '<p class="caption">'+tr('Ошибок проверки пока нет.')+'</p>';
+      '<p class="caption">'+tr('Ошибок пока нет.')+'</p>';
   }
   const revision=lastRevision;
   void api('source-status').then(data=>{

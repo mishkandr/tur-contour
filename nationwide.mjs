@@ -9,7 +9,7 @@ const osm = {
   license:'ODbL', provider:'Overpass API',
 };
 const europeanOsm = {...osm,provider:'Overpass Europe (Geofabrik)'};
-const europeLane = 'overpass-europe';
+const europeLane = 'openstreetmap-europe';
 const wiki = {id:'wikimedia',name:'Википедия',url:'https://www.mediawiki.org/wiki/API:Geosearch',license:'CC BY-SA 4.0',provider:'MediaWiki GeoSearch'};
 const fallbackUrl = 'https://overpass.private.coffee/api/interpreter';
 const wikiLimit = 250;
@@ -395,23 +395,29 @@ async function archivedPlaces(city,reason) {
 
 async function fetchOverpass(city,fetchImpl,target) {
   const shared = fetchImpl===globalThis.fetch;
-  function coolDown(delay) {
+  const signal=AbortSignal.timeout(7_000);
+  function failed(detail,delay) {
     if (shared) providerLanes[target.lane].cooldownUntil=Date.now()+delay;
-    return null;
+    return {detail};
   }
   try {
     const url = new URL(target.url);
     if (!['http:','https:'].includes(url.protocol)) throw Error('Unsupported Overpass URL');
     url.searchParams.set('data',queryAround(city,target.bounds));
     const response = await fetchImpl(url,{headers:{'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)','Accept':'application/json'},
-      signal:AbortSignal.timeout(7_000),redirect:'error'});
-    if (response.status===429 || response.status===406) return coolDown(retryDelay(response));
-    if (!response.ok || Number(response.headers?.get('content-length'))>2_000_000) return coolDown(120_000);
+      signal,redirect:'error'});
+    if (!response.ok) {
+      const delay=response.status===429 || response.status===406 ? retryDelay(response) : 120_000;
+      return failed('HTTP '+response.status,delay);
+    }
+    if (Number(response.headers?.get('content-length'))>2_000_000) return failed('format',120_000);
     const payload = await response.json();
-    if (!Array.isArray(payload.elements) || payload.remark) return coolDown(30_000);
+    if (payload?.remark) return failed(/timed out|timeout/iu.test(payload.remark)?'timeout':'partial',30_000);
+    if (!Array.isArray(payload?.elements)) return failed('format',30_000);
     const places = fromOsm(payload.elements,city);
-    return places.length ? { places,source:{...target.source,status:'live',checkedAt:payload.osm3s?.timestamp_osm_base ?? null} } : null;
-  } catch { return coolDown(120_000); }
+    const catalog=places.length ? {places,source:{...target.source,status:'live',checkedAt:payload.osm3s?.timestamp_osm_base ?? null}} : null;
+    return {catalog};
+  } catch (error) { return failed(signal.aborted?'timeout':error instanceof SyntaxError?'format':'network',120_000); }
 }
 
 function fallbackTags(label,tags = []) {
@@ -438,18 +444,19 @@ function categoryOfWikiPage(page) {
 }
 
 async function fetchWikiPois(city,fetchImpl) {
+  const signal=AbortSignal.timeout(5500);
   try {
     const endpoint = new URL('https://ru.wikipedia.org/w/api.php');
     endpoint.search=new URLSearchParams({action:'query',list:'geosearch',gscoord:city.coordinates.join('|'),
       gsradius:'10000',gslimit:String(wikiLimit),gsnamespace:'0',format:'json',formatversion:'2'});
     const response=await fetchImpl(endpoint,{headers:{'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)','Accept':'application/json'},
-      signal:AbortSignal.timeout(5500),redirect:'error'});
+      signal,redirect:'error'});
     if (response.status===429 && fetchImpl===globalThis.fetch) {
       providerLanes[wiki.id].cooldownUntil=Date.now()+retryDelay(response);
     }
-    if (!response.ok) return null;
+    if (!response.ok) return {detail:'HTTP '+response.status};
     const result=await response.json();
-    if (!Array.isArray(result.query?.geosearch)) return null;
+    if (!Array.isArray(result?.query?.geosearch)) return {detail:'format'};
     const places=result.query.geosearch.slice(0,wikiLimit).flatMap(page=>{
       const point=pointOf(page);
       const category=categoryOfWikiPage(page);
@@ -462,8 +469,9 @@ async function fetchWikiPois(city,fetchImpl) {
         ...(exposure ? {exposure} : {}),
         url:'https://ru.wikipedia.org/?curid='+page.pageid}];
     });
-    return places.length ? {places,source:{...wiki,status:'live',checkedAt:new Date().toISOString()}} : null;
-  } catch { return null; }
+    const catalog=places.length ? {places,source:{...wiki,status:'live',checkedAt:new Date().toISOString()}} : null;
+    return {catalog};
+  } catch (error) { return {detail:signal.aborted?'timeout':error instanceof SyntaxError?'format':'network'}; }
 }
 
 function mergeCatalogPlaces(places,catalog,curated=false) {
@@ -518,30 +526,42 @@ function retryDelay(response) {
   return Number.isFinite(delay) ? Math.max(30_000,delay) : 30_000;
 }
 
-async function requestProvider(city,fetchImpl,laneKey,fetchCatalog) {
-  if (fetchImpl!==globalThis.fetch) return {catalog:await fetchCatalog(city,fetchImpl)};
+async function requestProvider(city,fetchImpl,laneKey,fetchCatalog,recordCatalog) {
   const lane=providerLanes[laneKey];
-  const now=Date.now();
-  if (lane.active || lane.nextRequestAt>now) return {busy:true};
-  if (lane.cooldownUntil>now) return {};
-  lane.active=true;
-  lane.nextRequestAt=now+providerSpacingMs;
-  try {
-    return {catalog:await fetchCatalog(city,fetchImpl)};
-  } finally {
-    lane.active=false;
+  const shared=fetchImpl===globalThis.fetch;
+  if (shared) {
+    const now=Date.now();
+    if (lane.active || lane.nextRequestAt>now) return {busy:true};
+    if (lane.cooldownUntil>now) return {};
+    lane.active=true;
+    lane.nextRequestAt=now+providerSpacingMs;
   }
+  const start=performance.now();
+  let result;
+  try {
+    result=await fetchCatalog(city,fetchImpl);
+  } finally {
+    if (shared) lane.active=false;
+  }
+  const {catalog,detail}=result;
+  if (recordCatalog) {
+    try {
+      await recordCatalog({id:laneKey===wiki.id?'wikipedia':laneKey,detail,
+        count:detail?null:(catalog?.places.length ?? 0),durationMs:performance.now()-start});
+    } catch { /* Keep catalog results usable if the source journal cannot be written. */ }
+  }
+  return {catalog};
 }
 
 function freshCatalog({version,source}) {
   return version===catalogVersion && Date.now()-Date.parse(source.fetchedAt)<catalogRefreshMs;
 }
 
-async function requestPois(city,fetchImpl,retained=[]) {
+async function requestPois(city,fetchImpl,recordCatalog,retained=[]) {
   const target=await overpassTarget(city);
-  const mapped=await requestProvider(city,fetchImpl,target.lane,(area,request)=>fetchOverpass(area,request,target));
+  const mapped=await requestProvider(city,fetchImpl,target.lane,(area,request)=>fetchOverpass(area,request,target),recordCatalog);
   const freshWiki=retained.some(record=>record.source.id===wiki.id && freshCatalog(record));
-  const fallback=mapped.catalog || freshWiki ? {} : await requestProvider(city,fetchImpl,wiki.id,fetchWikiPois);
+  const fallback=mapped.catalog || freshWiki ? {} : await requestProvider(city,fetchImpl,wiki.id,fetchWikiPois,recordCatalog);
   const live=mapped.catalog ?? fallback.catalog;
   if (live && fetchImpl===globalThis.fetch) await saveCatalog(city.id,live);
   const reason=mapped.busy || fallback.busy ? 'busy' : freshWiki ? 'recent' : 'provider-error';
@@ -562,17 +582,17 @@ function sameSite(place,archived,curated) {
   }));
 }
 
-async function lookupPois(city,fetchImpl) {
+async function lookupPois(city,fetchImpl,recordCatalog) {
   const retained=await retainedCatalogs(city);
   if (retained.some(record=>record.source.id===osm.id && freshCatalog(record))) {
     return combineCatalogs(city,null,retained,'recent');
   }
-  return requestPois(city,fetchImpl,retained);
+  return requestPois(city,fetchImpl,recordCatalog,retained);
 }
 
-async function objectsFor(city,fetchImpl) {
+async function objectsFor(city,fetchImpl,recordCatalog) {
   if (process.env.TUR_NO_OVERPASS==='1') return archivedPlaces(city,'disabled');
-  if (fetchImpl!==globalThis.fetch) return requestPois(city,fetchImpl);
+  if (fetchImpl!==globalThis.fetch) return requestPois(city,fetchImpl,recordCatalog);
   const memo = cache.get(city.id);
   if (memo?.until>Date.now()) {
     cache.delete(city.id);
@@ -580,7 +600,7 @@ async function objectsFor(city,fetchImpl) {
     return memo.result;
   }
   if (pending.has(city.id)) return pending.get(city.id);
-  const task = lookupPois(city,fetchImpl).then(result=>{
+  const task = lookupPois(city,fetchImpl,recordCatalog).then(result=>{
     if (result.source.reason!=='busy') {
       const primaryRefresh=result.source.status==='live' && result.source.id===osm.id;
       cache.set(city.id,{until:Date.now()+(primaryRefresh ? catalogRefreshMs : fallbackRefreshMs),result});
@@ -1023,8 +1043,8 @@ export async function getCity(cityId) {
   return formatCity(row,regions);
 }
 
-async function catalogFor(city,fetchImpl,local) {
-  const {places:providerPlaces,source}=await objectsFor(city,fetchImpl);
+async function catalogFor(city,{fetchImpl,local,recordCatalog}) {
+  const {places:providerPlaces,source}=await objectsFor(city,fetchImpl,recordCatalog);
   const inArea=local?.places.filter(place=>place.city===city.name && distance(place.coordinates,city.coordinates)<=12) ?? [];
   if (!inArea.length) return {places:providerPlaces,source};
   const places=[...providerPlaces];
@@ -1033,17 +1053,17 @@ async function catalogFor(city,fetchImpl,local) {
     {...source,retained:[...(source.retained ?? []),local.source]}};
 }
 
-export async function cityCatalog(city,{fetchImpl=globalThis.fetch,local,include=true}={}) {
+export async function cityCatalog(city,{fetchImpl=globalThis.fetch,local,include=true,recordCatalog}={}) {
   const counts={visit:0,food:0,stay:0};
   if (!include) return {places:[],geodata:mapData([city],[],[]),catalogSources:[],counts};
-  const {places,source}=await catalogFor(city,fetchImpl,local);
+  const {places,source}=await catalogFor(city,{fetchImpl,local,recordCatalog});
   const sources=[source,source.supplemental,...(source.retained ?? [])].filter(Boolean)
     .map(({supplemental,retained,...evidence})=>evidence);
   for (const place of places) counts[place.kind]+=1;
   return {places,geodata:mapData([city],places,sources),catalogSources:sources,counts};
 }
 
-export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,local} = {}) {
+export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,local,recordCatalog} = {}) {
   if (!input || typeof input!=='object' || Array.isArray(input)) throw error('Укажите параметры программы.');
   const settings=readSettings(input);
   const data=await cityData();
@@ -1061,7 +1081,7 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,l
       const interval=lane?.nextRequestAt-now;
       if (interval>0 && interval<=providerSpacingMs) await wait(interval+5);
     }
-    const {places,source}=await catalogFor(location,fetchImpl,local);
+    const {places,source}=await catalogFor(location,{fetchImpl,local,recordCatalog});
     contexts.push({location,places,source});
   }
   const omitted=new Set(settings.omittedIds);

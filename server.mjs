@@ -45,9 +45,10 @@ const statsEdition = process.env.TUR_ROSSTAT_EDITION;
 const regionalStatistics = createRegionalStatistics({edition:statsEdition,apiKey:process.env.ROSCHART_API_KEY});
 const weatherForecast = createWeatherForecast();
 const localPlaces = createLocalPlaceCatalog(catalog,mapData);
-const cityOverview = createCityOverview({local:localPlaces,weatherForecast,getCityProjects});
 const sourceMonitor = createSourceMonitor(stateDir,{statisticsKey:process.env.ROSCHART_API_KEY,
   overpassUrl:process.env.TUR_OVERPASS_URL,overpassEuropeUrl:process.env.TUR_OVERPASS_EUROPE_URL});
+const {recordCatalog}=sourceMonitor;
+const cityOverview = createCityOverview({local:localPlaces,weatherForecast,getCityProjects,recordCatalog});
 const ollamaModel = process.env.TUR_OLLAMA_MODEL || 'qwen3.5:4b';
 const briefModel = process.env.TUR_OLLAMA_DETAIL_MODEL || ollamaModel;
 const briefKeepAlive = process.env.TUR_OLLAMA_BRIEF_KEEP_ALIVE || undefined;
@@ -547,7 +548,8 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/stat-regions') return respond(response,200,{regions:await statisticsRegions()});
     if (request.method==='POST' && path==='/api/regional-statistics') return respond(response,200,await regionalStatistics.get(await readBody(request)));
-    if (request.method==='POST' && path==='/api/draft') return respond(response,200,await draftItinerary(await readBody(request),{local:localPlaces}));
+    if (request.method==='POST' && path==='/api/draft') return respond(response,200,
+      await draftItinerary(await readBody(request),{local:localPlaces,recordCatalog}));
     if (request.method==='POST' && path==='/api/weather') return respond(response,200,await weatherForecast(await readBody(request)));
     if (request.method==='POST' && path==='/api/knowledge') {
       const signal=clientSignal(response);

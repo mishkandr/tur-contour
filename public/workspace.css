@@ -121,6 +121,8 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .composer-form,.composer-parameters{display:grid;grid-template-columns:minmax(0,1fr);gap:11px}
 .composer-form{gap:20px;padding:clamp(14px,2.5vw,24px)}
 .planner-brief-entry{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-content:start;min-width:0}
+.composer-form--context #draft-defaults{font-size:1rem;color:var(--ink);font-weight:700}
+.composer-form--context .composer-fields :is(input,select){min-height:44px}
 .planner-editor-actions{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}
 .composer-parameters{padding-top:8px}
 .composer-parameters>div:empty,.composer-form #draft-status:empty{display:none}
@@ -274,6 +276,7 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
   .planner-editor-head{min-height:44px;padding:6px 12px}
   .planner-editor-actions{padding-block-start:8px}
   .composer-form [name=brief]{height:98px;font-size:max(1rem,16px)}
+  .composer-form--context [name=brief]{height:76px;min-height:76px}
   .composer-title{padding:12px;gap:8px}
   .composer-title .caption{margin-block-start:4px}
   .planner-toolbar-actions{width:100%;gap:6px}

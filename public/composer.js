@@ -16,6 +16,9 @@ addLocaleMessages([
   ['Точки для проверки подбираются по опубликованным условиям направления.',
     'The verification uses venues with published conditions for this destination.','核查会选取该线路上已公布到访条件的地点。'],
   ['Опишите, что нужно группе','Describe what the group needs','描述团队需求'],
+  ['Пожелания к маршруту','Itinerary preferences','行程偏好'],
+  ['Музеи и прогулки без длинных переездов','Museums and walks without long transfers','参观博物馆并散步，避免长途换乘'],
+  ['Города и условия','Cities and conditions','城市与条件'],
   ['Собрать маршрут','Build itinerary','编制行程'],
   ['Пересчитать маршрут','Rebuild itinerary','重新计算行程'],
   ['Уточнить условия с ИИ','Refine requirements with AI','用人工智能细化条件'],
@@ -303,19 +306,27 @@ function retainDraft(state) {
 const options = (choices,current)=>Object.entries(choices).map(([value,label])=>'<option value="'+safe(value)+'"'+
   (String(current)===value?' selected':'')+'>'+tr(label)+'</option>').join('');
 
-function formMarkup(state) {
+function formMarkup(state,contextual) {
   const settings = state.settings;
+  const context='<p class="caption" id="draft-defaults" hidden></p><ul id="draft-context-places" class="composer-extra" hidden></ul>';
+  const tripFields='<div class="composer-fields"><label class="field">'+tr('Дата начала')+
+    '<input type="date" name="date" min="2000-01-01" max="2099-12-31" value="'+safe(settings.date)+'" required></label>'+
+    '<label class="field">'+tr('Длительность')+'<select name="days">'+[2,3].map(day=>'<option value="'+day+'"'+(settings.days===day?' selected':'')+'>'+
+    tr('{days} дня',{days:day})+'</option>').join('')+'</select></label>'+
+    '<label class="field">'+tr('Размер группы')+'<input type="number" name="size" value="'+settings.size+'" min="1" max="100" required></label></div>';
+  const samples='<details class="brief-examples"><summary>'+tr('Примеры запросов')+'</summary><ul>'+examples.map(([label],index)=>
+    '<li><button class="button-quiet" type="button" data-composer="example" data-value="'+index+'">'+tr(label)+'</button></li>').join('')+'</ul></details>';
   return '<section class="composer-inputs" id="planner-editor" aria-label="'+tr('Параметры')+'">'+
     '<header class="planner-editor-head" hidden><button class="button-quiet" type="button" data-composer="close-editor">'+
     tr('Вернуться к маршруту')+'</button></header>'+
-    '<form id="draft-input" class="composer-form" novalidate><div class="planner-brief-entry">'+
-    '<label class="field composer-request"><span>'+tr('Опишите, что нужно группе')+'</span><textarea name="brief" aria-describedby="draft-defaults" rows="4" maxlength="600" placeholder="'+
-    tr('Например: Казань на три дня, 12 человек, музеи и неспешные прогулки')+'">'+safe(state.brief)+'</textarea></label>'+
-    '<p class="caption" id="draft-defaults" hidden></p>'+
-    '<ul id="draft-context-places" class="composer-extra" hidden></ul>'+
-    '<details class="brief-examples"><summary>'+tr('Примеры запросов')+'</summary><ul>'+examples.map(([label],index)=>
-      '<li><button class="button-quiet" type="button" data-composer="example" data-value="'+index+'">'+tr(label)+'</button></li>').join('')+
-    '</ul></details></div><details id="draft-parameters"><summary>'+tr('Ввести параметры вручную')+'</summary>'+
+    '<form id="draft-input" class="composer-form'+(contextual?' composer-form--context':'')+'" novalidate><div class="planner-brief-entry">'+
+    (contextual?context+tripFields:'')+
+    '<label class="field composer-request"><span>'+tr(contextual?'Пожелания к маршруту':'Опишите, что нужно группе')+
+    '</span><textarea name="brief" aria-describedby="draft-defaults" rows="'+(contextual?3:4)+'" maxlength="600" placeholder="'+
+    tr(contextual?'Музеи и прогулки без длинных переездов':'Например: Казань на три дня, 12 человек, музеи и неспешные прогулки')+
+    '">'+safe(state.brief)+'</textarea></label>'+
+    (contextual?'':context+samples)+'</div><details id="draft-parameters"><summary>'+
+    tr(contextual?'Города и условия':'Ввести параметры вручную')+'</summary>'+
     '<div class="composer-parameters">'+
     '<label class="field composer-city"><span>'+tr('Город начала')+'</span><input id="city-query" type="search" value="'+
     safe(state.query)+'" placeholder="'+tr('Название города')+'" autocomplete="off" aria-controls="city-results"></label>'+
@@ -324,11 +335,7 @@ function formMarkup(state) {
     '<label class="field">'+tr('Название следующего города')+
     '<input id="extra-city-query" type="search" autocomplete="off" maxlength="100" aria-controls="extra-city-results"></label>'+
     '<div id="extra-city-results"></div></details>'+
-    '<div class="composer-fields"><label class="field">'+tr('Дата начала')+
-    '<input type="date" name="date" min="2000-01-01" max="2099-12-31" value="'+safe(settings.date)+'" required></label>'+
-    '<label class="field">'+tr('Длительность')+'<select name="days">'+[2,3].map(day=>'<option value="'+day+'"'+(settings.days===day?' selected':'')+'>'+
-    tr('{days} дня',{days:day})+'</option>').join('')+'</select></label>'+
-    '<label class="field">'+tr('Размер группы')+'<input type="number" name="size" value="'+settings.size+'" min="1" max="100" required></label></div>'+
+    (contextual?'':tripFields)+
     '<details id="draft-advanced"><summary>'+tr('Темы и ограничения')+'</summary><fieldset class="composer-themes"><legend>'+tr('Типы посещений')+'</legend>'+
     Object.entries(themes).map(([theme,label])=>'<label class="check"><input type="checkbox" name="interest" value="'+theme+'"'+
       (settings.interests.includes(theme)?' checked':'')+'>'+tr(label)+'</label>').join('')+'</fieldset>'+
@@ -590,7 +597,8 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   const placeKind=query.get('kind');
   const existingWorkspace=restoreWorkspace && workspace?.hash===location.hash ? workspace : null;
   const state=existingWorkspace?.state ?? {...newState(),...(resume && rememberedDraft ? structuredClone(rememberedDraft) : {})};
-  workspace={hash:location.hash,state,view:existingWorkspace?.view ?? 'schedule'};
+  const contextual=existingWorkspace?.contextual ?? /^\d{1,12}$/u.test(cityId ?? '');
+  workspace={hash:location.hash,state,contextual,view:existingWorkspace?.view ?? 'schedule'};
   const initialCityController=new AbortController();
   let loadingCity=/^\d{1,12}$/u.test(cityId ?? '') && !state.selectedCity;
   let map;
@@ -604,7 +612,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   let workView=workspace.view;
   const serviceView={query:'',kind:'all',city:'',limit:8};
   container.innerHTML = '<header class="planner-heading"><h1>'+tr('Маршруты')+'</h1><div id="draft-navigation"></div></header>'+
-    '<div class="composer-layout">'+formMarkup(state)+
+    '<div class="composer-layout">'+formMarkup(state,contextual)+
     '<div class="composer-result" id="composer-result"></div></div>';
   const mapVisibility=window.matchMedia('(min-width: 1050px)');
   function paintDraftNavigation() {
@@ -686,10 +694,11 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   function showDefaults() {
     const {date,days,size}=state.settings;
     const defaults=find('#draft-defaults');
-    defaults.hidden=!state.selectedCity || !Number.isFinite(Date.parse(date));
+    defaults.hidden=!state.selectedCity || (!contextual && !Number.isFinite(Date.parse(date)));
     if (defaults.hidden) return;
     const scope=[state.selectedCity,...state.extraCities].map(name).join(' → ');
-    defaults.textContent=scope+' · '+t('{date} · {days} дня · {size} чел.',{date:formatDate(date),days,size});
+    defaults.textContent=contextual ? scope :
+      scope+' · '+t('{date} · {days} дня · {size} чел.',{date:formatDate(date),days,size});
   }
   function showNote(message, values) {
     if (!mounted) return;

@@ -17,6 +17,8 @@ const fixture=`
   const [lat,lon]=[Number(latitude),Number(longitude)];
   Date.now=()=>Number(now);
   const calls=[];
+  const loads=[];
+  const recordCatalog=({id,detail,count})=>loads.push([id,detail??null,count]);
   const osm=(id,name,offset,tags)=>({type:'node',id,lat:lat+offset,lon,tags:{name,...tags}});
   const archived=[
     osm(8240,'Музей одного источника',.001,{tourism:'museum'}),
@@ -41,11 +43,12 @@ const fixture=`
   const input={cityId,days:2,date:'2026-11-28',size:8,required:[${JSON.stringify(privateBrief)}],
     ...(mode==='refresh' ? {requiredPlaceIds:['ruwiki-5901']} : {})};
   if (mode==='busy') {
-    await draftItinerary({...input,cityId:'524901'});
+    await draftItinerary({...input,cityId:'524901'},{recordCatalog});
     calls.length=0;
+    loads.length=0;
   }
-  const {source,places,geodata,plan}=await draftItinerary(input);
-  process.stdout.write(JSON.stringify({source,calls,places:places.map(({id,name,sources,status})=>({id,name,sources,status})),
+  const {source,places,geodata,plan}=await draftItinerary(input,{recordCatalog});
+  process.stdout.write(JSON.stringify({source,calls,loads,places:places.map(({id,name,sources,status})=>({id,name,sources,status})),
     attribution:geodata.attribution,required:plan.required}));
 `;
 
@@ -64,6 +67,7 @@ test('provider catalogs survive restarts, merge with fresh sources and expire wi
   const initial=await run('initial',0);
   assert.equal(initial.source.status,'live');
   assert.deepEqual(initial.calls,['osm.example.test']);
+  assert.deepEqual(initial.loads,[['openstreetmap',null,2]]);
   assert.equal(initial.places.find(place=>place.id==='osm-node-8240')?.status,'unknown');
 
   const restarted=await run('offline',1);
@@ -72,17 +76,20 @@ test('provider catalogs survive restarts, merge with fresh sources and expire wi
   assert.equal(restarted.source.checkedAt,initial.source.checkedAt);
   assert.equal(restarted.source.fetchedAt,new Date(start).toISOString());
   assert.deepEqual(restarted.calls,[]);
+  assert.deepEqual(restarted.loads,[]);
   assert.deepEqual(restarted.places,initial.places);
 
   const busy=await run('busy',19);
   assert.equal(busy.source.reason,'busy');
   assert.deepEqual(busy.calls,[]);
+  assert.deepEqual(busy.loads,[]);
   assert.deepEqual(busy.places,initial.places);
 
   const withWiki=await run('wiki',20);
   assert.equal(withWiki.source.id,'wikimedia');
   assert.equal(withWiki.source.status,'live');
   assert.deepEqual(withWiki.calls,['osm.example.test','ru.wikipedia.org']);
+  assert.deepEqual(withWiki.loads,[['openstreetmap','HTTP 503',null],['wikipedia',null,2]]);
   assert.deepEqual(withWiki.source.retained.map(({id,status})=>[id,status]),[['openstreetmap','snapshot']]);
   assert.ok(withWiki.places.some(place=>place.id==='osm-node-8240'));
   const duplicates=withWiki.places.filter(place=>place.name==='Общий городской музей');
@@ -185,6 +192,8 @@ test('the optional regional Overpass uses a bounded query only within the publis
       getCity('484646'),getCity('551487'),getCity('473247'),listCities('Скопин').then(data=>data.cities[0]),
     ]);
     const calls=[];
+    const loads=[];
+    const load=city=>cityCatalog(city,{recordCatalog:({id,detail,count})=>loads.push([id,detail??null,count])});
     let now=Date.now();
     Date.now=()=>now;
     globalThis.fetch=async url=>{
@@ -195,22 +204,25 @@ test('the optional regional Overpass uses a bounded query only within the publis
       if (region && calls.length>2) return new Response(null,{status:429,headers:{'Retry-After':'60'}});
       return Response.json({elements:[{type:'node',id:region?61:62,lat,lon,tags:{name:'Городской парк',leisure:'park'}}]});
     };
-    const regional=await cityCatalog(tambov);
-    const global=await cityCatalog(kazan);
+    const regional=await load(tambov);
+    const global=await load(kazan);
     now+=2100;
-    await cityCatalog(vladimir);
-    const afterThrottle=await cityCatalog(skopin);
+    await load(vladimir);
+    const afterThrottle=await load(skopin);
     process.stdout.write(JSON.stringify({
-      calls,region:regional.catalogSources[0],global:global.catalogSources[0],afterThrottle:afterThrottle.catalogSources[0],
+      calls,loads,region:regional.catalogSources[0],global:global.catalogSources[0],afterThrottle:afterThrottle.catalogSources[0],
     }));
   `;
   const {stdout}=await exec(process.execPath,['--input-type=module','-e',scenario],{
     timeout:10_000,env:{...process.env,TUR_STATE_DIR:stateDir,TUR_NO_OVERPASS:'0',
       TUR_OVERPASS_URL:'https://osm.example.test/api/interpreter',TUR_OVERPASS_EUROPE_URL:'https://europe.example.test/api/interpreter'},
   });
-  const {calls,region,global,afterThrottle}=JSON.parse(stdout);
+  const {calls,loads,region,global,afterThrottle}=JSON.parse(stdout);
   assert.deepEqual(calls.map(call=>call.host),[
     'europe.example.test','osm.example.test','europe.example.test','ru.wikipedia.org','osm.example.test',
+  ]);
+  assert.deepEqual(loads.map(([id,detail])=>[id,detail]),[
+    ['openstreetmap-europe',null],['openstreetmap',null],['openstreetmap-europe','HTTP 429'],['wikipedia','format'],['openstreetmap',null],
   ]);
   assert.match(calls[0].query,/^\[out:json\]\[timeout:6\]\[bbox:[\d.,]+\];/u);
   assert.doesNotMatch(calls[0].query,/\(around:/u);

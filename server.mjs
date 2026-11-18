@@ -13,7 +13,7 @@ import { readVerifiedAudit } from './verified-audit.mjs';
 import { mergePublishedConditions } from './published-conditions.mjs';
 import { getDemoOffers } from './ota-offers.mjs';
 import { detectCities, draftItinerary, listCities } from './nationwide.mjs';
-import { createBriefInterpreter, parseBrief } from './planner-brief.mjs';
+import { createBriefInterpreter, parseBrief, warmBriefModel } from './planner-brief.mjs';
 import { answerKnowledge, classifyKnowledge } from './knowledge-chat.mjs';
 import { createRegionalStatistics, statisticsRegions } from './regional-statistics.mjs';
 import { createWeatherForecast } from './weather.mjs';
@@ -43,6 +43,7 @@ const regionalStatistics = createRegionalStatistics({edition:statsEdition,apiKey
 const weatherForecast = createWeatherForecast();
 const ollamaModel = process.env.TUR_OLLAMA_MODEL || 'qwen3.5:4b';
 const briefModel = process.env.TUR_OLLAMA_DETAIL_MODEL || ollamaModel;
+const briefKeepAlive = process.env.TUR_OLLAMA_BRIEF_KEEP_ALIVE || undefined;
 const ollamaUrl = 'http://127.0.0.1:11434';
 const userAgent = 'TurContourMVP/1.0 (School 21 demonstration)';
 let state;
@@ -88,7 +89,7 @@ async function withModel(action, fallback, signal) {
   }
 }
 
-const briefInterpreter=createBriefInterpreter({baseUrl:ollamaUrl,model:briefModel,run:withModel});
+const briefInterpreter=createBriefInterpreter({baseUrl:ollamaUrl,model:briefModel,keepAlive:briefKeepAlive,run:withModel});
 
 async function persist(next) {
   await mkdir(stateDir,{recursive:true});
@@ -623,6 +624,9 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     if (process.env.TUR_NO_AUTO !== '1') {
       if (!state.refreshedAt || Date.now()-Date.parse(state.refreshedAt)>6*3600000) refresh().catch(console.error);
       setInterval(()=>refresh().catch(console.error),6*3600000).unref();
+      if (process.env.TUR_OLLAMA_BRIEF_PREWARM==='1' && process.env.TUR_NO_LLM!=='1') {
+        void warmBriefModel({baseUrl:ollamaUrl,model:briefModel,keepAlive:briefKeepAlive});
+      }
     }
   });
 }

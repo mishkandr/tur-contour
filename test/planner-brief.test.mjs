@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createBriefInterpreter, interpretBrief, parseBrief } from '../planner-brief.mjs';
+import { createBriefInterpreter, interpretBrief, parseBrief, warmBriefModel } from '../planner-brief.mjs';
 
 const reference = '2026-11-17';
 
@@ -101,6 +101,30 @@ test('model cancellations and incomplete output do not enter the reusable cache'
   assert.equal((await interpret(brief)).mode,'ai');
   assert.equal((await interpret(brief)).cached,true);
   assert.equal(calls,3);
+});
+
+test('optional preload uses the same model, keep-alive and runtime settings as inference',async()=>{
+  const model='test-model';
+  const requests=[];
+  const fetchImpl=async(url,{body})=>{
+    requests.push([url,JSON.parse(body)]);
+    return Response.json({message:{content:'{"i":[],"r":[]}'},done_reason:'stop'});
+  };
+  const baseUrl='http://model.test';
+  const keepAlive='10m';
+  assert.equal(await warmBriefModel({baseUrl,model,fetchImpl,keepAlive}),true);
+  const interpret=createBriefInterpreter({baseUrl,model,fetchImpl,keepAlive});
+  await interpret('Петербург на два дня.');
+  await interpretBrief('Казань на два дня.',{baseUrl,model,fetchImpl});
+  const [[warmUrl,warm],[inferUrl,infer],[,defaults]]=requests;
+  assert.equal(warmUrl,baseUrl+'/api/generate');
+  assert.equal(inferUrl,baseUrl+'/api/chat');
+  assert.equal(warm.prompt,'');
+  assert.equal(warm.model,infer.model);
+  assert.equal(warm.keep_alive,keepAlive);
+  assert.equal(infer.keep_alive,keepAlive);
+  assert.equal(defaults.keep_alive,'2m');
+  assert.deepEqual(warm.options,infer.options);
 });
 
 test('never converts a no-museums instruction into a positive museum preference', () => {

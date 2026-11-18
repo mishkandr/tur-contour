@@ -6,6 +6,12 @@ import { routeDirections } from '/engine.mjs';
 
 addLocaleMessages([
   ['Маршруты','Itineraries','行程'],
+  ['Новый маршрут','New itinerary','新建行程'],
+  ['Продолжить черновик · {city}','Resume draft · {city}','继续草案 · {city}'],
+  ['Город загружается…','Loading the city…','正在加载城市…'],
+  ['Не удалось загрузить город. Выберите его в параметрах.',
+    'Could not load the city. Choose it in the itinerary settings.','无法加载该城市，请在行程设置中选择。'],
+  ['Убрать из маршрута {place}','Remove {place} from the itinerary','从行程中移除 {place}'],
   ['Сверить опубликованные условия','Check published conditions','核查已公布条件'],
   ['Точки для проверки подбираются по опубликованным условиям направления.',
     'The verification uses venues with published conditions for this destination.','核查会选取该线路上已公布到访条件的地点。'],
@@ -268,33 +274,36 @@ const examples = [
       'Two days in Kazan for 8 people. Food tour featuring Tatar cuisine. Must visit the Chak-Chak Museum.',
       '喀山两天，8人，鞑靼美食之旅。必须参观恰克恰克博物馆。']],
 ];
-const state = {
+const newState = ()=>({
   brief:'',lastAppliedBrief:'',query:'',cities:[],selectedCity:null,extraCities:[],settings:initialRequirements(currentDate()),
   result:null,mapDay:'all',point:null,dirty:false,
   revision:0,note:'',noteValues:null,findVersion:0,pointDay:null,unsupportedDays:null,invalidDate:null,invalidSize:null,
   omitted:[],replacements:[],overrideFields:[],requiredServices:[],
-};
+});
 const cacheKey='tur-contour.current-draft.v1';
+let rememberedDraft=null;
+let workspace;
 try {
   const saved=JSON.parse(sessionStorage.getItem(cacheKey)??'null');
   if (saved?.settings && saved?.result?.plan?.days?.length) {
-    Object.assign(state,saved);
+    rememberedDraft=saved;
   }
 } catch { /* A disabled or full session store leaves the current page usable. */ }
 
-function retainDraft() {
+function retainDraft(state) {
   if (!state.result) return;
   const {brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,mapDay,point,pointDay,dirty,omitted,
     unsupportedDays,invalidDate,invalidSize,replacements,overrideFields,requiredServices} = state;
-  try {sessionStorage.setItem(cacheKey,JSON.stringify({brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,
-    mapDay,point,pointDay,dirty,omitted,unsupportedDays,invalidDate,invalidSize,replacements,overrideFields,requiredServices}));}
+  rememberedDraft={brief,lastAppliedBrief,query,cities,selectedCity,extraCities,settings,result,
+    mapDay,point,pointDay,dirty,omitted,unsupportedDays,invalidDate,invalidSize,replacements,overrideFields,requiredServices};
+  try {sessionStorage.setItem(cacheKey,JSON.stringify(rememberedDraft));}
   catch { /* The open draft remains available in memory. */ }
 }
 
 const options = (choices,current)=>Object.entries(choices).map(([value,label])=>'<option value="'+safe(value)+'"'+
   (String(current)===value?' selected':'')+'>'+tr(label)+'</option>').join('');
 
-function formMarkup() {
+function formMarkup(state) {
   const settings = state.settings;
   return '<section class="composer-inputs" id="planner-editor" aria-label="'+tr('Параметры')+'">'+
     '<header class="planner-editor-head" hidden><button class="button-quiet" type="button" data-composer="close-editor">'+
@@ -303,6 +312,7 @@ function formMarkup() {
     '<label class="field composer-request"><span>'+tr('Опишите, что нужно группе')+'</span><textarea name="brief" aria-describedby="draft-defaults" rows="4" maxlength="600" placeholder="'+
     tr('Например: Казань на три дня, 12 человек, музеи и неспешные прогулки')+'">'+safe(state.brief)+'</textarea></label>'+
     '<p class="caption" id="draft-defaults" hidden></p>'+
+    '<ul id="draft-context-places" class="composer-extra" hidden></ul>'+
     '<details class="brief-examples"><summary>'+tr('Примеры запросов')+'</summary><ul>'+examples.map(([label],index)=>
       '<li><button class="button-quiet" type="button" data-composer="example" data-value="'+index+'">'+tr(label)+'</button></li>').join('')+
     '</ul></details></div><details id="draft-parameters"><summary>'+tr('Ввести параметры вручную')+'</summary>'+
@@ -353,9 +363,9 @@ function eligibility(item) {
     item.matched ? 'Объект не попал в расписание' : 'Объект не найден в данных');
 }
 
-function requirementName(item) {
+function requirementName(item,requiredServices) {
   if (!item.requestedId) return item.label;
-  const selected=state.requiredServices.find(place=>place.id===item.requestedId);
+  const selected=requiredServices.find(place=>place.id===item.requestedId);
   return selected ? name(selected) : item.matched?.name ?? item.label;
 }
 
@@ -452,8 +462,8 @@ function accessEvidence(requireAccess,place) {
     place?.wheelchairHint==='limited'?'По карте доступ частичный':'Уточнить безбарьерный доступ');
 }
 
-function replacementMarkup(stop,places,settings) {
-  if (state.dirty || !stop.alternatives?.length) return '';
+function replacementMarkup(stop,places,settings,dirty) {
+  if (dirty || !stop.alternatives?.length) return '';
   const choices=stop.exposure==='outdoors' ? stop.alternatives.toSorted((a,b)=>Number(b.exposure==='indoors')-Number(a.exposure==='indoors')) :
     stop.alternatives;
   return '<details class="composer-alternatives"><summary>'+tr('Варианты замены')+'</summary><ul>'+choices.map((alternative,index)=>{
@@ -496,7 +506,7 @@ function publishedCheck(result) {
     '<p class="caption">'+tr('Точки для проверки подбираются по опубликованным условиям направления.')+'</p>';
 }
 
-function draftMarkup(result,serviceView) {
+function draftMarkup(result,serviceView,state) {
   const {location,plan,settings} = result;
   const venues = result.locations ?? [location];
   const requiredCount=plan.required.filter(item=>item.scheduled).length;
@@ -535,14 +545,14 @@ function draftMarkup(result,serviceView) {
     '<section class="composer-evidence"><h3>'+tr('Проверить перед согласованием')+'</h3>'+
     (plan.required.length?'<p class="planner-check-summary">'+tr('{count} из {total} обязательных точек в расписании',{
       count:formatNumber(requiredCount),total:formatNumber(plan.required.length)})+'</p>':'')+'<ul>'+
-    plan.required.map(item=>'<li><span data-source-text>'+safe(requirementName(item))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
+    plan.required.map(item=>'<li><span data-source-text>'+safe(requirementName(item,state.requiredServices))+'</span> · '+safe(eligibility(item))+'</li>').join('')+
     result.warnings.map(warning=>'<li>'+tr(warning)+'</li>').join('')+'</ul>'+publishedCheck(result)+'</section>'+
     '<div class="planner-sources">'+coverageMarkup(plan.interestCoverage)+'<h3>'+tr('Источники маршрута')+'</h3>'+
     '<ul class="composer-source">'+sources+'<li><a href="'+safe(location.sourceUrl)+'" target="_blank" rel="noopener noreferrer">GeoNames</a></li></ul></div>'+
     '</div></section>';
 }
 
-function download(result) {
+function download(result,requiredServices) {
   const {location,plan,settings,warnings} = result;
   const places = new Map(result.places.map(place=>[place.id,place]));
   const weather = weatherExport(forecastDays(result));
@@ -560,7 +570,7 @@ function download(result) {
           place?.officialUrl && place.officialUrl!==stop.url ? t('Официальный сайт объекта')+' '+place.officialUrl : ''].filter(Boolean).join(' · ');
       }),...dayLogistics(day),...dayGaps(day),
       ...(day.transfer?.candidates?.length?[t('Объекты вне расписания'),...day.transfer.candidates.map(candidate=>name(candidate)+' · '+candidate.url)]:[]),'']),
-    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>requirementName(item)+' · '+eligibility(item)),
+    t('Проверка условий'),...warnings.map(t),...plan.required.map(item=>requirementName(item,requiredServices)+' · '+eligibility(item)),
     ...(plan.interestCoverage??[]).map(({theme,count})=>t(themes[theme]??theme)+' · '+
       (count?placeCount(count):t('Подходящие точки не найдены')))];
   const file = URL.createObjectURL(new Blob(['\uFEFF',lines.join('\n')],{type:'text/plain;charset=utf-8'}));
@@ -571,8 +581,18 @@ function download(result) {
   setTimeout(()=>URL.revokeObjectURL(file),1000);
 }
 
-export function mountComposer(container, api, requestedCityId) {
+export function mountComposer(container, api, query, {restoreWorkspace=false}={}) {
   const find = selector=>container.querySelector(selector);
+  const resume=query.get('draft')==='1';
+  const cityId=query.get('city');
+  const placeId=query.get('place');
+  const label=query.get('label')?.trim().slice(0,160);
+  const placeKind=query.get('kind');
+  const existingWorkspace=restoreWorkspace && workspace?.hash===location.hash ? workspace : null;
+  const state=existingWorkspace?.state ?? {...newState(),...(resume && rememberedDraft ? structuredClone(rememberedDraft) : {})};
+  workspace={hash:location.hash,state,view:existingWorkspace?.view ?? 'schedule'};
+  const initialCityController=new AbortController();
+  let loadingCity=/^\d{1,12}$/u.test(cityId ?? '') && !state.selectedCity;
   let map;
   let localizedGeodata;
   let searchTimer;
@@ -581,12 +601,25 @@ export function mountComposer(container, api, requestedCityId) {
   let extraMatches=[];
   let pending;
   let mounted=true;
-  let workView='schedule';
+  let workView=workspace.view;
   const serviceView={query:'',kind:'all',city:'',limit:8};
-  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Маршруты')+'</h1></header>'+
-    '<div class="composer-layout">'+formMarkup()+
+  container.innerHTML = '<header class="planner-heading"><h1>'+tr('Маршруты')+'</h1><div id="draft-navigation"></div></header>'+
+    '<div class="composer-layout">'+formMarkup(state)+
     '<div class="composer-result" id="composer-result"></div></div>';
   const mapVisibility=window.matchMedia('(min-width: 1050px)');
+  function paintDraftNavigation() {
+    const rememberedLocation=rememberedDraft?.result.location;
+    find('#draft-navigation').innerHTML=state.result?'<a class="button-quiet" href="#route">'+tr('Новый маршрут')+'</a>':
+      rememberedLocation?'<a class="button-quiet" href="#route?draft=1">'+tr('Продолжить черновик · {city}',{
+        city:name(rememberedLocation)})+'</a>':'';
+  }
+  function paintRequiredPlaces() {
+    const list=find('#draft-context-places');
+    list.hidden=!state.requiredServices.length;
+    list.innerHTML=state.requiredServices.map(place=>'<li><button type="button" class="button-quiet" data-composer="remove-required" data-value="'+
+      safe(place.id)+'" aria-label="'+tr('Убрать из маршрута {place}',{place:name(place)})+'">'+safe(name(place))+' <span aria-hidden="true">×</span></button></li>').join('');
+  }
+  const saveWorkspaceDraft=()=>retainDraft(state);
   function setEditor(open) {
     find('#planner-editor').hidden=!open;
     find('.planner-editor-head').hidden=!state.result;
@@ -679,10 +712,10 @@ export function mountComposer(container, api, requestedCityId) {
     if (!mounted) return;
     const form=find('#draft-input');
     const submit=form.querySelector('[type=submit]');
-    submit.disabled=Boolean(pending && !pending.refining);
+    submit.disabled=loadingCity || Boolean(pending && !pending.refining);
     submit.textContent=t(pending?.refining?'Собрать маршрут сейчас':state.result?'Пересчитать маршрут':'Собрать маршрут');
     find('[data-composer=close-editor]').disabled=Boolean(pending && !pending.feedback);
-    find('[data-composer=refine]').disabled=Boolean(pending) || state.brief.trim().length<3;
+    find('[data-composer=refine]').disabled=loadingCity || Boolean(pending) || state.brief.trim().length<3;
     for (const button of container.querySelectorAll('[data-composer=service-include],[data-composer=service-release]')) {
       button.disabled=Boolean(pending) || state.dirty;
     }
@@ -792,6 +825,7 @@ export function mountComposer(container, api, requestedCityId) {
   function selectWorkView(next) {
     const prior=workView;
     workView=next;
+    workspace.view=next;
     find('.planner-workarea').dataset.view=next;
     for (const tab of container.querySelectorAll('[data-composer=workspace-view]')) {
       tab.setAttribute('aria-pressed',String(tab.dataset.value===next));
@@ -830,7 +864,7 @@ export function mountComposer(container, api, requestedCityId) {
             '<span class="caption">'+tr('Условия для группы нужно подтвердить')+'</span>'+
             (stop.required?'':'<button type="button" class="link-button" data-composer="pin-stop" data-value="'+safe(stop.id)+'">'+tr('Сделать обязательным')+'</button>')+
             '<button type="button" class="link-button" data-composer="omit-stop" data-value="'+safe(stop.id)+'">'+tr('Исключить точку')+'</button>'+
-            replacementMarkup(stop,byId,plan.settings)+'</div>':'')+'</li>';
+            replacementMarkup(stop,byId,plan.settings,state.dirty)+'</div>':'')+'</li>';
       }).join('')+
       '</ul>'+(day.logistics?.arrivalAfterDay?'':weatherSlot(index,{compact:true}))+
       (day.missing.some(gap=>serviceGaps.has(gap))?'<button type="button" class="link-button composer-missing-services" data-composer="open-venues">'+
@@ -838,7 +872,7 @@ export function mountComposer(container, api, requestedCityId) {
       dayGaps({...day,missing:day.missing.filter(gap=>!serviceGaps.has(gap))}).map(gap=>'<p class="caption">'+safe(gap)+'</p>').join('')+'</section>').join('');
     loadPlanWeather(find('#draft-timeline'),forecastDays(state.result,state.dirty),api);
     paintMap(frame);
-    retainDraft();
+    saveWorkspaceDraft();
   }
   function resultMarkup(focus=false) {
     if (!mounted) return;
@@ -848,7 +882,9 @@ export function mountComposer(container, api, requestedCityId) {
     if (serviceView.city && !state.result.locations?.some(place=>place.name===serviceView.city)) serviceView.city='';
     const {geodata}=state.result;
     localizedGeodata={...geodata,attribution:geodata.attribution?.map(credit=>({...credit,label:t(credit.label)}))};
-    find('#composer-result').innerHTML=draftMarkup(state.result,serviceView);
+    find('#composer-result').innerHTML=draftMarkup(state.result,serviceView,state);
+    paintDraftNavigation();
+    paintRequiredPlaces();
     selectWorkView(workView);
     paintServices();
     setEditor(state.dirty);
@@ -908,7 +944,7 @@ export function mountComposer(container, api, requestedCityId) {
       if (previousIds!==cities.map(city=>city.id).join(',')) {
         state.omitted=[];
         state.replacements=[];
-        state.requiredServices=[];
+        state.requiredServices=state.requiredServices.filter(place=>cities.some(city=>city.name===place.city));
       }
       clearTimeout(searchTimer);
       state.findVersion++;
@@ -918,13 +954,14 @@ export function mountComposer(container, api, requestedCityId) {
       state.query=state.selectedCity ? name(state.selectedCity) : '';
     }
     if (state.result) markStale();
-    retainDraft();
+    saveWorkspaceDraft();
     const issue=parameterIssue();
     state.note = issue?.message ?? (
       state.extraCities.length>2 ? 'Укажите до трёх городов для одного маршрута.' :
       state.extraCities.length && !state.overrideFields.includes('city') ? 'Несколько городов найдено в тексте. Проверьте порядок.' : message);
     state.noteValues=issue?.values ?? null;
     updateExtraction();
+    paintRequiredPlaces();
   }
   async function analyse() {
     if (pending || state.brief.trim().length<3) return;
@@ -945,7 +982,7 @@ export function mountComposer(container, api, requestedCityId) {
     }
   }
   async function build(form,replacement,feedback,selectedServices,serviceChange) {
-    if (pending) return;
+    if (loadingCity || pending) return;
     const brief=state.brief.trim();
     const parseNew = brief.length>=3 && brief!==state.lastAppliedBrief;
     const request=start(selectedServices?'Пересчитываем маршрут с выбранным местом…':replacement?'Проверяем замену для этого времени…':
@@ -1000,7 +1037,8 @@ export function mountComposer(container, api, requestedCityId) {
       }
       if (parseNew) phase('Подбираем объекты и составляем программу…');
       const replacements=replacement ? [...state.replacements,replacement] : state.replacements;
-      const services=selectedServices ?? state.requiredServices;
+      const cities=[state.selectedCity,...state.extraCities];
+      const services=(selectedServices ?? state.requiredServices).filter(place=>cities.some(city=>city.name===place.city));
       const result=await api('draft',{...state.settings,cityId:state.selectedCity.id,additionalCityIds:state.extraCities.map(city=>city.id),
         omittedIds:state.omitted.map(place=>place.id),replacements,requiredPlaceIds:services.map(place=>place.id)},'POST',network);
       if (!isCurrent(request,revision)) return;
@@ -1013,6 +1051,10 @@ export function mountComposer(container, api, requestedCityId) {
       state.replacements=swaps.filter(item=>item.status==='applied').map(({day,fromId,toId})=>({day,fromId,toId}));
       state.requiredServices=services;
       state.result=result;
+      if (!resume && location.hash!=='#route?draft=1') {
+        history.replaceState(history.state,'','#route?draft=1');
+        workspace.hash=location.hash;
+      }
       if (!replacement && !selectedServices) {
         workView='schedule';
         state.mapDay='0';
@@ -1081,7 +1123,7 @@ export function mountComposer(container, api, requestedCityId) {
       state.overrideFields=[];
       setDirty();
       syncActions();
-      retainDraft();
+      saveWorkspaceDraft();
       return;
     }
     const manual=({china:'market',interest:'interests',excludedInterest:'excludedInterests'})[control.name] ||
@@ -1119,7 +1161,7 @@ export function mountComposer(container, api, requestedCityId) {
     }
     state.settings=settingsFrom(find('#draft-input'));
     showDefaults();
-    retainDraft();
+    saveWorkspaceDraft();
   };
   const click = event=>{
     if (event.target.closest('[data-action=cancel-composer]') && pending) {
@@ -1138,6 +1180,15 @@ export function mountComposer(container, api, requestedCityId) {
     const button=event.target.closest('[data-composer]');
     if (!button) return;
     const {composer:action,value}=button.dataset;
+    if (action==='remove-required') {
+      if (pending) {pending.controller.abort();finish(pending);}
+      state.requiredServices=state.requiredServices.filter(place=>place.id!==value);
+      setDirty();
+      paintRequiredPlaces();
+      saveWorkspaceDraft();
+      (find('#draft-context-places button') ?? find('[name=brief]')).focus();
+      return;
+    }
     if (action==='edit-editor' || action==='close-editor') {
       const open=action==='edit-editor' && find('#planner-editor').hidden;
       if (!open && pending && !pending.feedback) return;
@@ -1176,7 +1227,7 @@ export function mountComposer(container, api, requestedCityId) {
       state.overrideFields=[];
       setDirty();
       syncActions();
-      retainDraft();
+      saveWorkspaceDraft();
       input.focus();
       return;
     }
@@ -1186,7 +1237,7 @@ export function mountComposer(container, api, requestedCityId) {
       cityOptions();
       setDirty();
       showDefaults();
-      retainDraft();
+      saveWorkspaceDraft();
       (find('#draft-additional-cities button')??find('#draft-add-city summary')).focus();
       return;
     }
@@ -1202,7 +1253,7 @@ export function mountComposer(container, api, requestedCityId) {
       cityOptions();
       setDirty();
       showDefaults();
-      retainDraft();
+      saveWorkspaceDraft();
       (find('#draft-add-city').hidden?find('#draft-additional-cities li:last-child button'):query)?.focus();
       return;
     }
@@ -1210,7 +1261,7 @@ export function mountComposer(container, api, requestedCityId) {
       state.omitted=state.omitted.filter(place=>place.id!==value);
       cityOptions();
       setDirty();
-      retainDraft();
+      saveWorkspaceDraft();
       (find('#draft-omitted button')??find('#draft-input [type=submit]')).focus();
       return;
     }
@@ -1281,7 +1332,7 @@ export function mountComposer(container, api, requestedCityId) {
         alternatives.querySelector('summary')?.focus();
       } else find('#draft-timeline button[aria-pressed=true]')?.focus({preventScroll:true});
     }
-    if (action==='export' && !state.dirty) download(state.result);
+    if (action==='export' && !state.dirty) download(state.result,state.requiredServices);
     if (action==='replace-stop') {
       const previousId=button.dataset.previous;
       const candidate=state.result.plan.days[state.pointDay]?.stops.find(stop=>stop.id===previousId)?.alternatives?.find(place=>place.id===value);
@@ -1312,7 +1363,7 @@ export function mountComposer(container, api, requestedCityId) {
       state.settings=settingsFrom(form);
       cityOptions();
       setDirty();
-      retainDraft();
+      saveWorkspaceDraft();
       const status=find('#draft-status');
       status.textContent=t('Чтобы учесть изменения, пересчитайте черновик.');
       form.querySelector('[type=submit]').focus();
@@ -1324,26 +1375,34 @@ export function mountComposer(container, api, requestedCityId) {
   mapVisibility.addEventListener('change',syncMapLayout);
   cityOptions();
   showDefaults();
+  paintDraftNavigation();
+  paintRequiredPlaces();
   syncActions();
   resultMarkup();
-  if (/^\d{1,12}$/u.test(requestedCityId ?? '') && requestedCityId!==state.selectedCity?.id) {
-    const revision=state.revision;
-    void api('cities?id='+requestedCityId).then(({cities:[city]})=>{
-      if (!mounted || !city || state.revision!==revision) return;
-      Object.assign(state,{brief:'',lastAppliedBrief:'',query:name(city),cities:[city],selectedCity:city,extraCities:[],
-        settings:initialRequirements(currentDate()),overrideFields:[],result:null,dirty:false,mapDay:'all',point:null,pointDay:null,
-        omitted:[],requiredServices:[],replacements:[],unsupportedDays:null,invalidDate:null,invalidSize:null,note:'',noteValues:null});
-      map?.destroy();
-      map=null;
-      find('#composer-result').replaceChildren();
-      find('#draft-input [name=brief]').value='';
-      setEditor(true);
+  if (loadingCity) {
+    const version=state.findVersion;
+    showNote('Город загружается…');
+    void api('cities?id='+cityId,undefined,'GET',{signal:initialCityController.signal}).then(({cities:[city]})=>{
+      if (!mounted || state.findVersion!==version) return;
+      if (!city) throw Error('City not found');
+      Object.assign(state,{query:name(city),cities:[city],selectedCity:city,note:'',noteValues:null});
+      if (/^[\p{L}\p{N}][\p{L}\p{N}_-]{0,79}$/u.test(placeId ?? '') && label && Object.hasOwn(kind,placeKind)) {
+        state.requiredServices=[{id:placeId,name:label,kind:placeKind,city:city.name}];
+      }
       updateExtraction();
-      syncActions();
-    }).catch(()=>{});
+      paintRequiredPlaces();
+    }).catch(()=>{
+      if (!mounted || state.findVersion!==version) return;
+      find('#draft-parameters').open=true;
+      showNote('Не удалось загрузить город. Выберите его в параметрах.');
+    }).finally(()=>{
+      loadingCity=false;
+      if (mounted) syncActions();
+    });
   }
   return {destroy(){
     mounted=false;
+    initialCityController.abort();
     if (pending) {pending.controller.abort();finish(pending);}
     clearTimeout(searchTimer);
     clearTimeout(extraSearchTimer);

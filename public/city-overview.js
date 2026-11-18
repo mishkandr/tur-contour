@@ -39,6 +39,7 @@ addLocaleMessages([
   ['Загрузка ряда Росстата…','Loading Rosstat data…','正在加载俄罗斯统计局数据…'],
   ['Погода на три дня','Three-day forecast','未来三天天气'],
   ['Вопрос по городу','Ask about this city','询问此城市'],
+  ['В маршрут','Add to itinerary','加入行程'],
   ['Объекты в городе и окрестностях','Places in and around the city','城市及周边地点'],
 ]);
 
@@ -74,8 +75,7 @@ function addCached(cache,key,value) {
 }
 
 function chooseMarkup() {
-  return '<header class="city-overview-header"><h1>'+msg('Обзор')+'</h1>'+
-    '<a href="#route" class="button-quiet" id="city-overview-route">'+msg('Собрать маршрут')+'</a></header>'+
+  return '<header class="city-overview-header"><h1>'+msg('Обзор')+'</h1></header>'+
     '<div class="city-overview-search"><label class="field" for="overview-city-query">'+msg('Найти город России')+
     '<input type="search" id="overview-city-query" placeholder="'+msg('Введите название города')+'" autocomplete="off" maxlength="100" aria-controls="overview-city-choices"></label>'+
     '<div id="overview-city-choices"></div></div><div id="overview-city-report"><p class="caption">'+
@@ -106,17 +106,24 @@ function catalogSourcesMarkup(sources=[]) {
   return links.length?'<p class="caption city-overview-attribution">'+links.join(' / ')+'</p>':'';
 }
 
-function placeInfoMarkup(place) {
+function placeInfoMarkup(place,cityId) {
   if (!place) return '';
   const detail=translated(place,'detail');
   const address=translated(place,'address');
   const stage=place.kind==='project' ? stages[place.stage] ?? stages.planned : filters[place.kind];
-  return '<div class="city-place-info"><h4 data-source-text>'+escape(translated(place))+'</h4><p>'+
+  const title=translated(place);
+  const source=sourceLink(place.officialUrl??place.url,place.source?.name??place.source?.title??
+    (typeof place.source==='string'?translated(place,'source'):t('Открыть источник')));
+  const canPlan=['visit','food','stay'].includes(place.kind) && /^\d{1,12}$/u.test(cityId) &&
+    typeof place.id==='string' && /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,79}$/u.test(place.id);
+  const route=canPlan?'<a class="button-quiet" href="#route?'+escape(new URLSearchParams({
+    city:cityId,place:place.id,label:title,kind:place.kind,
+  }))+'">'+msg('В маршрут')+'</a>':'';
+  return '<div class="city-place-info"><h4 tabindex="-1" data-source-text>'+escape(title)+'</h4><p>'+
     [stage && msg(stage),address && escape(address),validDate(place.publishedAt)&&msg('Опубликовано {date}',{
       date:dateLabel(place.publishedAt,{day:'numeric',month:'short',year:'numeric'})})].filter(Boolean).join(' · ')+'</p>'+
     (detail?'<p data-source-text>'+escape(detail)+'</p>':'')+
-    (place.url||place.officialUrl?'<p>'+sourceLink(place.officialUrl??place.url,place.source?.name??place.source?.title??
-      (typeof place.source==='string'?translated(place,'source'):t('Открыть источник')))+'</p>':'')+'</div>';
+    (route||source?'<div class="city-place-actions">'+route+source+'</div>':'')+'</div>';
 }
 
 function reportMarkup(data,places,sources) {
@@ -131,7 +138,9 @@ function reportMarkup(data,places,sources) {
   return '<section class="city-overview-report" aria-labelledby="overview-city-title">'+
     '<header class="city-summary"><div><h2 id="overview-city-title" tabindex="-1" data-source-text>'+escape(translated(city))+'</h2>'+
     (regionLabel && regionLabel!==translated(city)?'<p class="caption" data-source-text>'+escape(regionLabel)+'</p>':'')+'</div>'+
-    '<a class="button-quiet" href="#ask?'+escape(ask)+'">'+msg('Вопрос по городу')+'</a></header>'+
+    '<div class="city-summary-actions"><a href="#route?'+escape(new URLSearchParams({city:city.id}))+
+    '" class="button" id="city-overview-route">'+msg('Собрать маршрут')+'</a>'+
+    '<a class="button-quiet" href="#ask?'+escape(ask)+'">'+msg('Вопрос по городу')+'</a></div></header>'+
     (sources.catalog || sources.projects ? '<section class="city-overview-inventory" aria-label="'+msg('Места и проекты')+'">'+
     '<div class="city-inventory-filters" role="group" aria-label="'+msg('Места и проекты')+'">'+entries.join('')+'</div>'+
     '<div class="city-inventory-layout"><div id="city-overview-map" role="region" aria-label="'+msg('Карта города')+'"></div>'+
@@ -167,7 +176,6 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   const choiceList=find('#overview-city-choices');
   const report=find('#overview-city-report');
   const monitor=find('#overview-monitor');
-  const routeLink=find('#city-overview-route');
   const sources=Object.fromEntries(['catalog','projects','statistics','weather'].map(id=>[id,sourceEnabled(id)]));
   const placeLimit=()=>window.matchMedia('(max-width: 520px)').matches ? 4 : 8;
   let mounted=true;
@@ -184,6 +192,16 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   let limit=placeLimit();
   let cityId;
   let metric='people';
+
+  function updateOverviewLink() {
+    const params=new URLSearchParams(location.hash.split('?')[1]);
+    params.set('city',cityId);
+    if (filter==='all') params.delete('category');
+    else params.set('category',filter);
+    if (selected) params.set('place',selected);
+    else params.delete('place');
+    history.replaceState(history.state,'','#overview?'+params);
+  }
 
   async function search(query) {
     queryRequest?.abort();
@@ -208,7 +226,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     const hits=visible.slice(0,limit);
     const detail=visible.find(place=>place.id===selected);
     const rows=find('#city-overview-rows');
-    find('#city-overview-place').innerHTML=placeInfoMarkup(detail);
+    find('#city-overview-place').innerHTML=placeInfoMarkup(detail,cityId);
     rows.innerHTML=hits.length ? '<ul class="city-list">'+hits.map(place=>'<li><button type="button" data-overview-place="'+escape(place.id)+
       '" aria-pressed="'+(place.id===selected)+'"><strong data-source-text>'+escape(translated(place))+'</strong><small>'+
       msg(place.kind==='project'?stages[place.stage]??stages.planned:filters[place.kind])+'</small></button></li>').join('')+'</ul>'+
@@ -223,6 +241,17 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     const fit=frame ? visible.some(place=>Array.isArray(place.coordinates)) ? 'places' : true : false;
     map?.update({places:visible,geodata:data.geodata,showPlaces:true,base:'streets',frame:fit,groupByCity:false,
       selectedId:selected,locale:getLocale()});
+  }
+
+  function inspectPlace(placeId,{keyboard,fromList=false}) {
+    selected=placeId;
+    updateOverviewLink();
+    paintPlaces();
+    if (fromList) map?.select(selected,{focus:true});
+    const detail=find('.city-place-info');
+    if (!detail) return;
+    if (keyboard) detail.querySelector('h4')?.focus({preventScroll:true});
+    detail.scrollIntoView({block:'nearest',inline:'nearest'});
   }
 
   async function loadStatistic() {
@@ -248,7 +277,7 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     }
   }
 
-  async function selectCity(id,{focus=false}={}) {
+  async function selectCity(id,{focus=false,category,placeId}={}) {
     if (!/^\d{1,12}$/u.test(id)) return;
     clearTimeout(queryTimer);
     queryRequest?.abort();
@@ -261,7 +290,6 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
     filter='all';
     selected=null;
     limit=placeLimit();
-    routeLink.href='#route';
     monitor.hidden=true;
     monitor.replaceChildren();
     choiceList.replaceChildren();
@@ -282,15 +310,17 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       places=[...(sources.catalog?data.places??[]:[]),...(sources.projects?projects?.records??[]:[])
         .map(place=>({...place,kind:'project',city:city.name}))];
       input.value=translated(city);
-      routeLink.href='#route?'+new URLSearchParams({city:id});
       const params=new URLSearchParams(location.hash.split('?')[1]);
-      params.set('city',id);
-      history.replaceState(history.state,'','#overview?'+params);
+      if (Object.hasOwn(filters,category) && (category==='project'?sources.projects:sources.catalog)) filter=category;
+      if (places.some(place=>place.id===placeId && (filter==='all'||filter===place.kind))) selected=placeId;
+      updateOverviewLink();
       report.innerHTML=reportMarkup(data,places,sources);
       const mapElement=find('#city-overview-map');
       if (mapElement && geodata) {
         map=createRouteMap(mapElement,{locale:getLocale(),minZoom:0,zoomPosition:'topright',
-          onSelect(placeId){selected=placeId;paintPlaces();}});
+          onSelect(placeId,place,{keyboard}){
+            inspectPlace(placeId,{keyboard});
+          }});
       } else if (mapElement) mapElement.hidden=true;
       if (mapElement) paintPlaces(true);
       const metricPicker=find('#overview-city-metric');
@@ -301,6 +331,9 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
         if (params.get('focus')==='programmes') find('#ops-programmes')?.focus();
       }
       if (focus) find('#overview-city-title').focus();
+      if (selected) requestAnimationFrame(()=>{
+        if (mounted && cityId===id && selected===placeId) find('.city-place-info')?.scrollIntoView({block:'nearest'});
+      });
       void loadStatistic();
     } catch {
       if (!mounted || controller.signal.aborted) return;
@@ -330,12 +363,10 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
       filter=overviewFilter;
       selected=null;
       limit=placeLimit();
+      updateOverviewLink();
       paintPlaces(true);
     } else if (overviewPlace) {
-      selected=overviewPlace;
-      paintPlaces();
-      map?.select(selected,{focus:true});
-      [...container.querySelectorAll('[data-overview-place]')].find(item=>item.dataset.overviewPlace===selected)?.focus({preventScroll:true});
+      inspectPlace(overviewPlace,{keyboard:event.detail===0,fromList:true});
     } else if (Object.hasOwn(button.dataset,'overviewNext')) {
       const previous=limit;
       limit+=8;
@@ -364,7 +395,10 @@ export function mountCityOverview(container,api,{initialCity,renderChart,renderM
   container.addEventListener('click',onClick);
   container.addEventListener('change',onChange);
   container.addEventListener('keydown',onKey);
-  if (initialCity && /^\d{1,12}$/u.test(initialCity)) void selectCity(initialCity);
+  if (initialCity && /^\d{1,12}$/u.test(initialCity)) {
+    const params=new URLSearchParams(location.hash.split('?')[1]);
+    void selectCity(initialCity,{category:params.get('category'),placeId:params.get('place')});
+  }
   else if (lastChosenCity) void selectCity(lastChosenCity);
   else void search('');
 

@@ -82,6 +82,10 @@ curl -sS -u reviewer -o /dev/null -w '%{http_code}\n' https://tour.example.org/a
 
 Ожидаются `401` без пароля и `200` с паролем. Проверка `Origin` защищает команды интерфейса от отправки с другого сайта. [Установка Caddy](https://caddyserver.com/docs/install), [HTTPS](https://caddyserver.com/docs/automatic-https), [Basic Auth](https://caddyserver.com/docs/caddyfile/directives/basic_auth)
 
+## Источники каталога
+
+Для европейского набора OpenStreetMap можно задать `TUR_OVERPASS_EUROPE_URL` в `/etc/tur-contour/app.env`. Сервис обращается к нему, если вся область поиска города входит в границу набора. Остальные города запрашиваются через `TUR_OVERPASS_URL`. У каждого подключения собственное ограничение запросов. При недоступности используются данные MediaWiki и сохранённый каталог. После перезапуска отдельное подключение будет видно в «Источниках». [Overpass Europe](https://ovp.dresel.systems/) · [Граница набора Geofabrik](https://download.geofabrik.de/europe.html)
+
 ## Локальная модель
 
 Ollama слушает `127.0.0.1:11434`. Загрузите `qwen3.5:4b` и проверьте отклик на VPS. `TUR_OLLAMA_MODEL` выбирает основную модель. Для подробного разбора запроса можно отдельно установить `qwen3.5:9b-q4_K_M` и задать эту модель в `TUR_OLLAMA_DETAIL_MODEL`. Проверьте запас памяти и холодный запуск для реального запроса. На CPU с 8 ГБ используйте `OLLAMA_NUM_PARALLEL=1` и `OLLAMA_MAX_LOADED_MODELS=1`.

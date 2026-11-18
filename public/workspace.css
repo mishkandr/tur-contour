@@ -106,9 +106,11 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .practice{margin-top:16px}
 .practice summary{cursor:pointer;font-size:1rem;font-weight:670}
 .practice p{margin:10px 0;max-width:70ch}
-.top nav a[href="#ask"]{color:var(--strong);font-weight:680}
-.planner-heading{margin-block-end:20px}
+.planner-heading{display:flex;align-items:center;justify-content:space-between;gap:6px 14px;flex-wrap:wrap;margin-block-end:20px}
 .planner-heading h1{font:720 clamp(1.38rem,2.8vw,1.8rem)/1.25 Inter,system-ui,sans-serif;letter-spacing:-.025em}
+#draft-navigation:empty{display:none}
+#draft-navigation a{display:inline-flex;align-items:center;min-height:44px;white-space:normal}
+#draft-context-places .button-quiet{min-height:44px;white-space:normal;text-align:start}
 .composer-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
 .composer-result:empty{display:none}
 .composer-inputs,.composer-result{min-width:0}

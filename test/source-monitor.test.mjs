@@ -19,7 +19,10 @@ test('source checks validate the connector, coalesce requests and retain failure
   };
   const config={fetchImpl,now:()=>now};
   const monitor=createSourceMonitor(dir,config);
-  assert.deepEqual(await monitor.status(),{latest:{},errors:[]});
+  const initial=await monitor.status();
+  assert.deepEqual(initial.latest,{});
+  assert.deepEqual(initial.errors,[]);
+  assert.ok(!initial.providers.includes('openstreetmap-europe'));
   await assert.rejects(monitor.check('https://example.org'),{status:400});
   await Promise.all([monitor.check('weather'),monitor.check('weather')]);
   const current=await monitor.check('wikipedia');
@@ -34,4 +37,12 @@ test('source checks validate the connector, coalesce requests and retain failure
   now+=60_000;
   await restarted.check('weather');
   assert.equal(calls.length,3);
+  const withEurope=createSourceMonitor(dir,{...config,overpassEuropeUrl:'https://europe.example/api/interpreter',
+    fetchImpl:async url=>{
+      assert.equal(String(url),'https://europe.example/api/status');
+      return new Response('Connected as: 7');
+    }});
+  const europe=await withEurope.check('openstreetmap-europe');
+  assert.ok(europe.providers.includes('openstreetmap-europe'));
+  assert.equal(europe.latest['openstreetmap-europe'].status,'ok');
 });

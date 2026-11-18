@@ -57,7 +57,7 @@ test('provider catalogs survive restarts, merge with fresh sources and expire wi
   async function run(mode,elapsedHours) {
     const {stdout}=await exec(process.execPath,['--input-type=module','-e',fixture,mode,
       String(start+elapsedHours*hour),city.id,...city.coordinates.map(String)],
-    {env:{...process.env,TUR_STATE_DIR:stateDir,TUR_NO_OVERPASS:'0',TUR_OVERPASS_URL:'https://osm.example.test'}});
+    {env:{...process.env,TUR_STATE_DIR:stateDir,TUR_NO_OVERPASS:'0',TUR_OVERPASS_URL:'https://osm.example.test',TUR_OVERPASS_EUROPE_URL:''}});
     return JSON.parse(stdout);
   }
 
@@ -105,7 +105,7 @@ test('provider catalogs survive restarts, merge with fresh sources and expire wi
   for (const file of files) {
     const contents=await readFile(join(directory,file),'utf8');
     assert.ok(!contents.includes(privateBrief));
-    assert.deepEqual(Object.keys(JSON.parse(contents)).sort(),['checkedAt','fetchedAt','places','version']);
+    assert.deepEqual(Object.keys(JSON.parse(contents)).sort(),['checkedAt','fetchedAt','places','provider','version']);
   }
 
   const stale=await run('offline',60);
@@ -117,4 +117,107 @@ test('provider catalogs survive restarts, merge with fresh sources and expire wi
   const expired=await run('offline',35*24);
   assert.equal(expired.source.status,'unavailable');
   assert.ok(!expired.places.some(place=>/824[0-2]|590[12]$/.test(place.id)));
+});
+
+test('the fallback serves another city while OSM is busy and its snapshot does not block an OSM refresh',async t=>{
+  const stateDir=await mkdtemp(join(tmpdir(),'tur-national-catalog-'));
+  t.after(()=>rm(stateDir,{recursive:true,force:true}));
+  const scenario=`
+    import { cityCatalog, listCities } from ${JSON.stringify(moduleUrl)};
+    const cities=await Promise.all(['Скопин','Зарайск','Касимов'].map(async name=>(await listCities(name)).cities[0]));
+    const calls=[];
+    let now=Date.now();
+    Date.now=()=>now;
+    const osmStarted=Promise.withResolvers(), wikiStarted=Promise.withResolvers();
+    const releaseOsm=Promise.withResolvers(), releaseWiki=Promise.withResolvers();
+    globalThis.fetch=async url=>{
+      if (url.hostname.endsWith('wikipedia.org')) {
+        calls.push('wiki');
+        wikiStarted.resolve();
+        await releaseWiki.promise;
+        const [lat,lon]=cities[1].coordinates;
+        return Response.json({query:{geosearch:[{pageid:51,title:'Музей второго города',lat,lon}]}});
+      }
+      calls.push('osm');
+      const index=calls.length===1 ? 0 : 1;
+      osmStarted.resolve();
+      await releaseOsm.promise;
+      const [lat,lon]=cities[index].coordinates;
+      return Response.json({elements:[{type:'node',id:61+index,lat,lon,tags:{name:'Городской парк',leisure:'park'}}]});
+    };
+    const first=cityCatalog(cities[0]);
+    await osmStarted.promise;
+    const duplicate=cityCatalog(cities[0]);
+    const second=cityCatalog(cities[1]);
+    await wikiStarted.promise;
+    const busy=await cityCatalog(cities[2]);
+    releaseWiki.resolve();
+    const fallback=await second;
+    releaseOsm.resolve();
+    const originals=await Promise.all([first,duplicate]);
+    now+=2100;
+    const refreshed=await cityCatalog(cities[1]);
+    process.stdout.write(JSON.stringify({
+      calls,busy:busy.catalogSources[0],fallback:fallback.catalogSources[0],
+      originalIds:originals.map(result=>result.places.map(place=>place.id)),
+      refreshedIds:refreshed.places.map(place=>place.id),
+    }));
+  `;
+  const {stdout}=await exec(process.execPath,['--input-type=module','-e',scenario],{
+    timeout:10_000,env:{...process.env,TUR_STATE_DIR:stateDir,TUR_NO_OVERPASS:'0',TUR_OVERPASS_URL:'https://osm.example.test',TUR_OVERPASS_EUROPE_URL:''},
+  });
+  const result=JSON.parse(stdout);
+  assert.deepEqual(result.calls,['osm','wiki','osm']);
+  assert.equal(result.busy.reason,'busy');
+  assert.equal(result.fallback.id,'wikimedia');
+  assert.equal(result.fallback.status,'live');
+  assert.equal(result.fallback.reason,'busy');
+  assert.deepEqual(result.originalIds,[['osm-node-61'],['osm-node-61']]);
+  assert.deepEqual(result.refreshedIds,['osm-node-62','ruwiki-51']);
+});
+
+test('the optional regional Overpass uses a bounded query only within the published extract',async t=>{
+  const stateDir=await mkdtemp(join(tmpdir(),'tur-national-catalog-'));
+  t.after(()=>rm(stateDir,{recursive:true,force:true}));
+  const scenario=`
+    import { cityCatalog, getCity, listCities } from ${JSON.stringify(moduleUrl)};
+    const [tambov,kazan,vladimir,skopin]=await Promise.all([
+      getCity('484646'),getCity('551487'),getCity('473247'),listCities('Скопин').then(data=>data.cities[0]),
+    ]);
+    const calls=[];
+    let now=Date.now();
+    Date.now=()=>now;
+    globalThis.fetch=async url=>{
+      const region=url.hostname==='europe.example.test';
+      const query=url.searchParams.get('data');
+      calls.push({host:url.hostname,query});
+      const [lat,lon]=(region ? tambov : calls.length===2 ? kazan : skopin).coordinates;
+      if (region && calls.length>2) return new Response(null,{status:429,headers:{'Retry-After':'60'}});
+      return Response.json({elements:[{type:'node',id:region?61:62,lat,lon,tags:{name:'Городской парк',leisure:'park'}}]});
+    };
+    const regional=await cityCatalog(tambov);
+    const global=await cityCatalog(kazan);
+    now+=2100;
+    await cityCatalog(vladimir);
+    const afterThrottle=await cityCatalog(skopin);
+    process.stdout.write(JSON.stringify({
+      calls,region:regional.catalogSources[0],global:global.catalogSources[0],afterThrottle:afterThrottle.catalogSources[0],
+    }));
+  `;
+  const {stdout}=await exec(process.execPath,['--input-type=module','-e',scenario],{
+    timeout:10_000,env:{...process.env,TUR_STATE_DIR:stateDir,TUR_NO_OVERPASS:'0',
+      TUR_OVERPASS_URL:'https://osm.example.test/api/interpreter',TUR_OVERPASS_EUROPE_URL:'https://europe.example.test/api/interpreter'},
+  });
+  const {calls,region,global,afterThrottle}=JSON.parse(stdout);
+  assert.deepEqual(calls.map(call=>call.host),[
+    'europe.example.test','osm.example.test','europe.example.test','ru.wikipedia.org','osm.example.test',
+  ]);
+  assert.match(calls[0].query,/^\[out:json\]\[timeout:6\]\[bbox:[\d.,]+\];/u);
+  assert.doesNotMatch(calls[0].query,/\(around:/u);
+  assert.match(calls[1].query,/\(around:/u);
+  assert.equal(region.provider,'Overpass Europe (Geofabrik)');
+  assert.equal(global.provider,'Overpass API');
+  assert.equal(afterThrottle.provider,'Overpass API');
+  const saved=JSON.parse(await readFile(join(stateDir,'national-catalog','484646-openstreetmap.json'),'utf8'));
+  assert.equal(saved.provider,region.provider);
 });

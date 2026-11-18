@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { createCityOverview } from '../city-overview.mjs';
+import { createCityOverview, createLocalPlaceCatalog } from '../city-overview.mjs';
+import { draftItinerary } from '../nationwide.mjs';
 
 const load=name=>readFile(new URL('../data/'+name,import.meta.url),'utf8').then(JSON.parse);
 
@@ -37,6 +38,12 @@ test('city overview separates listed places, local forecast, regional statistics
   assert.deepEqual(result.geodata.places[project.id],{coordinates:project.coordinates,source:project.url});
   assert.ok(!result.places.some(place=>place.id===project.id));
   assert.ok(result.catalogSources.some(source=>source.id==='pilot-place-catalog'));
+  const chosen=result.places.find(place=>place.id==='amaks-food');
+  const itinerary=await draftItinerary({cityId:result.city.id,date:'2026-11-21',days:2,size:8,requiredPlaceIds:[chosen.id]},
+    {local:createLocalPlaceCatalog(catalog,mapData),fetchImpl:async()=>new Response(null,{status:503})});
+  assert.equal(itinerary.plan.required[0].matched.id,chosen.id);
+  assert.equal(itinerary.plan.required[0].scheduled,true);
+  assert.ok(itinerary.plan.days.flatMap(day=>day.stops).some(stop=>stop.id===chosen.id && stop.status==='unknown'));
   const triggered={...calls};
   const disabled=await overview('473247',{includeWeather:false,includeCatalog:false,includeProjects:false});
   assert.deepEqual(calls,triggered);

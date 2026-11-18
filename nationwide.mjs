@@ -8,18 +8,25 @@ const osm = {
   id:'openstreetmap', name:'OpenStreetMap', url:'https://www.openstreetmap.org/copyright',
   license:'ODbL', provider:'Overpass API',
 };
+const europeanOsm = {...osm,provider:'Overpass Europe (Geofabrik)'};
+const europeLane = 'overpass-europe';
 const wiki = {id:'wikimedia',name:'Википедия',url:'https://www.mediawiki.org/wiki/API:Geosearch',license:'CC BY-SA 4.0',provider:'MediaWiki GeoSearch'};
 const fallbackUrl = 'https://overpass.private.coffee/api/interpreter';
 const wikiLimit = 250;
+const providerSpacingMs = 2000;
+const fallbackRefreshMs = 180_000;
+const providerLanes = {
+  [osm.id]:{active:false,nextRequestAt:0,cooldownUntil:0},
+  [europeLane]:{active:false,nextRequestAt:0,cooldownUntil:0},
+  [wiki.id]:{active:false,nextRequestAt:0,cooldownUntil:0},
+};
 const cache = new Map();
 const pending = new Map();
 const citySearchCache = new Map();
 let registry;
 let citySearchNames;
 let snapshots;
-let blockedUntil = 0;
-let overpassCooldownUntil = 0;
-let requestInProgress = false;
+let europeanBoundary;
 
 const themes = new Set(['heritage','museum','any','romantic','family','hike','nature','craft','pilgrimage','gastro']);
 const traditionalCrafts=['pottery','glassblower','weaver','basket_maker','sculptor','blacksmith','woodcarver','handicraft'];
@@ -248,18 +255,39 @@ function distance([a,b],[x,y]) {
   return 12742*Math.asin(Math.min(1,Math.sqrt(angle)));
 }
 
-function endpoint() {
-  const url = new URL(process.env.TUR_OVERPASS_URL ?? fallbackUrl);
-  if (!['http:','https:'].includes(url.protocol)) throw Error('Unsupported Overpass URL');
-  return url;
+function insideBoundary(lon,lat,boundary) {
+  let inside=false;
+  for (let index=1;index<boundary.length;index++) {
+    const [a,firstLat]=boundary[index-1];
+    const [b,secondLat]=boundary[index];
+    if ((firstLat>lat)!==(secondLat>lat) && lon<a+(b-a)*(lat-firstLat)/(secondLat-firstLat)) inside=!inside;
+  }
+  return inside;
 }
 
-function queryAround(city) {
+async function overpassTarget(city) {
+  const regionalUrl=process.env.TUR_OVERPASS_EUROPE_URL;
+  if (regionalUrl && providerLanes[europeLane].cooldownUntil<=Date.now()) {
+    europeanBoundary ??= loadJson('geofabrik-europe-boundary.json').then(data=>data.boundary).catch(()=>[]);
+    const boundary=await europeanBoundary;
+    const [lat,lon]=city.coordinates;
+    const latitudeRadius=7/111.2;
+    const longitudeRadius=latitudeRadius/Math.cos(lat*Math.PI/180);
+    const south=lat-latitudeRadius, north=lat+latitudeRadius, west=lon-longitudeRadius, east=lon+longitudeRadius;
+    if ([south,lat,north].every(y=>[west,lon,east].every(x=>insideBoundary(x,y,boundary)))) {
+      const bounds=[south,west,north,east].map(value=>value.toFixed(5)).join(',');
+      return {url:regionalUrl,lane:europeLane,source:europeanOsm,bounds};
+    }
+  }
+  return {url:process.env.TUR_OVERPASS_URL ?? fallbackUrl,lane:osm.id,source:osm};
+}
+
+function queryAround(city,bounds) {
   const [lat,lon] = city.coordinates;
-  const around = kilometres=>'(around:'+kilometres+','+lat.toFixed(5)+','+lon.toFixed(5)+')[name]';
+  const around = kilometres=>(bounds ? '' : '(around:'+kilometres+','+lat.toFixed(5)+','+lon.toFixed(5)+')')+'[name]';
   const visit = around(11_000);
   const infrastructure = around(10_500);
-  return '[out:json][timeout:10];'+
+  return (bounds?'[out:json][timeout:6][bbox:'+bounds+'];':'[out:json][timeout:10];')+
     'nwr'+visit+'[tourism~"^(museum|gallery|zoo|aquarium|theme_park)$"];out center 70;'+
     'nwr'+visit+'[historic~"^(castle|fort|monument|memorial|archaeological_site)$"];out center 50;'+
     'nwr'+visit+'[tourism~"^(attraction|viewpoint)$"];out center 55;'+
@@ -364,24 +392,24 @@ async function archivedPlaces(city,reason) {
   return { places,source:{...(dataset.source ?? osm),status:'snapshot',checkedAt:local.checkedAt,reason} };
 }
 
-async function fetchOverpass(city,fetchImpl) {
+async function fetchOverpass(city,fetchImpl,target) {
   const shared = fetchImpl===globalThis.fetch;
-  if (shared && overpassCooldownUntil>Date.now()) return null;
   function coolDown(delay) {
-    if (shared) overpassCooldownUntil=Math.max(overpassCooldownUntil,Date.now()+delay);
+    if (shared) providerLanes[target.lane].cooldownUntil=Date.now()+delay;
     return null;
   }
   try {
-    const url = endpoint();
-    url.searchParams.set('data',queryAround(city));
+    const url = new URL(target.url);
+    if (!['http:','https:'].includes(url.protocol)) throw Error('Unsupported Overpass URL');
+    url.searchParams.set('data',queryAround(city,target.bounds));
     const response = await fetchImpl(url,{headers:{'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)','Accept':'application/json'},
       signal:AbortSignal.timeout(7_000),redirect:'error'});
-    if (response.status===429 || response.status===406) return coolDown(30_000);
+    if (response.status===429 || response.status===406) return coolDown(retryDelay(response));
     if (!response.ok || Number(response.headers?.get('content-length'))>2_000_000) return coolDown(120_000);
     const payload = await response.json();
     if (!Array.isArray(payload.elements) || payload.remark) return null;
     const places = fromOsm(payload.elements,city);
-    return places.length ? { places,source:{...osm,status:'live',checkedAt:payload.osm3s?.timestamp_osm_base ?? null} } : null;
+    return places.length ? { places,source:{...target.source,status:'live',checkedAt:payload.osm3s?.timestamp_osm_base ?? null} } : null;
   } catch { return coolDown(120_000); }
 }
 
@@ -415,6 +443,9 @@ async function fetchWikiPois(city,fetchImpl) {
       gsradius:'10000',gslimit:String(wikiLimit),gsnamespace:'0',format:'json',formatversion:'2'});
     const response=await fetchImpl(endpoint,{headers:{'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)','Accept':'application/json'},
       signal:AbortSignal.timeout(5500),redirect:'error'});
+    if (response.status===429 && fetchImpl===globalThis.fetch) {
+      providerLanes[wiki.id].cooldownUntil=Date.now()+retryDelay(response);
+    }
     if (!response.ok) return null;
     const result=await response.json();
     if (!Array.isArray(result.query?.geosearch)) return null;
@@ -475,15 +506,45 @@ async function combineCatalogs(city,live,retained,reason) {
   const places=[...primary.places];
   for (const catalog of secondary) mergeCatalogPlaces(places,catalog);
   mergeCatalogPlaces(places,saved,true);
-  return {places,source:{...primary.source,...(!live ? {reason} : {}),
+  return {places,source:{...primary.source,...(!live || reason==='busy' ? {reason} : {}),
     ...(secondary.length ? {retained:secondary.map(({source})=>source)} : {}),
     ...(saved.places.length ? {supplemental:saved.source} : {})}};
 }
 
+function retryDelay(response) {
+  const value=response.headers?.get('retry-after')?.trim();
+  const delay=/^\d+$/u.test(value ?? '') ? Number(value)*1000 : Date.parse(value)-Date.now();
+  return Number.isFinite(delay) ? Math.max(30_000,delay) : 30_000;
+}
+
+async function requestProvider(city,fetchImpl,laneKey,fetchCatalog) {
+  if (fetchImpl!==globalThis.fetch) return {catalog:await fetchCatalog(city,fetchImpl)};
+  const lane=providerLanes[laneKey];
+  const now=Date.now();
+  if (lane.active || lane.nextRequestAt>now) return {busy:true};
+  if (lane.cooldownUntil>now) return {};
+  lane.active=true;
+  lane.nextRequestAt=now+providerSpacingMs;
+  try {
+    return {catalog:await fetchCatalog(city,fetchImpl)};
+  } finally {
+    lane.active=false;
+  }
+}
+
+function freshCatalog({version,source}) {
+  return version===catalogVersion && Date.now()-Date.parse(source.fetchedAt)<catalogRefreshMs;
+}
+
 async function requestPois(city,fetchImpl,retained=[]) {
-  const live=await fetchOverpass(city,fetchImpl) ?? await fetchWikiPois(city,fetchImpl);
+  const target=await overpassTarget(city);
+  const mapped=await requestProvider(city,fetchImpl,target.lane,(area,request)=>fetchOverpass(area,request,target));
+  const freshWiki=retained.some(record=>record.source.id===wiki.id && freshCatalog(record));
+  const fallback=mapped.catalog || freshWiki ? {} : await requestProvider(city,fetchImpl,wiki.id,fetchWikiPois);
+  const live=mapped.catalog ?? fallback.catalog;
   if (live && fetchImpl===globalThis.fetch) await saveCatalog(city.id,live);
-  return combineCatalogs(city,live,retained,'provider-error');
+  const reason=mapped.busy || fallback.busy ? 'busy' : freshWiki ? 'recent' : 'provider-error';
+  return combineCatalogs(city,live,retained,reason);
 }
 
 function sameSite(place,archived,curated) {
@@ -502,17 +563,10 @@ function sameSite(place,archived,curated) {
 
 async function lookupPois(city,fetchImpl) {
   const retained=await retainedCatalogs(city);
-  if (retained.some(({source,version})=>version===catalogVersion && Date.now()-Date.parse(source.fetchedAt)<catalogRefreshMs)) {
+  if (retained.some(record=>record.source.id===osm.id && freshCatalog(record))) {
     return combineCatalogs(city,null,retained,'recent');
   }
-  if (blockedUntil>Date.now() || requestInProgress) return combineCatalogs(city,null,retained,'busy');
-  requestInProgress = true;
-  blockedUntil = Date.now()+2000;
-  try {
-    return await requestPois(city,fetchImpl,retained);
-  } finally {
-    requestInProgress=false;
-  }
+  return requestPois(city,fetchImpl,retained);
 }
 
 async function objectsFor(city,fetchImpl) {
@@ -527,7 +581,8 @@ async function objectsFor(city,fetchImpl) {
   if (pending.has(city.id)) return pending.get(city.id);
   const task = lookupPois(city,fetchImpl).then(result=>{
     if (result.source.reason!=='busy') {
-      cache.set(city.id,{until:Date.now()+(result.source.status==='live' ? catalogRefreshMs : 180_000),result});
+      const primaryRefresh=result.source.status==='live' && result.source.id===osm.id;
+      cache.set(city.id,{until:Date.now()+(primaryRefresh ? catalogRefreshMs : fallbackRefreshMs),result});
       if (cache.size>80) cache.delete(cache.keys().next().value);
     }
     return result;
@@ -967,20 +1022,27 @@ export async function getCity(cityId) {
   return formatCity(row,regions);
 }
 
+async function catalogFor(city,fetchImpl,local) {
+  const {places:providerPlaces,source}=await objectsFor(city,fetchImpl);
+  const inArea=local?.places.filter(place=>place.city===city.name && distance(place.coordinates,city.coordinates)<=12) ?? [];
+  if (!inArea.length) return {places:providerPlaces,source};
+  const places=[...providerPlaces];
+  mergeCatalogPlaces(places,{places:inArea,source:local.source},true);
+  return {places,source:source.status==='unavailable' ? local.source :
+    {...source,retained:[...(source.retained ?? []),local.source]}};
+}
+
 export async function cityCatalog(city,{fetchImpl=globalThis.fetch,local,include=true}={}) {
   const counts={visit:0,food:0,stay:0};
   if (!include) return {places:[],geodata:mapData([city],[],[]),catalogSources:[],counts};
-  const {places:providerPlaces,source}=await objectsFor(city,fetchImpl);
-  const places=[...providerPlaces];
-  const inArea=local?.places.filter(place=>place.city===city.name && distance(place.coordinates,city.coordinates)<=12) ?? [];
-  if (inArea.length) mergeCatalogPlaces(places,{places:inArea,source:local.source},true);
-  const sources=[source,source.supplemental,...(source.retained ?? []),inArea.length ? local.source : null].filter(Boolean)
+  const {places,source}=await catalogFor(city,fetchImpl,local);
+  const sources=[source,source.supplemental,...(source.retained ?? [])].filter(Boolean)
     .map(({supplemental,retained,...evidence})=>evidence);
   for (const place of places) counts[place.kind]+=1;
   return {places,geodata:mapData([city],places,sources),catalogSources:sources,counts};
 }
 
-export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} = {}) {
+export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch,local} = {}) {
   if (!input || typeof input!=='object' || Array.isArray(input)) throw error('Укажите параметры программы.');
   const settings=readSettings(input);
   const data=await cityData();
@@ -991,9 +1053,14 @@ export async function draftItinerary(input = {}, {fetchImpl = globalThis.fetch} 
   });
   const contexts=[];
   for (const location of locations) {
-    const interval=blockedUntil-Date.now();
-    if (contexts.length && fetchImpl===globalThis.fetch && interval>0 && interval<=2000) await wait(interval+5);
-    const {places,source}=await objectsFor(location,fetchImpl);
+    if (contexts.length && fetchImpl===globalThis.fetch) {
+      const {lane:key}=await overpassTarget(location);
+      const now=Date.now();
+      const lane=[providerLanes[key],providerLanes[wiki.id]].find(item=>!item.active && item.cooldownUntil<=now);
+      const interval=lane?.nextRequestAt-now;
+      if (interval>0 && interval<=providerSpacingMs) await wait(interval+5);
+    }
+    const {places,source}=await catalogFor(location,fetchImpl,local);
     contexts.push({location,places,source});
   }
   const omitted=new Set(settings.omittedIds);

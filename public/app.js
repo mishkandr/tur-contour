@@ -1078,7 +1078,7 @@ function render(scroll=false) {
     if (current==='overview') cityOverview=mountCityOverview(screen,api,{initialCity:query.get('city'),
       renderChart:statisticChart,renderMonitoring:()=>renderMonitoredProgrammes(data,overview)});
     else if (current==='ask') knowledge=mountKnowledge(screen,api,options,query.get('region'),query.get('city'));
-    else if (current==='route' && params().get('scope')!=='pilot') composer=mountComposer(screen,api,query.get('city'));
+    else if (current==='route' && !isRoutePilot) composer=mountComposer(screen,api,query,{restoreWorkspace:!scroll});
     else {
       const plan = current==='route' ? currentRoutePlan() : null;
       screen.innerHTML = {catalog,route:()=>routeView(plan),stats,sources}[current]();

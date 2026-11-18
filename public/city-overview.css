@@ -1,8 +1,9 @@
-.city-overview-header,.city-summary,.city-demand-head{
+.city-summary,.city-demand-head{
   display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 18px
 }
 .city-overview-header{margin-bottom:20px}
-.city-overview-header a,.city-summary a{min-height:44px;display:inline-flex;align-items:center}
+.city-summary-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}
+.city-summary-actions a{min-height:44px;white-space:normal}
 .city-overview-search{max-width:620px;margin-bottom:18px}
 #overview-city-query,#overview-city-metric{min-height:44px;font-size:max(1rem,16px)}
 .city-options{display:grid;list-style:none;margin:6px 0 0;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--white)}
@@ -44,10 +45,11 @@
 .city-list li{border-top:1px solid var(--line)}
 .city-list button{padding-inline:5px}
 .city-list strong{font-size:.92rem;font-weight:660}
-.city-place-info{background:var(--light);padding:10px 12px;border-radius:6px;margin-bottom:12px;font-size:.86rem}
+.city-place-info{background:var(--light);padding:10px 12px;border-radius:6px;margin-bottom:12px;font-size:.86rem;scroll-margin:10px}
 .city-place-info h4{margin:0 0 5px;font-size:1rem;line-height:1.35;overflow-wrap:anywhere}
 .city-place-info p{overflow-wrap:anywhere}
-.city-place-info a{min-height:36px;display:inline-flex;align-items:center}
+.city-place-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.city-place-actions a{min-height:44px;display:inline-flex;align-items:center;white-space:normal;overflow-wrap:anywhere}
 .city-inventory-scope,.city-overview-attribution{margin:0;padding:0 12px 8px;overflow-wrap:anywhere}
 .city-inventory-scope{border-top:1px solid var(--line);padding-top:10px}
 .city-overview-attribution a{display:inline-flex;min-height:32px;align-items:center}
@@ -74,7 +76,7 @@
   .city-conditions{grid-template-columns:minmax(0,1.65fr) minmax(235px,1fr)}
 }
 @media (max-width:520px){
-  .city-overview-header{gap:8px;margin-bottom:12px}
+  .city-overview-header{margin-bottom:12px}
   .city-overview-search{margin-bottom:12px}
   .city-inventory-filters{padding:4px;gap:2px}
   .city-inventory-filters button{font-size:.84rem;padding-inline:7px}

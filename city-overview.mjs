@@ -12,8 +12,8 @@ function weatherPoints(city,now) {
   }));
 }
 
-export function createCityOverview({catalog,mapData,weatherForecast,getCityProjects,now=Date.now,fetchImpl}={}) {
-  const local={
+export function createLocalPlaceCatalog(catalog,mapData) {
+  return {
     source:{id:'pilot-place-catalog',name:'Каталог ТурКонтура',
       url:'https://github.com/mishkandr/tur-contour/blob/dev/data/catalog.json',status:'snapshot'},
     places:catalog.flatMap(place=>{
@@ -25,6 +25,10 @@ export function createCityOverview({catalog,mapData,weatherForecast,getCityProje
         status:'unknown',geoStatus:'mapped',tags}];
     }),
   };
+}
+
+export function createCityOverview({catalog,mapData,local=createLocalPlaceCatalog(catalog,mapData),
+  weatherForecast,getCityProjects,now=Date.now,fetchImpl}={}) {
   return async function getCityOverview(cityId,{includeWeather=true,includeCatalog=true,includeProjects=true}={}) {
     const city=await getCity(cityId);
     const [cityPlaces,region,weather,projects]=await Promise.all([

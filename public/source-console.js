@@ -7,6 +7,7 @@ addLocaleMessages([
   ['Каталог мест','Place catalogue','地点目录'],
   ['Статистика размещения','Accommodation statistics','住宿统计'],
   ['Погода','Weather','天气'],
+  ['OpenStreetMap · европейская часть','OpenStreetMap · European coverage','OpenStreetMap · 欧洲部分'],
   ['Проекты','Projects','项目'],
   ['Проверить связь','Check connection','检查连接'],
   ['Проверяем…','Checking…','正在检查…'],
@@ -28,6 +29,7 @@ addLocaleMessages([
 const groups=[
   {id:'catalog',label:'Каталог мест',feeds:[
     ['openstreetmap','OpenStreetMap · Overpass','https://wiki.openstreetmap.org/wiki/Overpass_API'],
+    ['openstreetmap-europe','OpenStreetMap · европейская часть','https://ovp.dresel.systems/',true],
     ['wikipedia','MediaWiki GeoSearch','https://www.mediawiki.org/wiki/API:Geosearch'],
     [null,'GeoNames','https://www.geonames.org/export/'],
   ]},
@@ -55,7 +57,8 @@ export function mountSourceConsole(container,api) {
     '<div class="connector-groups">'+groups.map(group=>'<section class="connector-group"><header><h3>'+tr(group.label)+'</h3>'+
       '<label class="check"><input type="checkbox" data-source-toggle="'+group.id+'"'+(sourceEnabled(group.id)?' checked':'')+
       ' aria-label="'+tr('Показывать в обзоре')+' · '+tr(group.label)+'">'+tr('Показывать в обзоре')+'</label></header>'+
-      '<ul class="connector-rows">'+group.feeds.map(([id,title,url])=>'<li><div><strong>'+
+      '<ul class="connector-rows">'+group.feeds.map(([id,title,url,optional])=>'<li'+
+        (optional?' data-source-optional="'+id+'" hidden':'')+'><div><strong>'+
         (url?'<a href="'+safe(url)+'" target="_blank" rel="noopener noreferrer">'+tr(title)+'</a>':tr(title))+'</strong>'+
         '<p class="caption"'+(id?' data-source-state="'+id+'"':'')+'>'+tr(id?'Связь ещё не проверяли':'Локальная выборка')+'</p></div>'+
         (id?'<button type="button" class="button-quiet" data-source-check="'+id+'" aria-label="'+tr('Проверить связь')+' · '+
@@ -66,6 +69,9 @@ export function mountSourceConsole(container,api) {
   let lastRevision=0;
   function paint(data) {
     if (!container.isConnected) return;
+    for (const row of container.querySelectorAll('[data-source-optional]')) {
+      row.hidden=!data.providers?.includes(row.dataset.sourceOptional);
+    }
     for (const [id,result] of Object.entries(data.latest ?? {})) {
       const node=container.querySelector('[data-source-state="'+CSS.escape(id)+'"]');
       if (!node) continue;

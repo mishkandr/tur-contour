@@ -15,10 +15,13 @@ const validResponses = {
   weather:data=>Array.isArray(data.daily?.weather_code),
   statistics:data=>data.ok===true && Array.isArray(data.items),
 };
-const providers = ['openstreetmap','wikipedia','weather','statistics'];
-
-export function createSourceMonitor(stateDirectory,{fetchImpl=globalThis.fetch,now=Date.now,statisticsKey,overpassUrl}={}) {
+export function createSourceMonitor(stateDirectory,{fetchImpl=globalThis.fetch,now=Date.now,statisticsKey,overpassUrl,overpassEuropeUrl}={}) {
   const file=join(stateDirectory,'source-checks.json');
+  const mapProviders={
+    openstreetmap:overpassUrl ?? 'https://overpass.private.coffee/api/interpreter',
+    ...(overpassEuropeUrl ? {'openstreetmap-europe':overpassEuropeUrl} : {}),
+  };
+  const providers=[...Object.keys(mapProviders),...Object.keys(providerUrls)];
   const pending=new Map();
   let writes=Promise.resolve();
   let journal;
@@ -30,7 +33,7 @@ export function createSourceMonitor(stateDirectory,{fetchImpl=globalThis.fetch,n
   }
   async function status() {
     const entries=await history();
-    return {latest:Object.fromEntries(providers.flatMap(id=>{
+    return {providers,latest:Object.fromEntries(providers.flatMap(id=>{
       const entry=entries.find(item=>item.id===id);
       return entry ? [[id,entry]] : [];
     })),errors:entries.filter(entry=>entry.status==='error').slice(0,15)};
@@ -53,13 +56,13 @@ export function createSourceMonitor(stateDirectory,{fetchImpl=globalThis.fetch,n
     let outcome='ok';
     let detail=null;
     try {
-      const url=id==='openstreetmap' ?
-        new URL('status',overpassUrl ?? 'https://overpass.private.coffee/api/interpreter') : providerUrls[id];
+      const isMapProvider=Object.hasOwn(mapProviders,id);
+      const url=isMapProvider ? new URL('status',mapProviders[id]) : providerUrls[id];
       const headers={'User-Agent':'TourContour/1.0 (https://github.com/mishkandr/tur-contour)'};
       if (id==='statistics' && statisticsKey) headers['X-API-Key']=statisticsKey;
       const response=await fetchImpl(url,{headers,signal,redirect:'error'});
       if (!response.ok) {outcome='error';detail='HTTP '+response.status;}
-      else if (id==='openstreetmap') {
+      else if (isMapProvider) {
         const text=await response.text();
         if (!/Connected as|Current time|Rate limit/iu.test(text)) {outcome='error';detail='format';}
       } else if (!validResponses[id](await response.json())) {

@@ -31,12 +31,13 @@ export async function readCatalog(cityId,provider) {
   const file=join(directory(),catalogFile(cityId,provider));
   try {
     if ((await stat(file)).size>maxBytes) return null;
-    const {version,fetchedAt,checkedAt,places}=JSON.parse(await readFile(file,'utf8'));
+    const {version,fetchedAt,checkedAt,places,provider:catalogProvider}=JSON.parse(await readFile(file,'utf8'));
     const age=Date.now()-Date.parse(fetchedAt);
     if (![1,catalogVersion].includes(version) || !Number.isFinite(age) || age<0 || age>=retentionMs ||
         !Array.isArray(places) || !places.length || places.length>maxCatalogPlaces ||
         !places.every(place=>validPlace(place,provider))) return null;
-    return {places,version,source:{...provider,status:'snapshot',checkedAt:savedDate(checkedAt),fetchedAt}};
+    const providerName=typeof catalogProvider==='string' && catalogProvider.length<=80 ? catalogProvider : provider.provider;
+    return {places,version,source:{...provider,provider:providerName,status:'snapshot',checkedAt:savedDate(checkedAt),fetchedAt}};
   } catch { return null; }
 }
 
@@ -59,7 +60,8 @@ export async function saveCatalog(cityId,{places,source}) {
   try {
     await mkdir(dir,{recursive:true});
     const now=Date.now();
-    const payload=JSON.stringify({version:catalogVersion,fetchedAt:new Date(now).toISOString(),checkedAt:savedDate(source.checkedAt),places});
+    const payload=JSON.stringify({version:catalogVersion,fetchedAt:new Date(now).toISOString(),
+      checkedAt:savedDate(source.checkedAt),provider:source.provider,places});
     if (Buffer.byteLength(payload)>maxBytes) return;
     await writeFile(temporary,payload,{mode:0o644,flag:'wx'});
     await rename(temporary,file);

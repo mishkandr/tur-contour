@@ -271,7 +271,7 @@ async function overpassTarget(city) {
     europeanBoundary ??= loadJson('geofabrik-europe-boundary.json').then(data=>data.boundary).catch(()=>[]);
     const boundary=await europeanBoundary;
     const [lat,lon]=city.coordinates;
-    const latitudeRadius=7/111.2;
+    const latitudeRadius=4.5/111.2;
     const longitudeRadius=latitudeRadius/Math.cos(lat*Math.PI/180);
     const south=lat-latitudeRadius, north=lat+latitudeRadius, west=lon-longitudeRadius, east=lon+longitudeRadius;
     if ([south,lat,north].every(y=>[west,lon,east].every(x=>insideBoundary(x,y,boundary)))) {
@@ -285,19 +285,20 @@ async function overpassTarget(city) {
 function queryAround(city,bounds) {
   const [lat,lon] = city.coordinates;
   const around = kilometres=>(bounds ? '' : '(around:'+kilometres+','+lat.toFixed(5)+','+lon.toFixed(5)+')')+'[name]';
+  const output = limit=>';out center '+(bounds ? 'qt ' : '')+limit+';';
   const visit = around(11_000);
   const infrastructure = around(10_500);
   return (bounds?'[out:json][timeout:6][bbox:'+bounds+'];':'[out:json][timeout:10];')+
-    'nwr'+visit+'[tourism~"^(museum|gallery|zoo|aquarium|theme_park)$"];out center 70;'+
-    'nwr'+visit+'[historic~"^(castle|fort|monument|memorial|archaeological_site)$"];out center 50;'+
-    'nwr'+visit+'[tourism~"^(attraction|viewpoint)$"];out center 55;'+
-    'nwr'+visit+'[leisure~"^(park|garden)$"];out center 42;'+
-    'nwr'+visit+'[craft~"^('+traditionalCrafts.join('|')+')$"];out center 24;'+
-    '(nwr'+visit+'[amenity=monastery];nwr'+visit+'[historic=monastery];nwr'+visit+'[building=monastery];nwr'+visit+'[pilgrimage=yes];);out center 24;'+
-    'nwr'+infrastructure+'[amenity=restaurant];out center 65;'+
-    'nwr'+infrastructure+'[amenity=cafe];out center 30;'+
-    'nwr'+visit+'[amenity=marketplace];out center 20;'+
-    'nwr'+infrastructure+'[tourism~"^(hotel|hostel|guest_house)$"];out center 50;';
+    'nwr'+visit+'[tourism~"^(museum|gallery|zoo|aquarium|theme_park)$"]'+output(70)+
+    'nwr'+visit+'[historic~"^(castle|fort|monument|memorial|archaeological_site)$"]'+output(50)+
+    'nwr'+visit+'[tourism~"^(attraction|viewpoint)$"]'+output(55)+
+    'nwr'+visit+'[leisure~"^(park|garden)$"]'+output(42)+
+    'nwr'+visit+'[craft~"^('+traditionalCrafts.join('|')+')$"]'+output(24)+
+    '(nwr'+visit+'[amenity=monastery];nwr'+visit+'[historic=monastery];nwr'+visit+'[building=monastery];nwr'+visit+'[pilgrimage=yes];)'+output(24)+
+    'nwr'+infrastructure+'[amenity=restaurant]'+output(65)+
+    'nwr'+infrastructure+'[amenity=cafe]'+output(30)+
+    'nwr'+visit+'[amenity=marketplace]'+output(20)+
+    'nwr'+infrastructure+'[tourism~"^(hotel|hostel|guest_house)$"]'+output(50);
 }
 
 function classify(tags) {
@@ -407,7 +408,7 @@ async function fetchOverpass(city,fetchImpl,target) {
     if (response.status===429 || response.status===406) return coolDown(retryDelay(response));
     if (!response.ok || Number(response.headers?.get('content-length'))>2_000_000) return coolDown(120_000);
     const payload = await response.json();
-    if (!Array.isArray(payload.elements) || payload.remark) return null;
+    if (!Array.isArray(payload.elements) || payload.remark) return coolDown(30_000);
     const places = fromOsm(payload.elements,city);
     return places.length ? { places,source:{...target.source,status:'live',checkedAt:payload.osm3s?.timestamp_osm_base ?? null} } : null;
   } catch { return coolDown(120_000); }

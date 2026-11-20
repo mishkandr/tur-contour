@@ -10,7 +10,8 @@ import {
 } from './engine.mjs';
 import { suggestRoute } from './route-ai.mjs';
 import { readVerifiedAudit } from './verified-audit.mjs';
-import { mergePublishedConditions } from './published-conditions.mjs';
+import { mergePublishedConditions, publishedConditionFiles } from './published-conditions.mjs';
+import { pilotDatasetCsv } from './pilot-dataset.mjs';
 import { getDemoOffers } from './ota-offers.mjs';
 import { detectCities, draftItinerary, getCity, listCities } from './nationwide.mjs';
 import { createBriefInterpreter, parseBrief, warmBriefModel } from './planner-brief.mjs';
@@ -36,9 +37,11 @@ const portfolioTraining = {
 };
 const mapData = await load('map.json');
 const demoOffers = await load('demo-ota.json');
-const publishedConditions = mergePublishedConditions(catalog,await Promise.all([
-  load('published-vladimir.json'), load('published-suzdal.json'), load('published-hospitality.json'), load('published-regional.json'),
-]));
+const [officialFeeds, magReferences] = await Promise.all([
+  Promise.all(publishedConditionFiles.map(load)), load('pilot-mag-references.json'),
+]);
+const publishedConditions = mergePublishedConditions(catalog,officialFeeds);
+const pilotDataset = pilotDatasetCsv(catalog,publishedConditions,magReferences);
 const stateDir = process.env.TUR_STATE_DIR || join(directory,'.runtime');
 const statePath = join(stateDir,'state.json');
 const port = Number(process.env.PORT || 4173);
@@ -536,6 +539,12 @@ export async function handleRequest(request,response) {
     }
     if (request.method==='GET' && path==='/api/map') return respond(response,200,mapData);
     if (request.method==='GET' && path==='/api/state') return respond(response,200,dashboard(state));
+    if (request.method==='GET' && path==='/api/pilot-dataset.csv') {
+      response.writeHead(200,{'Content-Type':'text/csv; charset=utf-8',
+        'Content-Disposition':'attachment; filename="tur-contour-pilot-dataset.csv"',
+        'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
+      return response.end(pilotDataset);
+    }
     if (request.method==='GET' && path==='/api/source-status') return respond(response,200,await sourceMonitor.status());
     if (request.method==='POST' && path==='/api/source-check') {
       const {id}=await readBody(request);

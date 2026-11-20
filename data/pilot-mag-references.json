@@ -1,0 +1,85 @@
+{
+  "dmitrovsky": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[2],"relation":"Объект"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[7,12],"relation":"Архитектура и ЮНЕСКО"}
+  ],
+  "palaty": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[5],"relation":"Упоминание площадки экспозиции «Сунгирь»"}
+  ],
+  "history": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[5],"relation":"Объект"}
+  ],
+  "assumption": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[2],"relation":"Объект"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[6,11],"relation":"Архитектура и ЮНЕСКО"}
+  ],
+  "golden-gate": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[2],"relation":"Памятник, формат осмотра сверяется отдельно"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[4,9],"relation":"Архитектура и ЮНЕСКО"}
+  ],
+  "vladimir-glass": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[16],"relation":"Объект"}
+  ],
+  "suzdal-kremlin": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[6],"relation":"Объект"}
+  ],
+  "euthymius": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[6],"relation":"Объект"}
+  ],
+  "wood": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[6],"relation":"Объект"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[45],"relation":"Площадка фестиваля «День огурца»"}
+  ],
+  "nativity": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[6],"relation":"Упомянут Суздальский кремль, в состав которого входит собор"}
+  ],
+  "kideksha": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[4],"relation":"Объект"}
+  ],
+  "bogolyubovo": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[3],"relation":"Другие достопримечательности Боголюбова"}
+  ],
+  "sloboda": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[7],"relation":"Объект"}
+  ],
+  "amaks": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[3],"relation":"Объект"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[69],"relation":"Конференц-площадки гостиницы"}
+  ],
+  "nposad": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[8],"relation":"Объект"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[69,71,73],"relation":"Конференц-площадки, доступность и профиль гостиницы"}
+  ],
+  "amaks-food": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[3],"relation":"Упомянута гостиница АМАКС"}
+  ],
+  "ogurec": [
+    {"workbook":"routes","sheet":"Гастрономия (Рестораны и кафе)","rows":[3],"relation":"Объект"}
+  ],
+  "kupets": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[8],"relation":"Упомянут арт-отель «Николаевский Посад»"}
+  ],
+  "murom-exhibit": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[9],"relation":"Упомянут Муромский историко-художественный музей"}
+  ],
+  "murom-gallery": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[9],"relation":"Упомянут Муромский историко-художественный музей"}
+  ],
+  "murom-hotel": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[19],"relation":"Объект"}
+  ],
+  "maltsov-crystal": [
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[8],"relation":"Объект"}
+  ],
+  "gus-hotel": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[28],"relation":"Парк-отель под названием «Мещерская усадьба»"}
+  ],
+  "gus-food": [
+    {"workbook":"routes","sheet":"Объекты туристической инфрастру","rows":[28],"relation":"Упомянут парк-отель «Мещерская усадьба»"}
+  ],
+  "nerl-trail": [
+    {"workbook":"routes","sheet":"Активный и природный туризм","rows":[5],"relation":"Территория тропы, Боголюбовский луг"},
+    {"workbook":"routes","sheet":"Музеи, объекты ЮНЕСКО","rows":[3],"relation":"Конечная точка, церковь Покрова на Нерли"},
+    {"workbook":"diagnostics","sheet":"Туристические ресурсы","rows":[5,10],"relation":"Архитектура и ЮНЕСКО конечной точки"}
+  ]
+}

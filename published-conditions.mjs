@@ -1,5 +1,9 @@
 const datePattern = /^20\d{2}-\d{2}-\d{2}$/;
 
+export const publishedConditionFiles = [
+  'published-vladimir.json', 'published-suzdal.json', 'published-hospitality.json', 'published-regional.json',
+];
+
 function isDate(value) {
   return typeof value === 'string' && datePattern.test(value) && Number.isFinite(Date.parse(value)) &&
     new Date(value).toISOString().slice(0, 10) === value;

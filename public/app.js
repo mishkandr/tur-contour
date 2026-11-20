@@ -55,6 +55,10 @@ addLocaleMessages([
   ['Режим','Mode','模式'],
   ['Опубликованные данные','Published data','已公布的数据'],
   ['Учебные данные','Training data','演示数据'],
+  ['Скачать датасет пилота (CSV)','Download pilot dataset (CSV)','下载试点数据集（CSV）'],
+  ['В каталоге пилота — {count} объектов. В CSV есть источники, опубликованные условия и вопросы для проверки.',
+    'The pilot catalogue has {count} places. The CSV includes sources, published conditions and items to verify.',
+    '试点名录包含 {count} 个地点。CSV 包含来源、已公布条件及待核查事项。'],
   ['Группа · {size} чел.','Group · {size} people','团队 · {size} 人'],
   ['Обновлено','Updated','已更新'],
   ['Картографические источники','Mapping sources','地图数据源'],
@@ -1020,7 +1024,11 @@ function sources() {
     safe(t('Места и категории OpenStreetMap по запросу; при сбое — геопоиск Wikimedia и сохранённые записи.'))+'</p>'+
     '<p class="caption">'+outbound('https://www.mediawiki.org/wiki/API:Geosearch','MediaWiki GeoSearch')+' · '+
     safe(t('Графики и запись сверяются по паспорту поставщика.'))+'</p></li></ul></section>';
-  return head(t('Источники'))+'<div id="source-console" class="stack"></div>'+
+  const datasetSummary = t('В каталоге пилота — {count} объектов. В CSV есть источники, опубликованные условия и вопросы для проверки.',
+    {count:formatNumber(data.places.length)});
+  const datasetDownload = '<a class="button-quiet" href="/api/pilot-dataset.csv" download>'+
+    safe(t('Скачать датасет пилота (CSV)'))+'</a>';
+  return head(t('Источники'),datasetSummary,datasetDownload)+'<div id="source-console" class="stack"></div>'+
     '<details class="panel source-legacy"><summary>'+safe(t('Журнал изменений'))+'</summary>'+
     '<div class="grid"><section class="panel"><div class="section-head">'+button(t('Обновить источники'),'refresh',true)+'</div>'+
     (changes ? '<ul class="rows">'+changes+'</ul>' : '<p class="empty">'+safe(t('Изменений не зафиксировано.'))+'</p>')+'</section>'+

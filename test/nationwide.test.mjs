@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {detectCities,draftItinerary,listCities} from '../nationwide.mjs';
 import {parseBrief} from '../planner-brief.mjs';
+import {MAX_DRAFT_DAYS} from '../draft-duration.mjs';
 
 const offline = async () => { throw new Error('Test connection unavailable'); };
 const request = {cityId:'524901',days:2,date:'2026-11-28',size:18,market:'zh',theme:'museum'};
@@ -194,6 +195,51 @@ test('multi-city drafts visit selected cities in order and leave transfer timing
   await assert.rejects(draftItinerary({...request,additionalCityIds:['551487','2013348']},{fetchImpl:offline}),{status:400});
 });
 
+test('a one-day draft keeps a required visit and lunch without offering lodging',async()=>{
+  const single={...request,cityId:'551487',days:1,required:['Казанский кремль']};
+  const {plan}=await draftItinerary(single,{fetchImpl:offline});
+  assert.equal(plan.days.length,1);
+  assert.equal(plan.required[0].scheduled,true);
+  const [day]=plan.days;
+  assert.ok(day.stops.some(stop=>stop.required && stop.type==='visit'));
+  assert.ok(day.stops.some(stop=>stop.type==='food'));
+  assert.ok(day.stops.every(stop=>stop.type!=='stay'));
+  assert.equal(day.logistics.overnight.status,'not-required');
+  await assert.rejects(draftItinerary({...single,additionalCityIds:['524901']},{fetchImpl:offline}),{status:400});
+});
+
+test('a fourteen-day draft balances cities in order and covers the full calendar without repeated visits',async()=>{
+  const {plan}=await draftItinerary({...request,days:MAX_DRAFT_DAYS,date:'2026-12-24',
+    additionalCityIds:['551487','498817'],required:['Красная площадь','Казанский кремль']},{fetchImpl:offline});
+  assert.equal(plan.days.length,MAX_DRAFT_DAYS);
+  assert.equal(plan.days.at(-1).date,'2027-01-06');
+  assert.deepEqual(plan.days.map(day=>day.cityId),[
+    ...Array(4).fill('524901'),...Array(5).fill('551487'),...Array(5).fill('498817'),
+  ]);
+  assert.deepEqual(plan.days.flatMap((day,index)=>day.transfer ? [index] : []),[4,9]);
+  assert.ok(plan.required.every(item=>item.scheduled));
+  const visits=plan.days.flatMap(day=>day.stops.filter(stop=>stop.type==='visit').map(stop=>stop.id));
+  assert.equal(visits.length,new Set(visits).size);
+  const [first,second]=plan.days;
+  assert.equal(first.logistics.overnight.status,'suggested');
+  assert.equal(second.logistics.originStayId,first.logistics.overnight.id);
+  assert.equal(plan.days.at(-1).logistics.overnight.status,'not-required');
+});
+
+test('date comparison keeps the full trip inside the supported calendar',async()=>{
+  const options={fetchImpl:offline,compareDates:true};
+  const input={...request,days:MAX_DRAFT_DAYS,date:'2099-12-16'};
+  const compared=await draftItinerary(input,options);
+  assert.equal(compared.current.date,input.date);
+  assert.equal(compared.datesChecked,2);
+  assert.deepEqual(compared.options.map(option=>option.date).sort(),['2099-12-17','2099-12-18']);
+  await assert.rejects(draftItinerary({...input,date:'2099-12-19'},options),{status:400});
+  const lastDay=await draftItinerary({...input,date:'2099-12-31',days:1},options);
+  assert.equal(lastDay.current.date,'2099-12-31');
+  assert.equal(lastDay.datesChecked,0);
+  assert.deepEqual(lastDay.options,[]);
+});
+
 test('a long by-car leg reserves arrival time and offers unscheduled sightseeing separately',async()=>{
   const result=await draftItinerary({...request,days:3,size:8,transport:'car',additionalCityIds:['551487'],
     required:['Казанский кремль']},{fetchImpl:offline});
@@ -326,6 +372,26 @@ test('scoped replacements keep all required visits, exact slots and other days i
   ]);
   assert.deepEqual(rejected.plan.days,baseline.plan.days);
   await assert.rejects(draftItinerary({...input,replacements:[{...operation,toId:operation.fromId}]},options),{status:400});
+});
+
+test('a last-day replacement is accepted and shortening the draft discards only that change',async()=>{
+  const [city]=(await listCities('Псков')).cities;
+  const [lat,lon]=city.coordinates;
+  const point=(id,tags)=>({type:'node',id,lat:lat+id*.00001,lon,tags});
+  const cafes=Array.from({length:MAX_DRAFT_DAYS+2},(_,i)=>point(i+1,{name:`Кафе квартала ${i+1}`,amenity:'cafe'}));
+  const elements=[...cafes,point(100,{name:'Музей',tourism:'museum'}),point(101,{name:'Гостиница',tourism:'hotel'})];
+  const options={fetchImpl:async()=>Response.json({elements})};
+  const input={...request,cityId:city.id,days:MAX_DRAFT_DAYS};
+  const baseline=await draftItinerary(input,options);
+  const lunch=baseline.plan.days.at(-1).stops.find(stop=>stop.type==='food');
+  const operation={day:MAX_DRAFT_DAYS-1,fromId:lunch.id,toId:lunch.alternatives[0].id};
+  const changed=await draftItinerary({...input,replacements:[operation]},options);
+  assert.deepEqual(changed.plan.replacements,[{...operation,status:'applied'}]);
+  assert.equal(changed.plan.days.at(-1).logistics.lunch.id,operation.toId);
+  const shortened=await draftItinerary({...input,days:1,replacements:[operation]},options);
+  assert.deepEqual(shortened.plan.replacements,[{...operation,status:'rejected',reason:'day-unavailable'}]);
+  assert.equal(shortened.plan.days.length,1);
+  await assert.rejects(draftItinerary({...input,replacements:[{...operation,day:MAX_DRAFT_DAYS}]},options),{status:400});
 });
 
 test('an outdoor stop offers an indoor same-time candidate for checking before a trip',async()=>{
@@ -653,5 +719,7 @@ test('invalid dates, city IDs and group sizes are rejected',async()=>{
   await assert.rejects(draftItinerary({...request,date:'2026-02-30'}),{status:400});
   await assert.rejects(draftItinerary({...request,cityId:'0);out;'}),{status:400});
   await assert.rejects(draftItinerary({...request,size:101}),{status:400});
-  await assert.rejects(draftItinerary({...request,days:7}),{status:400});
+  for (const days of [0,MAX_DRAFT_DAYS+1,2.5,true]) {
+    await assert.rejects(draftItinerary({...request,days}),{status:400});
+  }
 });

@@ -1,3 +1,5 @@
+import { MAX_DRAFT_DAYS } from './draft-duration.mjs';
+
 const horizonDays = 7;
 const source = {name:'Open-Meteo',url:'https://open-meteo.com/'};
 const fields = {
@@ -76,10 +78,10 @@ export function createWeatherForecast({fetchImpl=(...args)=>fetch(...args),now=D
   }
 
   return async function weatherForecast({points}) {
-    if (!Array.isArray(points) || points.length<1 || points.length>3 || points.some(point=>
+    if (!Array.isArray(points) || points.length<1 || points.length>MAX_DRAFT_DAYS || points.some(point=>
       !validDate(point?.date) || !(point.latitude==null && point.longitude==null ||
       validCoordinate(point.latitude,90) && validCoordinate(point.longitude,180)))) {
-      throw Object.assign(new Error('Укажите от одной до трёх дат и координаты для прогноза.'),{status:400});
+      throw Object.assign(new Error(`Укажите от 1 до ${MAX_DRAFT_DAYS} дат и координаты для прогноза.`),{status:400});
     }
     const today = Date.parse(dateAt(now()));
     const days = await Promise.all(points.map(async({date,latitude,longitude})=>{

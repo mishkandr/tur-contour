@@ -54,3 +54,19 @@ test('provider failures stay unknown, retry after a short pause and reject inval
   }
   assert.equal(requests,2);
 });
+
+test('a fourteen-day itinerary keeps available weather without extending the forecast horizon',async()=>{
+  let requests=0;
+  const forecast=createWeatherForecast({now:()=>fixedDate,fetchImpl:async()=>{
+    requests++;
+    return Response.json({daily});
+  }});
+  const points=Array.from({length:14},(_,index)=>point('2026-11-'+(index+17)));
+  const result=await forecast({points});
+  assert.equal(result.days.length,14);
+  assert.equal(result.days[1].status,'forecast');
+  assert.equal(result.days.at(-1).status,'out-of-range');
+  assert.equal(result.horizonDays,7);
+  assert.equal(requests,1);
+  await assert.rejects(forecast({points:[...points,point('2026-12-01')]}),{status:400});
+});

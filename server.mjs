@@ -525,7 +525,7 @@ export async function handleRequest(request,response) {
   const url = new URL(request.url,'http://localhost');
   const path = url.pathname;
   try {
-    if (request.method==='GET' && ['/engine.mjs','/route-directions.mjs'].includes(path)) {
+    if (request.method==='GET' && ['/engine.mjs','/route-directions.mjs','/draft-duration.mjs'].includes(path)) {
       response.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','X-Content-Type-Options':'nosniff'});
       return response.end(await readFile(join(directory,path.slice(1))));
     }

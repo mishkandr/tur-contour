@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { setImmediate as yieldTurn, setTimeout as wait } from 'node:timers/promises';
 import { catalogRefreshMs, catalogVersion, maxCatalogPlaces, readCatalog, saveCatalog } from './national-catalog.mjs';
 import { findPublishedVenue, publishedHours } from './engine.mjs';
+import { MIN_DRAFT_DAYS, MAX_DRAFT_DAYS, isDraftDuration } from './draft-duration.mjs';
 
 const loadJson = file => readFile(new URL('./data/'+file,import.meta.url),'utf8').then(JSON.parse);
 const geonames = 'https://www.geonames.org/';
@@ -189,6 +190,7 @@ export async function detectCities(brief) {
 
 const error = message => Object.assign(new Error(message),{status:400});
 const relativeDate = (date,offset) => new Date(Date.parse(date+'T12:00:00Z')+offset*86_400_000).toISOString().slice(0,10);
+const lastDraftDate = '2099-12-31';
 
 function description(value, maxParts, maxLength) {
   const values = Array.isArray(value) ? value : typeof value==='string' ? value.split(/[,;\n]+/) : [];
@@ -209,8 +211,9 @@ function readSettings(input) {
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || relativeDate(date,0)!==date) {
     throw error('Укажите корректную дату начала программы.');
   }
-  const days = Number(input.days);
-  if (![2,3].includes(days)) throw error('Выберите длительность 2 или 3 дня.');
+  const days = typeof input.days==='number' || typeof input.days==='string' ? Number(input.days) : NaN;
+  if (!isDraftDuration(days)) throw error(`Укажите длительность от ${MIN_DRAFT_DAYS} до ${MAX_DRAFT_DAYS} дней.`);
+  if (relativeDate(date,days-1)>lastDraftDate) throw error('Маршрут должен завершиться не позднее 31 декабря 2099 года.');
   const additional = input.additionalCityIds ?? [];
   if (!Array.isArray(additional) || additional.length>2 || additional.some(value=>asCityId(value)===null)) {
     throw error('Выберите дополнительные населённые пункты из списка.');
@@ -234,7 +237,7 @@ function readSettings(input) {
   const requiredPlaceIds=[...new Set(selected)];
   const replacements=input.replacements ?? [];
   if (!Array.isArray(replacements) || replacements.length>16 || replacements.some(change=>
-    !change || !Number.isInteger(change.day) || change.day<0 || change.day>2 ||
+    !change || !Number.isInteger(change.day) || change.day<0 || change.day>=MAX_DRAFT_DAYS ||
     !isPlaceId(change.fromId) || !isPlaceId(change.toId) || change.fromId===change.toId)) {
     throw error('Укажите до 16 замен с номером дня и разными идентификаторами точек.');
   }
@@ -952,15 +955,18 @@ function schedule(contexts,settings,officialCatalog,includeAlternatives=true,pre
   const omitted=new Set(settings.omittedIds);
   const [deadlineHour,deadlineMinute]=settings.visitDeadline?.split(':').map(Number) ?? [18,0];
   const visitEnd=Math.min(endOfDay,deadlineHour*60+deadlineMinute);
+  const daysPerCity=Math.floor(settings.days/contexts.length);
+  const firstExtraDayCity=contexts.length-settings.days%contexts.length;
+  const dailyContexts=contexts.flatMap((context,index)=>
+    Array.from({length:daysPerCity+Number(index>=firstExtraDayCity)},()=>context));
   let previousStay;
   let earliestArrival=null;
 
-  for (let day=0; day<settings.days; day+=1) {
-    const {location,places}=contexts[Math.min(day,contexts.length-1)];
+  for (const [day,{location,places}] of dailyContexts.entries()) {
     const date=relativeDate(settings.date,day);
     const missing=[];
-    const changedCity=day>0 && day<contexts.length;
-    const from=changedCity ? contexts[day-1].location : null;
+    const previousCity=dailyContexts[day-1]?.location;
+    const from=previousCity && previousCity.id!==location.id ? previousCity : null;
     const transfer=from ? {from:from.name,to:location.name,fromId:from.id,toId:location.id,
       distanceKm:Math.round(distance(from.coordinates,location.coordinates)*10)/10,distanceType:'straight-line',
       status:'unknown',transport:settings.transport} : null;
@@ -974,7 +980,7 @@ function schedule(contexts,settings,officialCatalog,includeAlternatives=true,pre
     const arrivalAfterDay=Boolean(arrival && arrival.date>date);
     const arrivalMinute=arrival?.date===date ? Number(arrival.time.slice(0,2))*60+Number(arrival.time.slice(3)) : 0;
     const startMinute=arrivalAfterDay ? 24*60 : Math.max(pace.starts,arrivalMinute);
-    const origin=!changedCity && previousStay ? previousStay : {coordinates:location.coordinates};
+    const origin=!from && previousStay ? previousStay : {coordinates:location.coordinates};
     const candidates=eligible(places,origin);
     for (const place of candidates) inScope.add(place.id);
     const allowed=candidates.filter(place=>!isOmitted(place,omitted) && !excludedThemes(place,settings).length && !accessBlocked(place,settings));
@@ -1136,7 +1142,7 @@ async function compareDepartureDates(contexts,settings,officialCatalog,signal) {
     if (offset) await yieldTurn();
     signal?.throwIfAborted();
     const date=relativeDate(settings.date,offset);
-    if (date>'2099-12-31') break;
+    if (relativeDate(date,settings.days-1)>lastDraftDate) break;
     const {days,required}=schedule(contexts,{...settings,date},officialCatalog,false);
     const covered=required.flatMap((item,index)=>item.scheduled ? [index] : []);
     baselineRequired ??= new Set(covered);

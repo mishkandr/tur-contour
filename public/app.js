@@ -46,6 +46,9 @@ addLocaleMessages([
     'Correct the date or group size. For now the catalogue shows conditions for {size} people on {date}.',
     '请更正日期或团队人数。目录目前显示 {date} 接待 {size} 人的条件。'],
   ['Карта объектов','Map of places','地点地图'],
+  ['Не удалось загрузить мониторинг.','Could not load monitoring data.','无法加载监测数据。'],
+  ['Повторить загрузку','Retry loading','重试加载'],
+  ['Другая длительность','Choose a different duration','选择其他行程天数'],
   ['Дата визита','Visit date','到访日期'],
   ['Все города','All cities','所有城市'],
   ['Город','City','城市'],
@@ -142,6 +145,7 @@ addLocaleMessages([
     '已按两场、每场至多 {size} 人核查这个 {total} 人团队。请与博物馆确认两场参观。'],
 ]);
 let data;
+let dashboardFailed = false;
 let geodata = {};
 let atlas;
 let composer;
@@ -701,8 +705,9 @@ function attachPilotWeather(plan) {
 function routeView(plan) {
   const direction = routeDirections.find(item=>item.id===(options.direction ?? 'vladimir-suzdal')) ?? routeDirections[0];
   const localizedDirection = item=>item.translations[localeTag()] ?? item.translations[getLocale()] ?? item;
-  const mapLink = !plan.settings.demo ? '<a class="button-quiet" id="pilot-map-link"></a>' : '';
-  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'),mapLink)+
+  const actions = '<a class="button-quiet" href="#route">'+safe(t('Другая длительность'))+'</a>'+
+    (!plan.settings.demo ? '<a class="button-quiet" id="pilot-map-link"></a>' : '');
+  return head(t('Проверка программы'),t('Сопоставить даты, группу и условия'),actions)+
     '<div class="route-layout"><form id="route-form" class="panel route-options"><h2>Параметры</h2>'+
     '<label class="field">Направление<select name="direction">'+routeDirections.map(item=>selectOption(item.id,localizedDirection(item).title,direction.id)).join('')+
     '</select><small class="caption">'+safe(localizedDirection(direction).description)+'</small></label>'+
@@ -1028,7 +1033,7 @@ function sources() {
 }
 
 function render(scroll=false) {
-  if (!data) return;
+  if (!data && !dashboardFailed) return;
   const current = page();
   const query = params();
   const isRoutePilot = current==='route' && query.get('scope')==='pilot';
@@ -1054,7 +1059,11 @@ function render(scroll=false) {
   if (composer) { composer.destroy(); composer=null; }
   if (knowledge) { knowledge.destroy(); knowledge=null; }
   if (cityOverview) { cityOverview.destroy(); cityOverview=null; }
-  if (current==='impact') {
+  const independent = current==='overview' || current==='ask' || current==='route' && !isRoutePilot;
+  if (!data && !independent) {
+    screen.innerHTML='<section class="panel"><p role="alert">'+safe(t('Не удалось загрузить мониторинг.'))+'</p>'+
+      '<button type="button" class="button" data-action="retry-dashboard">'+safe(t('Повторить загрузку'))+'</button></section>';
+  } else if (current==='impact') {
     if (atlas && atlasHash!==location.hash) saveMapContext();
     if (atlas) atlas.update(data);
     else {
@@ -1080,7 +1089,7 @@ function render(scroll=false) {
   } else {
     if (atlas) saveMapContext();
     if (current==='overview') cityOverview=mountCityOverview(screen,api,{initialCity:query.get('city'),
-      renderChart:statisticChart,renderMonitoring:cityId=>renderMonitoredProgrammes(data,overview,cityId)});
+      renderChart:statisticChart,renderMonitoring:cityId=>data ? renderMonitoredProgrammes(data,overview,cityId) : ''});
     else if (current==='ask') knowledge=mountKnowledge(screen,api,options,query.get('region'),query.get('city'));
     else if (current==='route' && !isRoutePilot) composer=mountComposer(screen,api,query,{restoreWorkspace:!scroll});
     else {
@@ -1190,6 +1199,11 @@ screen.addEventListener('submit',event=>{
 screen.addEventListener('click',event=>{
   const target = event.target.closest('[data-action],[data-place],[data-sample]');
   if (!target) return;
+  if (target.dataset.action==='retry-dashboard') {
+    target.disabled=true;
+    void loadDashboard();
+    return;
+  }
   if (target.dataset.action==='overview-filter' || target.dataset.action==='overview-change') {
     const key = target.dataset.action==='overview-filter' ? 'filter' : 'selected';
     overview[key] = target.dataset.value;
@@ -1350,10 +1364,25 @@ language.addEventListener('change',()=>{
   render();
 });
 
-try {
-  [data, geodata] = await Promise.all([api('state'), api('map').catch(()=>({}))]);
-  render();
-  if (!data.refreshedAt) setTimeout(async()=>{
+async function loadDashboard() {
+  screen.setAttribute('aria-busy','true');
+  try {
+    const signal=AbortSignal.timeout(10000);
+    [data, geodata] = await Promise.all([
+      api('state',undefined,'GET',{signal}), api('map',undefined,'GET',{signal}).catch(()=>({})),
+    ]);
+    dashboardFailed=false;
+  } catch {
+    dashboardFailed=true;
+  } finally {
+    screen.setAttribute('aria-busy','false');
+  }
+  // A successful retry must not interrupt editing in an independently loaded planner.
+  if (!composer) render();
+}
+
+await loadDashboard();
+if (data && !data.refreshedAt) setTimeout(async()=>{
     const screenIsIdle=()=>!busy && !dialog.open && !activeRouteAnalysis && !knowledge?.waiting &&
       !screen.contains(document.activeElement);
     if (screenIsIdle()) {
@@ -1363,7 +1392,4 @@ try {
         if (!composer && screenIsIdle()) render();
       } catch { /* last rendered state remains usable */ }
     }
-  },8000);
-} catch(error) {
-  screen.innerHTML = '<p role="alert">'+safe(error.message)+'</p>';
-} finally { screen.setAttribute('aria-busy','false'); }
+},8000);

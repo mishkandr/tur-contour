@@ -1,3 +1,5 @@
+import { isDraftDuration } from './draft-duration.mjs';
+
 const themes = ['heritage','museum','family','romantic','nature','hike','craft','pilgrimage','gastro','any'];
 const themePatterns = {
   museum:/музе[йяие]|экспозици|museum|博物馆/iu,
@@ -19,7 +21,7 @@ const exclusions = {
   pilgrimage:/без\s+(?:храм|монастыр)|(?:no|without|skip)\s+(?:churches|monasteries|pilgrimage)|不参观修道院/iu,
   gastro:/без\s+(?:дегустац|гастроном|гастротур)|(?:no|without|skip)\s+(?:food tours?|tastings?)|不(?:要美食|参加品尝)/iu,
 };
-const digitWords = { один:1,одного:1,два:2,двух:2,три:3,трех:3,четыре:4,четырех:4,пять:5,пяти:5,шесть:6,шести:6,
+const digitWords = { один:1,одного:1,одна:1,одну:1,два:2,две:2,двух:2,три:3,трех:3,четыре:4,четырех:4,пять:5,пяти:5,шесть:6,шести:6,
   семь:7,семи:7,восемь:8,восьми:8,девять:9,девяти:9,десять:10,десяти:10,одиннадцать:11,одиннадцати:11,
   двенадцать:12,двенадцати:12,тринадцать:13,тринадцати:13,четырнадцать:14,четырнадцати:14,пятнадцать:15,пятнадцати:15,
   шестнадцать:16,шестнадцати:16,семнадцать:17,семнадцати:17,восемнадцать:18,восемнадцати:18,
@@ -59,17 +61,53 @@ const tensWords=Object.keys(countTens).join('|');
 const simpleNumbers='(?:(?:'+tensWords+')[- ]+(?:'+singleDigits+')|'+tensWords+'|'+Object.keys(digitWords).join('|')+')';
 const numberWords='(?:(?:'+russianHundredWords+'|(?:'+englishUnits+') hundred)(?: (?:and )?'+simpleNumbers+')?|'+simpleNumbers+')';
 const numericCount='[-−]?\\d+(?:[.,]\\d+)?';
-const duration=new RegExp('(?<![\\p{L}\\d])('+numericCount+'|'+numberWords+')\\s*(?:-?\\s*(?:дн|день|дня|дней)|days?)(?!\\p{L})|'+
-  '(?<!\\d)('+numericCount+'|'+hanCount+')\\s*天','u');
+const durationNumbers=numericCount+'|'+numberWords;
+const collectiveDays={одни:1,двое:2,трое:3,четверо:4,пятеро:5,шестеро:6,семеро:7};
+const westDurationUnit='дней|дня|день|дн|суток|сутки|days?|недел(?:ю|и|ь|я)|weeks?';
+const hanDurationUnit='天|[周週]|[个個]?星期';
+const westDuration=new RegExp('(?<![\\p{L}\\d])(?<count>'+durationNumbers+'|'+Object.keys(collectiveDays).join('|')+')'+
+  '\\s*(?:[-‐‑]\\s*|(?:полн(?:ый|ых)|цел(?:ый|ых)|full|whole)\\s+)?(?<unit>'+westDurationUnit+')(?!\\p{L})','gu');
+const hanDuration=new RegExp('(?<![第月\\d零〇一二两兩三四五六七八九十百千])(?<count>'+numericCount+'|'+hanCount+')'+
+  '\\s*(?<unit>'+hanDurationUnit+'|日(?=游|遊|行程|旅行|之旅))','gu');
+const hanExactDays=new RegExp('(?:为期|為期)\\s*(?<count>'+numericCount+'|'+hanCount+')\\s*日','gu');
+const compactDuration=/(?<![\p{L}\d])(?<stem>[а-я]+|\d+)[-‐‑]?дневн[а-я]*(?!\p{L})/gu;
+const singleDuration=/(?<![\p{L}\d])(?:на\s+(?<unit>сутки|неделю)(?!\p{L})|(?:a\s+|single(?:\s+|[-‐‑]))(?<englishUnit>day|week)(?!\p{L}))/gu;
+const rangeJoin='[-−‐‑–—~～/]|to|or|до|или|至|到';
+const approximateHanCount=/[一二两兩三四五六七八九]{2}/u;
+const rangeBefore=new RegExp('(?:'+durationNumbers+'|'+hanCount+')\\s*(?:(?:'+westDurationUnit+'|'+hanDurationUnit+')\\s*)?'+
+  '(?:'+rangeJoin+')\\s*$','u');
+const rangeAfter=new RegExp('^\\s*(?:'+rangeJoin+')\\s*(?:'+durationNumbers+'|'+hanCount+')','u');
+const durationBefore=/(?:^|[^\p{L}])(?:через|спустя|около|примерно|не более|не менее|как минимум|от|до|не на|in|within|after|around|about|roughly|at least|at most|up to|not for)\s*$|(?:至少|最多|大约|大約|约|約|不超过|不超過|不是|不要)\s*$|[~≈～]\s*$/u;
+const durationAfter=/^\s*(?:(?:назад|спустя|до выезда|до начала|и более|и меньше|later|ago|from now|or more|or less|(?:before|after) (?:departure|leaving|tomorrow))(?!\p{L})|左右|上下|以内|以內|以上|以下|以后|以後|之后|之後|后|後|前)/u;
+const weekUnit=/^(?:недел|week|[周週]|(?:个|個)?星期)/u;
+const durationUnitAfter=new RegExp('^\\s*(?:(?:'+westDurationUnit+')(?!\\p{L})|'+hanDurationUnit+')','u');
 const groupSize=new RegExp('(?<![\\p{L}\\d])('+numericCount+'|'+numberWords+')\\s*(?:чел(?:овек(?:а)?)?|людей|участник[а-я]*|гост[а-я]*|people|persons?|guests?)(?!\\p{L})|'+
   '(?<!\\d)('+numericCount+'|'+hanCount+')\\s*(?:位|个)?人','u');
 const sameFold = text=>String(text).normalize('NFKC').toLocaleLowerCase().replaceAll('ё','е');
 const supportedDate = value=>typeof value==='string' && /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
 
+function durationIn(text) {
+  const candidates = [westDuration,hanDuration,hanExactDays,compactDuration,singleDuration].flatMap(pattern=>[...text.matchAll(pattern)])
+    .sort((left,right)=>left.index-right.index);
+  for (const match of candidates) {
+    const {count,stem,unit,englishUnit} = match.groups;
+    const before=text.slice(0,match.index);
+    const after=text.slice(match.index+match[0].length);
+    const anySeparator=/^[-−]/u.test(match[0]) ? before+match[0][0] : before;
+    if ((count && approximateHanCount.test(count)) || rangeBefore.test(anySeparator) || rangeAfter.test(after) ||
+        durationBefore.test(before) || durationAfter.test(after)) continue;
+    const value=stem ? stem==='одно' ? 1 : /^\d+$/u.test(stem) ? Number(stem) : digitWords[stem] :
+      count ? collectiveDays[count] ?? integer(count) : 1;
+    if (value!=null) return weekUnit.test(unit ?? englishUnit ?? '') ? value*7 : value;
+  }
+  return null;
+}
+
 function dateIn(text, referenceDate) {
   const iso = text.match(/(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/u);
-  const numeric = text.match(/(?<![\p{L}\d/])(\d{1,2})([./])(\d{1,2})(?:\2(\d{4}|\d{2}))?(?![\d/])/u);
+  const numeric = [...text.matchAll(/(?<![\p{L}\d/])(\d{1,2})([./])(\d{1,2})(?:\2(\d{4}|\d{2}))?(?![\d/])/gu)]
+    .find(match=>match[4] || !durationUnitAfter.test(text.slice(match.index+match[0].length)));
   const chinese = text.match(/(?:(\d{4})年)?(\d{1,2})月(\d{1,2})[日号]/u);
   const monthWords = ['январ','феврал','март','апрел','май','июн','июл','август','сентябр','октябр','ноябр','декабр',
     'january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -121,8 +159,7 @@ function requiredPlaces(brief) {
 
 export function parseBrief(brief, referenceDate = new Date().toISOString().slice(0,10)) {
   const text = sameFold(brief);
-  const days = text.match(duration);
-  const requestedDays = integer(days?.[1] ?? days?.[2]);
+  const requestedDays = durationIn(text);
   const sizeToken = text.match(groupSize);
   const requestedSize = integer(sizeToken?.[1] ?? sizeToken?.[2]);
   const size = Number.isInteger(requestedSize) && requestedSize>=1 && requestedSize<=100 ? requestedSize : null;
@@ -139,7 +176,7 @@ export function parseBrief(brief, referenceDate = new Date().toISOString().slice
   const visitDeadline = text.match(/(?:только\s+)?(?:до|before|until)\s+((?:09|1[0-8]):[0-5]\d)(?!\d)/iu)?.[1] ??
     (/до обеда|к обеду|до полудня|before noon|before lunch|中午前|午餐前/u.test(text) ? '12:00' : null);
   const required = requiredPlaces(brief);
-  return {...dateIn(text,referenceDate),days:[2,3].includes(requestedDays) ? requestedDays : null,
+  return {...dateIn(text,referenceDate),days:isDraftDuration(requestedDays) ? requestedDays : null,
     requestedDays, size,invalidSize:requestedSize!=null && size==null ? String(requestedSize) : null,
     theme:interests[0] ?? null, interests, excludedInterests, pace, transport, market, access, required, visitDeadline};
 }

@@ -43,13 +43,13 @@ test('reads English and Simplified Chinese without creating parameters the user 
 
 test('AI may classify interests, while operating constraints require explicit input',async t=>{
   t.mock.method(globalThis,'fetch',async()=>Response.json({
-    message:{content:JSON.stringify({i:['craft'],r:[],t:'car',p:'dense',m:'zh',a:true})},
+    message:{content:JSON.stringify({i:['craft'],r:[],t:'car',p:'dense',m:'zh',a:true,days:14,requestedDays:14})},
   }));
   const {parsed,mode}=await interpretBrief('Казань. Показать, как люди расписывают глиняную посуду.',
     {baseUrl:'http://model.test',model:'test-model',referenceDate:reference});
   assert.equal(mode,'ai');
   assert.deepEqual(parsed.interests,['craft']);
-  for (const field of ['transport','pace','market','access']) assert.equal(parsed[field],null);
+  for (const field of ['transport','pace','market','access','days','requestedDays']) assert.equal(parsed[field],null);
   assert.equal(parseBrief('Казань, нужна еда из Китая.',reference).market,null);
   for (const input of ['Казань для группы из Китая.','Казань, нужен китайскоязычный гид.','Kazan for travelers from China.','喀山需要中文导游。']) {
     assert.equal(parseBrief(input,reference).market,'zh');
@@ -140,11 +140,81 @@ test('treats a relaxed pace separately from walking or hiking', () => {
   assert.equal(parsed.transport,'car');
 });
 
-test('reports an unsupported spelled-out duration in every interface language', () => {
-  for (const request of ['Казань на четыре дня','Four days in Kazan','喀山四天']) {
-    assert.equal(parseBrief(request,reference).requestedDays,4);
-    assert.equal(parseBrief(request,reference).days,null);
+test('accepts explicit itinerary durations from one through fourteen days in all interface languages', () => {
+  for (const [request, days] of [
+    ['Однодневная поездка в Казань',1],
+    ['На сутки в Казань',1],
+    ['Трое суток в Казани',3],
+    ['Казань на четыре дня',4],
+    ['Казань на два полных дня',2],
+    ['Казань на неделю',7],
+    ['Две недели в Казани',14],
+    ['Четырнадцатидневный маршрут по Казани',14],
+    ['A day trip to Kazan',1],
+    ['Single-day museum trip to Kazan',1],
+    ['A four-day itinerary in Kazan',4],
+    ['Four days in Kazan',4],
+    ['For two full days in Kazan',2],
+    ['A week-long itinerary in Kazan',7],
+    ['Two weeks in Kazan',14],
+    ['Kazan for fourteen days',14],
+    ['喀山一日游',1],
+    ['喀山四天',4],
+    ['喀山十四天行程',14],
+    ['喀山為期七日',7],
+    ['喀山兩個星期',14],
+    ['喀山１４天',14],
+  ]) {
+    const parsed=parseBrief(request,reference);
+    assert.equal(parsed.requestedDays,days,request);
+    assert.equal(parsed.days,days,request);
   }
+});
+
+test('reports explicit out-of-range and noninteger durations without substituting a default', () => {
+  for (const [request, days] of [
+    ['Казань на пятнадцать дней',15],
+    ['Fifteen days in Kazan',15],
+    ['喀山十五天',15],
+    ['Казань на 0 дней',0],
+    ['Kazan for -2 days',-2],
+    ['Kazan for 2.5 days',2.5],
+    ['Казань на три недели',21],
+  ]) {
+    const parsed=parseBrief(request,reference);
+    assert.equal(parsed.requestedDays,days,request);
+    assert.equal(parsed.days,null,request);
+    assert.equal(parsed.date,null,request);
+  }
+});
+
+test('does not turn ranges, relative starts, night counts or ordinal stops into exact durations', () => {
+  for (const request of [
+    'Казань на 3–5 дней',
+    'Казань на 3 -5 дней',
+    'На два или три дня по Казани',
+    'Скорее всего на выходные в Казань',
+    'Через 5 дней в Казань',
+    'Казань примерно 5 дней',
+    'Kazan in three days',
+    'Kazan for two days or three days',
+    'Kazan for 2/3 days',
+    'Kazan for two nights',
+    'A day before departure, check museum hours in Kazan',
+    '喀山三到五天',
+    '在喀山两三天',
+    '在喀山五天左右',
+    '喀山第十四天参观博物馆',
+    '五天后去喀山',
+    '喀山2026年11月21日游玩',
+  ]) {
+    const parsed=parseBrief(request,reference);
+    assert.equal(parsed.requestedDays,null,request);
+    assert.equal(parsed.days,null,request);
+  }
+  assert.equal(parseBrief('Через пять дней поездка в Казань на четыре дня',reference).days,4);
+  assert.equal(parseBrief('Не на три дня, а на пять дней по Казани',reference).days,5);
+  assert.equal(parseBrief('Kazan for 2.5 days from 21.11.2026',reference).date,'2026-11-21');
 });
 
 test('keeps relative dates, inflected group sizes and explicit negations in three languages', () => {

@@ -3,6 +3,7 @@ import { addLocaleMessages, formatDate, formatNumber, getLocale, t } from '/loca
 import { aiWaitingMarkup, updateAiWait } from '/knowledge.js';
 import { loadPlanWeather, weatherExport, weatherSlot } from '/weather.js';
 import { clockTime, routeDirections } from '/engine.mjs';
+import { MIN_DRAFT_DAYS, MAX_DRAFT_DAYS, isDraftDuration } from '/draft-duration.mjs';
 import { groupServiceMarkup } from '/group-services.js';
 import { hideBrokenVenuePhoto, venueMedia } from '/venue-media.js';
 
@@ -49,7 +50,7 @@ addLocaleMessages([
   ['Уточнить условия с ИИ','Refine requirements with AI','用人工智能细化条件'],
   ['Ввести параметры вручную','Enter details manually','手动输入参数'],
   ['Программа по дням','Day-by-day itinerary','每日行程'],
-  ['{date} · {days} дня · {size} чел.','{date} · {days} days · {size} people','{date} · {days} 天 · {size} 人'],
+  ['{date} · {duration} · {size} чел.','{date} · {duration} · {size} people','{date} · {duration} · {size} 人'],
   ['Смотрим даты, группу и города в запросе…','Reading dates, group size and cities…','正在读取日期、团队人数与城市…'],
   ['ИИ уточняет условия…','AI is refining the requirements…','人工智能正在细化条件…'],
   ['Подбираем объекты и составляем программу…','Finding places and building the itinerary…','正在查找地点并安排行程…'],
@@ -116,7 +117,10 @@ addLocaleMessages([
   ['Дата начала','Start date','开始日期'],
   ['Размер группы','Group size','团队人数'],
   ['Длительность','Duration','天数'],
+  ['{days} день','{days} day','{days} 天'],
   ['{days} дня','{days} days','{days} 天'],
+  ['{days} дней','{days} days','{days} 天'],
+  ['Выберите длительность','Choose the duration','请选择天数'],
   ['Темы и ограничения','Interests and constraints','主题与限制'],
   ['Транспорт','Transport','交通方式'],
   ['Пешком','Walking','步行'],
@@ -141,7 +145,8 @@ addLocaleMessages([
   ['Параметры заполнены автоматически. ИИ сейчас недоступен.','Fields filled automatically. AI is currently unavailable.','已自动填写参数，人工智能暂不可用。'],
   ['ИИ занят. Параметры заполнены из запроса.','AI is busy. The fields were filled from your request.','人工智能正忙，已根据需求填写参数。'],
   ['Собрать маршрут сейчас','Build itinerary now','立即生成行程'],
-  ['Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.','Your request specifies {days} days. Choose a two- or three-day draft.','需求为 {days} 天，您可选择生成两天或三天行程。'],
+  ['Запрошено дней: {days}. Выберите от {min} до {max}.','Days requested: {days}. Choose from {min} to {max}.','需求为 {days} 天。请选择 {min} 至 {max} 天。'],
+  ['Выберите длительность от {min} до {max} дней.','Choose a duration from {min} to {max} days.','请选择 {min} 至 {max} 天的行程。'],
   ['Типы посещений','Visit types','参观类型'],
   ['История и архитектура','History and architecture','历史与建筑'],
   ['Музеи','Museums','博物馆'],
@@ -204,6 +209,7 @@ addLocaleMessages([
   ['Карта черновика','Draft map','行程草案地图'],
   ['Целиком','Fit itinerary','显示全程'],
   ['Все дни','All days','所有日期'],
+  ['День маршрута','Itinerary day','行程日期'],
   ['Темы','Interests','主题'],
   ['Исключить типы посещений','Exclude visit types','排除参观类型'],
   ['Учтённые темы','Requested interests covered','已覆盖的主题'],
@@ -283,6 +289,16 @@ const delayedArrival='Расчётный переезд заканчиваетс
 const shorterVisits='После расчётного прибытия остаётся меньше времени на посещения.';
 const safe = value=>String(value ?? '').replace(/[&<>"']/gu,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const tr = (value,vars)=>safe(t(value,vars));
+const draftDurations=Array.from({length:MAX_DRAFT_DAYS-MIN_DRAFT_DAYS+1},(_,index)=>MIN_DRAFT_DAYS+index);
+function durationLabel(days) {
+  const plural=new Intl.PluralRules(getLocale()).select(days);
+  return t(plural==='one'?'{days} день':plural==='few'?'{days} дня':'{days} дней',{days:formatNumber(days)});
+}
+function tripSummary(settings) {
+  return t('{date} · {duration} · {size} чел.',{
+    date:formatDate(settings.date),duration:durationLabel(settings.days),size:formatNumber(settings.size),
+  });
+}
 const name = item=>getLocale()==='zh' ? item.cn || item.name : getLocale()==='en' ? item.en || item.name : item.name;
 const regionName = city=>getLocale()==='zh' ? city.regionCn || city.region : getLocale()==='en' ? city.regionEn || city.region : city.region;
 const currentDate = ()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Moscow'});
@@ -341,11 +357,14 @@ const options = (choices,current)=>Object.entries(choices).map(([value,label])=>
 
 function formMarkup(state,contextual) {
   const settings = state.settings;
+  const selectedDuration=state.unsupportedDays==null && isDraftDuration(settings.days) ? settings.days : null;
   const context='<p class="caption" id="draft-defaults" hidden></p><ul id="draft-context-places" class="composer-extra" hidden></ul>';
   const tripFields='<div class="composer-fields"><label class="field">'+tr('Дата начала')+
     '<input type="date" name="date" min="2000-01-01" max="2099-12-31" value="'+safe(settings.date)+'" required></label>'+
-    '<label class="field">'+tr('Длительность')+'<select name="days">'+[2,3].map(day=>'<option value="'+day+'"'+(settings.days===day?' selected':'')+'>'+
-    tr('{days} дня',{days:day})+'</option>').join('')+'</select></label>'+
+    '<div class="composer-duration"><label class="field">'+tr('Длительность')+'<select name="days" required>'+
+    '<option value="" disabled hidden'+(selectedDuration==null?' selected':'')+'>'+tr('Выберите длительность')+'</option>'+
+    draftDurations.map(day=>'<option value="'+day+'"'+(selectedDuration===day?' selected':'')+'>'+safe(durationLabel(day))+'</option>').join('')+
+    '</select></label><p class="caption composer-duration-error" id="draft-duration-error" hidden></p></div>'+
     '<label class="field">'+tr('Размер группы')+'<input type="number" name="size" value="'+settings.size+'" min="1" max="100" required></label></div>';
   const samples='<details class="brief-examples"><summary>'+tr('Примеры запросов')+'</summary><ul>'+examples.map(([label],index)=>
     '<li><button class="button-quiet" type="button" data-composer="example" data-value="'+index+'">'+tr(label)+'</button></li>').join('')+'</ul></details>';
@@ -568,6 +587,7 @@ function draftDayRisks(result) {
 function publishedCheck(result) {
   const cities=result.locations?.map(city=>city.name) ?? [];
   const settings=result.settings;
+  if (![2,3].includes(settings.days)) return '';
   const direction=routeDirections.find(item=>cities.length>=2 && cities.every((city,index)=>item.centres[index]===city));
   if (!direction) return '';
   const theme=direction.themes.includes(settings.theme) ? settings.theme : 'any';
@@ -664,8 +684,7 @@ function draftMarkup(result,serviceView,state) {
   }).join('');
   return '<section class="composer-output" data-dirty="'+state.dirty+'" aria-labelledby="draft-title"><header class="composer-title"><div>'+
     '<h2 id="draft-title" tabindex="-1" data-source-text>'+safe(venues.map(name).join(' → '))+'</h2><p class="caption"><strong>'+tr('Черновик')+'</strong> · '+
-    tr('{date} · {days} дня · {size} чел.',{
-      date:formatDate(settings.date),days:formatNumber(settings.days),size:formatNumber(settings.size)})+
+    safe(tripSummary(settings))+
     (settings.access?' · '+tr('Безбарьерный доступ'):'')+
     '</p></div><div class="planner-toolbar-actions">'+
     '<button class="button-quiet" type="button" data-composer="edit-editor" aria-controls="planner-editor">'+tr('Параметры')+'</button>'+
@@ -703,8 +722,7 @@ function download(result,requiredServices) {
   const {location,plan,settings,warnings} = result;
   const places = new Map(result.places.map(place=>[place.id,place]));
   const weather = weatherExport(forecastDays(result));
-  const summary = t('{date} · {days} дня · {size} чел.',{
-    date:formatDate(settings.date),days:formatNumber(settings.days),size:formatNumber(settings.size)});
+  const summary = tripSummary(settings);
   const lines = [t('Черновик')+' · '+(result.locations??[location]).map(name).join(' → '),summary,
     ...(settings.access?[t('Безбарьерный доступ')]:[]),
     ...evidenceSources(result).map(item=>t(item.name)+' · '+item.url), location.sourceUrl,'',
@@ -739,6 +757,11 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   const placeKind=query.get('kind');
   const existingWorkspace=restoreWorkspace && workspace?.hash===location.hash ? workspace : null;
   const state=existingWorkspace?.state ?? {...newState(),...(resume && rememberedDraft ? structuredClone(rememberedDraft) : {})};
+  if (isDraftDuration(state.unsupportedDays) && !state.overrideFields.includes('days')) {
+    state.settings.days=state.unsupportedDays;
+    state.unsupportedDays=null;
+    state.lastAppliedBrief='';
+  }
   const contextual=existingWorkspace?.contextual ?? /^\d{1,12}$/u.test(cityId ?? '');
   workspace={hash:location.hash,state,contextual,view:existingWorkspace?.view ?? 'schedule'};
   const initialCityController=new AbortController();
@@ -818,7 +841,8 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   function updateExtraction() {
     if (!mounted) return;
     const fields=find('#draft-input').elements;
-    for(const key of ['date','days','size','transport','pace']) fields[key].value=state.settings[key];
+    for(const key of ['date','size','transport','pace']) fields[key].value=state.settings[key];
+    fields.days.value=state.unsupportedDays==null && isDraftDuration(state.settings.days) ? state.settings.days : '';
     fields.required.value=state.settings.required.join(', ');
     fields.visitDeadline.value=state.settings.visitDeadline??'';
     fields.china.checked=state.settings.market==='zh';
@@ -834,25 +858,29 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     showDefaults();
   }
   function showDefaults() {
-    const {date,days,size}=state.settings;
+    const {date,days}=state.settings;
     const defaults=find('#draft-defaults');
     defaults.hidden=!state.selectedCity || (!contextual && !Number.isFinite(Date.parse(date)));
     if (defaults.hidden) return;
     const scope=[state.selectedCity,...state.extraCities].map(name).join(' → ');
-    defaults.textContent=contextual ? scope :
-      scope+' · '+t('{date} · {days} дня · {size} чел.',{date:formatDate(date),days,size});
+    defaults.textContent=contextual || state.unsupportedDays!=null || !isDraftDuration(days) ? scope :
+      scope+' · '+tripSummary(state.settings);
   }
   function showNote(message, values) {
     if (!mounted) return;
-    state.note=message;
-    state.noteValues=values;
-    find('#draft-status').textContent=message?t(message,values):'';
     const issue=parameterIssue();
+    const duration=durationIssue();
+    state.note=message===duration?.message ? '' : message;
+    state.noteValues=state.note ? values : null;
+    find('#draft-status').textContent=state.note?t(state.note,values):'';
+    const durationError=find('#draft-duration-error');
+    durationError.hidden=!duration;
+    durationError.textContent=duration ? t(duration.message,duration.values) : '';
     for (const name of ['date','size','days']) {
       const field=find('#draft-input').elements[name];
-      if (name===issue?.field && message===issue.message) {
+      if (name==='days' ? duration : name===issue?.field && message===issue.message) {
         field.setAttribute('aria-invalid','true');
-        field.setAttribute('aria-describedby','draft-status');
+        field.setAttribute('aria-describedby',name==='days'?'draft-duration-error':'draft-status');
       } else {
         field.removeAttribute('aria-invalid');
         field.removeAttribute('aria-describedby');
@@ -996,8 +1024,14 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     const byId=new Map(places.map(place=>[place.id,place]));
     const days=visibleDays();
     const region=find('#draft-days');
-    region.innerHTML = [['all',t('Все дни')],...plan.days.map((_day,i)=>[String(i),t('День {day}',{day:i+1})])]
-      .map(([key,label])=>'<button class="atlas-option" type="button" data-composer="day" data-value="'+key+'" aria-pressed="'+(state.mapDay===key)+'">'+safe(label)+'</button>').join('');
+    const compact=plan.days.length>7;
+    const dayOptions=[['all',t('Все дни')],...plan.days.map((day,index)=>[
+      String(index),t('День {day}',{day:formatNumber(index+1)})+(compact?' · '+formatDate(day.date):''),
+    ])];
+    region.innerHTML=compact ? '<label class="field composer-day-select">'+tr('День маршрута')+'<select id="draft-day-select">'+
+      dayOptions.map(([key,label])=>'<option value="'+key+'"'+(state.mapDay===key?' selected':'')+'>'+safe(label)+'</option>').join('')+
+      '</select></label>' : dayOptions.map(([key,label])=>'<button class="atlas-option" type="button" data-composer="day" data-value="'+
+      key+'" aria-pressed="'+(state.mapDay===key)+'">'+safe(label)+'</button>').join('');
     find('#draft-timeline').innerHTML = days.map(({day,index})=>'<section class="composer-day"><h3>'+tr('День {day}',{day:index+1})+
       ' · '+safe(formatDate(day.date))+(state.result.locations?.length>1?' · '+safe(name(state.result.locations.find(city=>city.id===day.cityId)??{name:day.city})): '')+
       '</h3>'+(themes[day.focus?.theme]?'<p class="composer-day-focus">'+tr(themes[day.focus.theme])+'</p>':'')+
@@ -1052,6 +1086,15 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     }
     if (state.dirty) find('#draft-status').textContent=t('Параметры изменились. Соберите черновик заново.');
   }
+  function chooseDay(value) {
+    if (!state.result || value===state.mapDay) return;
+    if (pending?.feedback) {pending.controller.abort();finish(pending);}
+    state.mapDay=value;
+    state.point=null;
+    state.pointDay=null;
+    paintDays(true);
+    (find('#draft-day-select')??find('#draft-days [aria-pressed=true]'))?.focus({preventScroll:true});
+  }
   function settingsFrom(form) {
     const fields=new FormData(form);
     return {date:fields.get('date'),days:Number(fields.get('days')),size:Number(fields.get('size')),interests:fields.getAll('interest'),
@@ -1077,23 +1120,40 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     if (send) send.disabled=true;
     syncActions();
   }
+  function durationIssue() {
+    const min=MIN_DRAFT_DAYS;
+    const max=MAX_DRAFT_DAYS;
+    if (state.unsupportedDays!=null) return {field:'days',message:'Запрошено дней: {days}. Выберите от {min} до {max}.',
+      values:{days:formatNumber(state.unsupportedDays),min,max}};
+    if (!isDraftDuration(state.settings.days)) return {field:'days',message:'Выберите длительность от {min} до {max} дней.',values:{min,max}};
+    if (state.selectedCity && state.extraCities.length>=state.settings.days) return {field:'days',
+      message:'Городов больше, чем дней. Уберите лишние города или увеличьте длительность.'};
+    return null;
+  }
+  function clearRequestedDuration() {
+    if (state.unsupportedDays!=null) {
+      if (!isDraftDuration(state.settings.days)) state.settings.days=initialRequirements(currentDate()).days;
+      find('#draft-input').elements.days.value=state.settings.days;
+    }
+    state.unsupportedDays=null;
+  }
   function parameterIssue() {
     if (state.invalidDate) return {field:'date',message:'В запросе неверная дата {value}. Исправьте её в запросе или укажите дату в параметрах.',values:{value:state.invalidDate}};
     if (state.invalidSize) return {field:'size',message:'В запросе {value} чел. Укажите размер группы от 1 до 100 человек.',values:{value:state.invalidSize}};
-    if (state.unsupportedDays!=null) return {field:'days',message:'Запрошено {days} дней. Здесь можно собрать программу на 2 или 3 дня.',values:{days:state.unsupportedDays}};
-    return null;
+    return durationIssue();
   }
   function applyParsing(result,message) {
     const {parsed,cities}=result;
     const resultSettings=initialRequirements(result.referenceDate ?? currentDate());
-    for (const key of ['date','days','size','transport','pace','market','access','visitDeadline']) if (parsed[key]!=null) resultSettings[key]=parsed[key];
+    for (const key of ['date','size','transport','pace','market','access','visitDeadline']) if (parsed[key]!=null) resultSettings[key]=parsed[key];
+    if (isDraftDuration(parsed.days)) resultSettings.days=parsed.days;
     resultSettings.interests=parsed.interests;
     resultSettings.required=parsed.required;
     resultSettings.excludedInterests=parsed.excludedInterests??[];
     for (const key of state.overrideFields) delete resultSettings[key];
     state.settings={...state.settings,...resultSettings};
     state.lastAppliedBrief=state.brief.trim();
-    state.unsupportedDays=parsed.requestedDays!=null && !parsed.days && !state.overrideFields.includes('days') ? parsed.requestedDays : null;
+    state.unsupportedDays=!state.overrideFields.includes('days') && !isDraftDuration(parsed.days) ? parsed.requestedDays ?? parsed.days ?? null : null;
     state.invalidDate=state.overrideFields.includes('date') ? null : parsed.invalidDate ?? null;
     state.invalidSize=state.overrideFields.includes('size') ? null : parsed.invalidSize ?? null;
     if (!state.overrideFields.includes('city') && (cities.length || !state.selectedCity)) {
@@ -1203,9 +1263,11 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
         form.elements.required.focus();
         return;
       }
-      if (state.extraCities.length>=state.settings.days) {
+      const duration=durationIssue();
+      if (duration) {
         find('#draft-parameters').open=true;
-        showNote('Городов больше, чем дней. Уберите лишние города или увеличьте длительность.');
+        showNote(duration.message,duration.values);
+        form.elements.days.focus();
         return;
       }
       if (parseNew) phase('Подбираем объекты и составляем программу…');
@@ -1270,6 +1332,10 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
   };
   const input = event=>{
     const control=event.target;
+    if (control.id==='draft-day-select') {
+      chooseDay(control.value);
+      return;
+    }
     if (control.id==='extra-city-query') {
       searchAdditionalCity(control.value.trim());
       return;
@@ -1290,10 +1356,12 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     }
     if (control.name==='brief') {
       state.brief=control.value;
-      state.unsupportedDays=null;
+      clearRequestedDuration();
       state.invalidDate=null;
       state.invalidSize=null;
       setDirty();
+      showNote(state.note,state.noteValues);
+      showDefaults();
       syncActions();
       saveWorkspaceDraft();
       return;
@@ -1332,6 +1400,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       syncAdditionalCitiesControl();
     }
     state.settings=settingsFrom(find('#draft-input'));
+    if (control.name==='days' || control.id.startsWith('city-')) showNote(state.note,state.noteValues);
     showDefaults();
     saveWorkspaceDraft();
   };
@@ -1393,7 +1462,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
     }
     if (action==='refine') {void analyse();return;}
     if (pending && (['example','remove-city','restore-stop','pin-stop','omit-stop'].includes(action) ||
-        (pending.feedback && ['day','stop','weather-alternatives'].includes(action)))) {
+        (pending.feedback && ['stop','weather-alternatives'].includes(action)))) {
       pending.controller.abort();
       finish(pending);
     }
@@ -1401,11 +1470,13 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       const input = find('[name=brief]');
       input.value=examples[Number(value)][1][{ru:0,en:1,zh:2}[getLocale()]];
       state.brief=input.value;
-      state.unsupportedDays=null;
+      clearRequestedDuration();
       state.invalidDate=null;
       state.invalidSize=null;
       state.overrideFields=[];
       setDirty();
+      showNote(state.note,state.noteValues);
+      showDefaults();
       syncActions();
       saveWorkspaceDraft();
       input.focus();
@@ -1416,6 +1487,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       if (!state.overrideFields.includes('city')) state.overrideFields.push('city');
       cityOptions();
       setDirty();
+      showNote(state.note,state.noteValues);
       showDefaults();
       saveWorkspaceDraft();
       (find('#draft-additional-cities button')??find('#draft-add-city summary')).focus();
@@ -1432,6 +1504,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       searchAdditionalCity('');
       cityOptions();
       setDirty();
+      showNote(state.note,state.noteValues);
       showDefaults();
       saveWorkspaceDraft();
       (find('#draft-add-city').hidden?find('#draft-additional-cities li:last-child button'):query)?.focus();
@@ -1487,13 +1560,7 @@ export function mountComposer(container, api, query, {restoreWorkspace=false}={}
       else void build(find('#draft-input'),null,feedback,services,value);
       return;
     }
-    if (action==='day') {
-      state.mapDay=value;
-      state.point=null;
-      state.pointDay=null;
-      paintDays(true);
-      find('#draft-days [aria-pressed=true]')?.focus({preventScroll:true});
-    }
+    if (action==='day') chooseDay(value);
     if (action==='fit') map?.fit({routeOnly:true});
     if (action==='map-stop') {
       selectWorkView('schedule');

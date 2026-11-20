@@ -111,6 +111,10 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 }
 .composer-request textarea::placeholder,.knowledge-feed textarea::placeholder{color:var(--muted)}
 .composer-fields{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:9px}
+.composer-fields:has(>.composer-duration){align-items:start}
+.composer-duration{min-width:0}
+.composer-duration [aria-invalid=true]{border-color:var(--error)}
+.composer-duration-error{color:var(--error);margin-top:4px;overflow-wrap:anywhere}
 .composer-form details{border-top:1px solid var(--line);padding-top:9px}
 .composer-form summary{cursor:pointer;font-size:.91rem;font-weight:680;min-height:44px;align-content:center;padding:5px 0}
 .composer-form .brief-examples summary{color:var(--muted)}
@@ -206,8 +210,10 @@ html[lang="zh-Hans"] h1{letter-spacing:0}
 .route-workbench[data-dirty=true] .day-weather{display:none}
 #catalog-conditions-status:empty{margin:0}
 .composer-day-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.composer-day-head #draft-days{gap:6px}
+.composer-day-head #draft-days{gap:6px;min-width:0;max-width:100%}
 .composer-day-head #draft-days button{min-height:44px}
+.composer-day-select{width:min(19rem,100%);min-width:0}
+.composer-day-head #draft-days:has(.composer-day-select){width:100%}
 .composer-day-focus{color:var(--muted);font-size:.86rem;margin:4px 0}
 .composer-missing-services{min-height:44px;text-align:start}
 #draft-map-stop{display:flex;flex-wrap:wrap;gap:2px 14px;justify-content:space-between;align-items:center;

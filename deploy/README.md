@@ -82,11 +82,28 @@ curl -sS -u reviewer -o /dev/null -w '%{http_code}\n' https://tour.example.org/a
 
 Ожидаются `401` без пароля и `200` с паролем. Проверка `Origin` защищает команды интерфейса от отправки с другого сайта. [Установка Caddy](https://caddyserver.com/docs/install), [HTTPS](https://caddyserver.com/docs/automatic-https), [Basic Auth](https://caddyserver.com/docs/caddyfile/directives/basic_auth)
 
-На выделенном VPS ТурКонтура для HTTPS настроены HTTP/1.1 и HTTP/2 через `servers :443 { protocols h1 h2 }` в блоке глобальных параметров. В блоке сайта `header >Alt-Svc clear` сбрасывает у браузеров прежнее объявление HTTP/3, на котором при проверке Chrome задерживалась загрузка ресурсов. [Протоколы Caddy](https://caddyserver.com/docs/caddyfile/options#protocols) · [Заголовки ответа](https://caddyserver.com/docs/caddyfile/directives/header)
+Для HTTPS через HTTP/1.1 и HTTP/2 задайте `servers :443 { protocols h1 h2 }` в глобальных параметрах Caddy. Если сервер ранее объявлял HTTP/3, добавьте в блок сайта `header >Alt-Svc clear`. [Протоколы Caddy](https://caddyserver.com/docs/caddyfile/options#protocols) · [Заголовки ответа](https://caddyserver.com/docs/caddyfile/directives/header)
 
 ## Источники каталога
 
 Для европейского набора OpenStreetMap можно задать `TUR_OVERPASS_EUROPE_URL` в `/etc/tur-contour/app.env`. Сервис обращается к нему, если вся область поиска города входит в границу набора. Остальные города запрашиваются через `TUR_OVERPASS_URL`. У каждого подключения собственное ограничение запросов. При недоступности используются данные MediaWiki и сохранённый каталог. После перезапуска отдельное подключение будет видно в «Источниках». [Overpass Europe](https://ovp.dresel.systems/) · [Граница набора Geofabrik](https://download.geofabrik.de/europe.html)
+
+## Подтверждённые условия поставщиков
+
+Укажите абсолютный путь к согласованному JSON-файлу поставщиков в `TUR_AUDIT_FEED_FILE` в `/etc/tur-contour/app.env`. Дайте пользователю службы `turcontour` право чтения файла и перезапустите службу. Сервис загружает выгрузку вместе с остальными источниками. При ошибке чтения или формата сохраняет последний корректный снимок и показывает статус источника. Условия вне периода действия требуют уточнения.
+
+В JSON укажите `version` (строка) и `objects` (объект с ключами из [`data/catalog.json`](../data/catalog.json)). Для каждого объекта заполните поля:
+
+| Поле | Значение |
+| --- | --- |
+| `capacity`, `minutes` | Вместимость группы в людях и длительность визита в минутах |
+| `hours`, `off` | Местные часы `[открытие, закрытие]` и выходные дни от `0` (вс) до `6` (сб) |
+| `seasons` | Массив из `all`, `winter`, `spring`, `summer`, `autumn` |
+| `language`, `access` | `interpreter`, `ru` или `null`. Доступность — `true`, `false` или `null` |
+| `booking`, `sourceUrl` | `reservation` или `walk-in` и HTTPS-ссылка на акт или другой источник подтверждения |
+| `verifiedAt`, `validUntil` | Дата или время сверки в ISO и включительная дата окончания `ГГГГ-ММ-ДД` |
+
+Вместимость должна относиться к указанному групповому визиту. Квоты сборной экскурсии, отдельного зала и число номеров указываются в опубликованных условиях соответствующих услуг.
 
 ## Локальная модель
 

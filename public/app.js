@@ -19,6 +19,10 @@ const routeThemes = {
   heritage:'История и архитектура', museum:'Музеи', romantic:'Романтическая поездка', family:'Семейная поездка',
   hike:'Пеший маршрут', nature:'Природа', craft:'Ремёсла', pilgrimage:'Паломничество', any:'Любой формат',
 };
+const magWorkbooks = {
+  routes:['Маршруты и объекты МАГ','https://docs.google.com/spreadsheets/d/1SjOsVz4YBI54DQKpsbo-pWhYDZ4jcrYz7iRpei7ckDQ/edit'],
+  diagnostics:['Диагностическая карта МАГ','https://docs.google.com/spreadsheets/d/1B4lVfrkmyicFYZI9Bl_71Atlxsb3Obys/edit'],
+};
 addLocaleMessages([
   ['Начиная с января 2026 года действует обновлённая методика Росстата.','Rosstat uses an updated methodology from January 2026.','俄罗斯统计局自2026年1月起采用更新后的统计方法。'],
   ['Ряды показаны отдельно по годам.','The series are shown separately by year.','各年度数据分别列示。'],
@@ -56,6 +60,11 @@ addLocaleMessages([
   ['Опубликованные данные','Published data','已公布的数据'],
   ['Учебные данные','Training data','演示数据'],
   ['Скачать датасет пилота (CSV)','Download pilot dataset (CSV)','下载试点数据集（CSV）'],
+  ['Открыть каталог пилота','Open pilot catalogue','打开试点名录'],
+  ['Упоминания в материалах МАГ','References in International Hospitality Academy materials','国际酒店管理学院资料中的提及'],
+  ['Маршруты и объекты МАГ','International Hospitality Academy itineraries and places','国际酒店管理学院行程和地点表'],
+  ['Диагностическая карта МАГ','International Hospitality Academy assessment sheet','国际酒店管理学院评估表'],
+  ['Строки {rows}','Rows {rows}','第 {rows} 行'],
   ['В каталоге пилота — {count} объектов. В CSV есть источники, опубликованные условия и вопросы для проверки.',
     'The pilot catalogue has {count} places. The CSV includes sources, published conditions and items to verify.',
     '试点名录包含 {count} 个地点。CSV 包含来源、已公布条件及待核查事项。'],
@@ -375,6 +384,17 @@ function restorePassportFocus(entry) {
   }
 }
 
+function magEvidence(place) {
+  const references = place.magReferences?.flatMap(({workbook,sheet,rows,relation})=>{
+    if (!Object.hasOwn(magWorkbooks,workbook)) return [];
+    const [label,url] = magWorkbooks[workbook];
+    return '<li>'+outbound(url,t(label))+'<p class="caption"><span lang="ru" data-source-text>'+safe(sheet)+'</span> · '+
+      safe(t('Строки {rows}',{rows:rows.map(row=>formatNumber(row)).join(', ')}))+
+      '<br><span lang="ru" data-source-text>'+safe(relation)+'</span></p></li>';
+  });
+  return references?.length ? '<ul class="official-links">'+references.join('')+'</ul>' : '';
+}
+
 function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop,trigger) {
   const place = data.places.find(x=>x.id===id);
   if (!place) return;
@@ -390,6 +410,7 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop
   const field = (label,content)=>'<dt>'+safe(t(label))+'</dt><dd>'+content+'</dd>';
   const title = itemName(place);
   const titleLang = title===place.name ? 'ru' : localeTag();
+  const references = magEvidence(place);
   dialog.innerHTML = '<div class="section-head"><h2 id="place-title" lang="'+safe(titleLang)+'" data-source-text>'+safe(title)+'</h2>'+
     button(t('Закрыть'),'close',true)+'</div>'+
     (title!==place.name ? '<p class="lang-line" lang="ru" data-source-text>'+safe(place.name)+'</p>' : '')+
@@ -410,6 +431,7 @@ function placeDetails(id,decisionId,requestedDay,requestedSettings,requestedStop
       field('Продолжительность',safe(t('{minutes} мин.',{minutes:formatNumber(audit.minutes)})))+
       field('Под перевод',safe(t(audit.language==='interpreter'
         ? settings.demo?'Предусмотрено в демо':'Подтверждено источником' : 'Требует подтверждения'))) : '')+
+    (references ? field('Упоминания в материалах МАГ',references) : '')+
     '</dl>'+(settings.demo && audit ? result.reasons.map(reason=>'<p class="detail">'+safe(evidenceReason(reason))+'</p>').join('') : '');
   if (stop?.split) dialog.insertAdjacentHTML('beforeend','<p class="callout">'+safe(t(
     'Группа из {total} чел. проверена для двух сеансов до {size} чел. каждый. Согласуйте оба сеанса с музеем.',
@@ -1026,9 +1048,9 @@ function sources() {
     safe(t('Графики и запись сверяются по паспорту поставщика.'))+'</p></li></ul></section>';
   const datasetSummary = t('В каталоге пилота — {count} объектов. В CSV есть источники, опубликованные условия и вопросы для проверки.',
     {count:formatNumber(data.places.length)});
-  const datasetDownload = '<a class="button-quiet" href="/api/pilot-dataset.csv" download>'+
-    safe(t('Скачать датасет пилота (CSV)'))+'</a>';
-  return head(t('Источники'),datasetSummary,datasetDownload)+'<div id="source-console" class="stack"></div>'+
+  const datasetActions = '<div class="actions"><a class="button-quiet" href="#catalog">'+safe(t('Открыть каталог пилота'))+'</a>'+
+    '<a class="button-quiet" href="/api/pilot-dataset.csv" download>'+safe(t('Скачать датасет пилота (CSV)'))+'</a></div>';
+  return head(t('Источники'),datasetSummary,datasetActions)+'<div id="source-console" class="stack"></div>'+
     '<details class="panel source-legacy"><summary>'+safe(t('Журнал изменений'))+'</summary>'+
     '<div class="grid"><section class="panel"><div class="section-head">'+button(t('Обновить источники'),'refresh',true)+'</div>'+
     (changes ? '<ul class="rows">'+changes+'</ul>' : '<p class="empty">'+safe(t('Изменений не зафиксировано.'))+'</p>')+'</section>'+

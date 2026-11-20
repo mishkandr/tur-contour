@@ -265,7 +265,8 @@ function dashboard(snapshot) {
   const places = objectsFrom(catalog,snapshot);
   const affected = impacts(catalog,snapshot,baseline,initial.wiki);
   return {
-    region, places, affected, changes:attributeChanges(snapshot.changes,places,affected), sources:snapshot.sources,
+    region, places:places.map(place=>({...place,magReferences:magReferences[place.id] ?? []})),
+    affected, changes:attributeChanges(snapshot.changes,places,affected), sources:snapshot.sources,
     refreshedAt:snapshot.refreshedAt, auditVersion:snapshot.audit.version, auditCheckedAt:snapshot.auditCheckedAt,
     publishedConditions: {
       objectCount:Object.keys(publishedConditions).length,
